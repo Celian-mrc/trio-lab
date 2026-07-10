@@ -173,6 +173,35 @@ def test_slot_label_maps_innate_to_passive():
     assert parse.slot_label("Bandage Toss") == "Bandage Toss"
 
 
+def test_reliability_aimed_part_wins_on_multipart_abilities():
+    """Q de Thresh : {{dv|Direction|Auto}} (lancer visé + recast auto) = skillshot."""
+    assert (
+        parse.reliability_of("{{dv|[[Direction-targeted|Direction]]|[[Auto-targeted|Auto]]}}")
+        == "skillshot"
+    )
+    assert (
+        parse.reliability_of("{{dv|[[Auto-targeted|Auto]]|[[Direction-targeted|Direction]]}}")
+        == "skillshot"
+    )
+    assert parse.reliability_of("[[Unit-targeted|Unit]]") == "point_click"
+    assert parse.reliability_of("") == "skillshot"
+
+
+def test_duration_found_on_later_keyword_occurrence():
+    """R de Yasuo : la 1re mention 'airborne' (condition de cast) n'a pas de durée,
+    le chiffre arrive sur l'occurrence suivante (knock up du recast)."""
+    props = parse.extract_cc_properties(
+        "targets an {{tip|airborne}} enemy champion nearest to the cursor, then "
+        "{{tip|airborne|knocks up}} all nearby enemies for 1 second",
+        "airborne",
+    )
+    assert props.duration_s == 1.0
+
+
+def test_form_champions_map_to_real_champion():
+    assert parse.FORM_TO_CHAMPION["Rhaast"] == "Kayn"
+
+
 def test_duration_single_value_inside_template():
     props = parse.extract_cc_properties(
         "{{tip|stun|stunning}} them for {{fd|0.65 seconds}}", "stun"

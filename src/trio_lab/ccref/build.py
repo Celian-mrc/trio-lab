@@ -72,15 +72,18 @@ def build_rows() -> list[dict[str, object]]:
     )
 
     pages = wiki.fetch_many(sorted({_data_page(e) for e in entries}))
+    _retry_forms(pages, entries)
 
     rows: list[dict[str, object]] = []
     fandom_candidates: list[tuple[int, parse.SourceEntry]] = []
     for entry in entries:
+        champion = parse.FORM_TO_CHAMPION.get(entry.champion, entry.champion)
+        form_note = [f"forme {entry.champion}"] if champion != entry.champion else []
         wikitext = pages.get(_data_page(entry))
         if wikitext is None:
             rows.append(
                 {
-                    "champion": entry.champion,
+                    "champion": champion,
                     "sort": parse.slot_label(entry.ability_ref),
                     "type_cc": entry.cc_type,
                     "duree_s": "",
@@ -89,7 +92,9 @@ def build_rows() -> list[dict[str, object]]:
                     "fiabilite": "",
                     "disponibilite": "",
                     "repositionnement": int(entry.displaces),
-                    "note_relecture": "page de données introuvable sur le wiki",
+                    "note_relecture": " ; ".join(
+                        ["page de données introuvable sur le wiki", *form_note]
+                    ),
                 }
             )
             continue
@@ -99,7 +104,7 @@ def build_rows() -> list[dict[str, object]]:
         )
         rows.append(
             {
-                "champion": entry.champion,
+                "champion": champion,
                 "sort": parse.slot_label(fields["skill"] or entry.ability_ref),
                 "type_cc": entry.cc_type,
                 "duree_s": "" if props.duration_s is None else props.duration_s,
@@ -108,7 +113,7 @@ def build_rows() -> list[dict[str, object]]:
                 "fiabilite": parse.reliability_of(fields["targeting"]),
                 "disponibilite": parse.availability_of(fields["skill"]),
                 "repositionnement": int(entry.displaces),
-                "note_relecture": " ; ".join(props.notes),
+                "note_relecture": " ; ".join(props.notes + form_note),
             }
         )
         if props.duration_s is None:
@@ -117,6 +122,24 @@ def build_rows() -> list[dict[str, object]]:
     _fill_from_fandom(rows, fandom_candidates)
     rows.sort(key=lambda r: (r["champion"], r["sort"], r["type_cc"]))
     return rows
+
+
+def _retry_forms(pages: dict[str, str | None], entries: list[parse.SourceEntry]) -> None:
+    """Pages absentes des formes alternatives : retente sous le champion réel.
+
+    Ex. « Template:Data Rhaast/Blade's Reach R » absent → la page vit parfois
+    sous « Template:Data Kayn/… ».
+    """
+    retry = {
+        _data_page(e): f"Template:Data {parse.FORM_TO_CHAMPION[e.champion]}/{e.ability_ref}"
+        for e in entries
+        if e.champion in parse.FORM_TO_CHAMPION and pages.get(_data_page(e)) is None
+    }
+    if not retry:
+        return
+    fetched = wiki.fetch_many(sorted(set(retry.values())))
+    for original_title, mapped_title in retry.items():
+        pages[original_title] = fetched.get(mapped_title)
 
 
 def _fill_from_fandom(

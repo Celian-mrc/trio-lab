@@ -47,6 +47,10 @@ SECTION_TO_CC: dict[str, str] = {
 # Knock up = « sur place » (PROJECT.md) → pas de repositionnement.
 DISPLACING_SUBSECTIONS = frozenset({"Knock aside", "Knock back", "Pull"})
 
+# Formes alternatives listées comme « champion » par le wiki → champion réel.
+# Rhaast = la forme Darkin de Kayn (le wiki donne une page par forme).
+FORM_TO_CHAMPION: dict[str, str] = {"Rhaast": "Kayn"}
+
 # {{cai|<sort>|<champion>|<affichage?>}} ou {{ai|...}} — param1 = page de
 # données du sort (slot Q/W/E/R/I ou nom), param2 = champion.
 _TEMPLATE_RE = re.compile(r"\{\{c?ai\|([^|}]+)\|([^|}]+)(?:\|[^}]*)?\}\}")
@@ -56,8 +60,16 @@ _TIP_RE = re.compile(r"\{\{tip\|([^|}]+)(?:\|([^}]+))?\}\}")
 
 _FIELD_RES = {
     name: re.compile(rf"^\|\s*{name}\s*=\s*(.*?)\s*$", re.MULTILINE)
-    for name in ("skill", "targeting", "description", "description2", "description3")
+    for name in ("skill", "targeting")
 }
+# Les champs description peuvent s'étaler sur PLUSIEURS lignes/paragraphes
+# (constaté sur Fandom : le knockback conditionnel du E de Briar est un 2e
+# paragraphe du même champ) : capture jusqu'au prochain champ `|xxx =` en
+# début de ligne.
+_DESCRIPTION_RE = re.compile(
+    r"^\|\s*description\d*\s*=\s*(.*?)(?=^\|\s*[a-zA-Z][\w. ]*=|\Z)",
+    re.MULTILINE | re.DOTALL,
+)
 # {{st|Nom de stat|expression}} — stats de leveling. Les champs `leveling`
 # s'étalent souvent sur PLUSIEURS lignes (constaté : « Stun Duration » d'Anivia
 # sur une ligne de continuation), donc on scanne tout le wikitext ; l'expression
@@ -200,7 +212,7 @@ def parse_ability_fields(wikitext: str) -> dict[str, object]:
         if match:
             fields[name] = match.group(1)
     description = " ".join(
-        fields.get(k, "") for k in ("description", "description2", "description3")
+        " ".join(block.split()) for block in _DESCRIPTION_RE.findall(wikitext)
     ).strip()
     leveling = [
         (stat.group(1).strip(), wikitext[stat.end() : stat.end() + 100])
@@ -266,14 +278,19 @@ def extract_cc_properties(
     props = CCProperties()
     lowered = description.lower()
 
-    window_start = None
-    for keyword in _CC_KEYWORDS[cc_type]:
-        pos = lowered.find(keyword)
-        if pos != -1 and (window_start is None or pos < window_start):
-            window_start = pos
-    if window_start is None:
+    # TOUTES les occurrences des mots-clés, en ordre de texte : la première
+    # mention d'un CC est souvent sans durée (annonce), le chiffre arrivant
+    # dans le recast ou une condition (constaté : R de Yasuo, E de Briar).
+    positions = sorted(
+        {
+            match.start()
+            for keyword in _CC_KEYWORDS[cc_type]
+            for match in re.finditer(re.escape(keyword), lowered)
+        }
+    )
+    if not positions:
         props.notes.append(f"mot-clé {cc_type} introuvable dans la description")
-    else:
+    for window_start in positions:
         window = description[window_start : window_start + 140]
         duration = None
         for candidate in _DURATION_RE.finditer(window):
@@ -287,6 +304,7 @@ def extract_cc_properties(
             props.duration_s = _mean_number(expr)
             if len(_NUMBER_RE.findall(expr)) > 1:
                 props.notes.append(f"durée variable ({expr}), moyenne retenue")
+            break
 
     if props.duration_s is None:
         for stat_name, expr in _duration_stats_for(cc_type, leveling):
@@ -344,8 +362,18 @@ def _duration_stats_for(cc_type: str, leveling: list[tuple[str, str]]) -> list[t
 
 
 def reliability_of(targeting: str) -> str:
-    """`targeting` du template → fiabilité (point_click si ciblage unitaire/auto)."""
-    return "point_click" if re.search(r"unit|auto", targeting, re.IGNORECASE) else "skillshot"
+    """`targeting` du template → fiabilité.
+
+    Les sorts multi-parties portent plusieurs ciblages ({{dv|Direction|Auto}}
+    sur le Q de Thresh : lancer visé puis recast automatique) : la présence
+    d'un ciblage visé (Direction/Location) prime — c'est lui qu'il faut
+    toucher. Point-and-click seulement si le sort est purement Unit/Auto.
+    """
+    if re.search(r"direction|location|vector", targeting, re.IGNORECASE):
+        return "skillshot"
+    if re.search(r"unit|auto", targeting, re.IGNORECASE):
+        return "point_click"
+    return "skillshot"
 
 
 def availability_of(skill: str) -> str:
