@@ -98,12 +98,29 @@ def test_rocket_grab_pull_has_no_prose_duration():
     assert any("durée introuvable" in n for n in props.notes)
 
 
-def test_charm_says_for_a_duration_only():
-    """Ahri : « for a duration » sans chiffre ni leveling → None + note (à relire)."""
+def test_charm_duration_from_multiline_leveling():
+    """Ahri : « for a duration » en prose, mais « Disable Duration » en leveling
+    (ligne de continuation — le champ leveling s'étale sur plusieurs lignes)."""
     fields = parse.parse_ability_fields(_fixture("data_charm.wikitext"))
     props = parse.extract_cc_properties(fields["description"], "charm", fields["leveling"])
+    assert props.duration_s is not None
+    assert any("leveling" in n for n in props.notes)
+
+
+def test_leveling_stat_of_other_cc_type_is_rejected():
+    """« Stun Duration » ne doit pas fournir la durée d'un slow (cas Anivia Q)."""
+    props = parse.extract_cc_properties(
+        "{{tip|slow|slows}} them briefly",
+        "slow",
+        [("Stun Duration", "{{ap|1.1 to 1.5}} seconds")],
+    )
     assert props.duration_s is None
-    assert any("durée introuvable" in n for n in props.notes)
+    props_stun = parse.extract_cc_properties(
+        "{{tip|stun|stuns}} them briefly",
+        "stun",
+        [("Stun Duration", "{{ap|1.1 to 1.5}} seconds")],
+    )
+    assert props_stun.duration_s == 1.3
 
 
 def test_whimsy_duration_from_leveling_fallback():
@@ -111,19 +128,49 @@ def test_whimsy_duration_from_leveling_fallback():
     fields = parse.parse_ability_fields(_fixture("data_whimsy.wikitext"))
     assert parse.reliability_of(fields["targeting"]) == "point_click"  # Unit
     props = parse.extract_cc_properties(fields["description"], "polymorph", fields["leveling"])
-    assert props.duration_s == 2.0  # {{ap|1.2 to 2}} → max
+    assert props.duration_s == 1.6  # {{ap|1.2 to 2}} → moyenne des bornes
     assert any("leveling" in n for n in props.notes)
 
 
 # --- heuristiques sur descriptions synthétiques ---
 
 
-def test_duration_takes_max_of_range_with_note():
+def test_duration_takes_mean_of_range_with_note():
     props = parse.extract_cc_properties(
         "{{tip|stun|stunning}} them for {{ap|1 to 2}} seconds", "stun"
     )
-    assert props.duration_s == 2.0
-    assert any("max retenu" in n for n in props.notes)
+    assert props.duration_s == 1.5  # moyenne des bornes du barème
+    assert any("moyenne retenue" in n for n in props.notes)
+
+
+def test_duration_pp_template_ignores_level_breakpoints():
+    """Barème par niveau (passif de Braum) : le « 1 to 13 » est un niveau, pas une durée."""
+    props = parse.extract_cc_properties(
+        "{{tip|stun|stunning}} them for "
+        "{{pp|changedisplay=true|1.25 to 1.75 for 3|1 to 13|type=his level|label1=level}} seconds",
+        "stun",
+    )
+    assert props.duration_s == 1.5  # moyenne de 1.25-1.75, le 13 (niveau) ignoré
+
+
+def test_implausible_hard_cc_duration_is_discarded():
+    props = parse.extract_cc_properties("{{tip|stun|stunning}} them for 13 seconds", "stun")
+    assert props.duration_s is None
+    assert any("invraisemblable" in n for n in props.notes)
+
+
+def test_airborne_duration_with_over_wording():
+    """Les airbornes disent souvent « knocks back over X seconds » plutôt que « for »."""
+    props = parse.extract_cc_properties(
+        "{{tip|airborne|knocks them back}} 700 units over {{fd|0.5 seconds}}", "airborne"
+    )
+    assert props.duration_s == 0.5
+
+
+def test_slot_label_maps_innate_to_passive():
+    assert parse.slot_label("I") == "P"
+    assert parse.slot_label("Q") == "Q"
+    assert parse.slot_label("Bandage Toss") == "Bandage Toss"
 
 
 def test_duration_single_value_inside_template():
@@ -140,11 +187,11 @@ def test_missing_duration_is_noted():
     assert any("durée introuvable" in n for n in props.notes)
 
 
-def test_slow_percentage_max_of_range():
+def test_slow_percentage_mean_of_range():
     props = parse.extract_cc_properties(
         "{{tip|slow|slowing}} them by {{ap|20% to 40%}} for 2 seconds", "slow"
     )
-    assert props.slow_pct == 40.0
+    assert props.slow_pct == 30.0  # moyenne des bornes
     assert props.duration_s == 2.0
 
 

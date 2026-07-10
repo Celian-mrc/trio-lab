@@ -19,6 +19,11 @@ import urllib.request
 logger = logging.getLogger(__name__)
 
 API_URL = "https://wiki.leagueoflegends.com/en-us/api.php"
+# Ancien wiki (Fandom) : même moteur MediaWiki, mêmes templates de données,
+# prose parfois plus détaillée sur les durées — utilisé en 2e passe pour les
+# durées manquantes. Contenu CC BY-SA également, mais potentiellement daté
+# (le wiki a migré vers wiki.leagueoflegends.com en 2024) → toujours annoté.
+FANDOM_API_URL = "https://leagueoflegends.fandom.com/api.php"
 USER_AGENT = "trio-lab/0.1 (projet perso; import one-shot cc_reference; script non recurrent)"
 # Limite MediaWiki : 50 titres par requête `action=query` pour un utilisateur anonyme.
 BATCH_SIZE = 50
@@ -26,20 +31,23 @@ BATCH_SIZE = 50
 BATCH_PAUSE_S = 1.0
 
 
-def _get(params: dict[str, str]) -> dict:
+def _get(params: dict[str, str], *, api_url: str = API_URL) -> dict:
     query = urllib.parse.urlencode({**params, "format": "json", "formatversion": "2"})
-    request = urllib.request.Request(f"{API_URL}?{query}", headers={"User-Agent": USER_AGENT})
+    request = urllib.request.Request(f"{api_url}?{query}", headers={"User-Agent": USER_AGENT})
     with urllib.request.urlopen(request, timeout=30) as response:
         return json.load(response)
 
 
-def fetch_wikitext(page: str) -> str:
+def fetch_wikitext(page: str, *, api_url: str = API_URL) -> str:
     """Wikitext d'une page (suit les redirections)."""
-    data = _get({"action": "parse", "page": page, "prop": "wikitext", "redirects": "1"})
+    data = _get(
+        {"action": "parse", "page": page, "prop": "wikitext", "redirects": "1"},
+        api_url=api_url,
+    )
     return data["parse"]["wikitext"]
 
 
-def fetch_many(titles: list[str]) -> dict[str, str | None]:
+def fetch_many(titles: list[str], *, api_url: str = API_URL) -> dict[str, str | None]:
     """Wikitext de plusieurs pages, par lots de 50, redirections suivies.
 
     Retourne `{titre demandé: wikitext | None si page absente}`.
@@ -55,7 +63,8 @@ def fetch_many(titles: list[str]) -> dict[str, str | None]:
                 "rvslots": "main",
                 "redirects": "1",
                 "titles": "|".join(batch),
-            }
+            },
+            api_url=api_url,
         )
         query = data["query"]
         # titre demandé → titre canonique (normalisation puis redirection).

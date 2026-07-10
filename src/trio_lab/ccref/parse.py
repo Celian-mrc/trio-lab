@@ -58,9 +58,11 @@ _FIELD_RES = {
     name: re.compile(rf"^\|\s*{name}\s*=\s*(.*?)\s*$", re.MULTILINE)
     for name in ("skill", "targeting", "description", "description2", "description3")
 }
-_LEVELING_RE = re.compile(r"^\|\s*leveling\d*\s*=\s*(.*)$", re.MULTILINE)
-# {{st|Nom de stat|expression}} — l'expression peut contenir des templates
-# imbriqués : on capture le nom et les ~100 caractères suivants pour les nombres.
+# {{st|Nom de stat|expression}} — stats de leveling. Les champs `leveling`
+# s'étalent souvent sur PLUSIEURS lignes (constaté : « Stun Duration » d'Anivia
+# sur une ligne de continuation), donc on scanne tout le wikitext ; l'expression
+# peut contenir des templates imbriqués → on capture les ~100 caractères
+# suivants pour les nombres.
 _STAT_RE = re.compile(r"\{\{st\|([^|{}]+)\|")
 
 # Mots-clés de la prose signalant chaque type de CC (fenêtre de recherche de durée).
@@ -81,12 +83,18 @@ _CC_KEYWORDS: dict[str, tuple[str, ...]] = {
 }
 
 # « for {{fd|0.65 seconds}} » (unité DANS le template), « for 1 second »,
-# « for {{ap|1 to 2}} seconds »… L'unité peut suivre l'expression ou être
-# incluse dedans : validé a posteriori dans `extract_cc_properties`.
-_DURATION_RE = re.compile(r"for\s+(\{\{[^{}]+\}\}|[\d.]+)(\s*seconds?)?", re.IGNORECASE)
+# « for {{ap|1 to 2}} seconds », « knocks them back over {{fd|0.5 seconds}} »
+# (les airbornes utilisent souvent « over »)… L'unité peut suivre l'expression
+# ou être incluse dedans : validé a posteriori dans `extract_cc_properties`.
+_DURATION_RE = re.compile(r"(?:for|over)\s+(\{\{[^{}]+\}\}|[\d.]+)(\s*seconds?)?", re.IGNORECASE)
 # « slowing them by {{ap|20% to 40%}} », « by 30% »…
 _SLOW_RE = re.compile(r"slow[^.]{0,90}?by\s+(\{\{[^{}]+\}\}|\d+(?:\.\d+)?\s*%)", re.IGNORECASE)
 _NUMBER_RE = re.compile(r"\d+(?:\.\d+)?")
+# « 1.25 to 1.75 » : bornes d'un barème par rang/niveau.
+_TO_PAIR_RE = re.compile(r"([\d.]+)\s*to\s*([\d.]+)")
+# Durée de CC dur au-delà de ce seuil = extraction très probablement fausse
+# (ex. niveau attrapé dans un {{pp}}) → valeur écartée, note de relecture.
+MAX_PLAUSIBLE_HARD_CC_S = 4.0
 
 # Marqueurs de prose suggérant un CC multi-cibles (heuristique, à relire).
 _AREA_MARKERS = (
@@ -194,11 +202,10 @@ def parse_ability_fields(wikitext: str) -> dict[str, object]:
     description = " ".join(
         fields.get(k, "") for k in ("description", "description2", "description3")
     ).strip()
-    leveling: list[tuple[str, str]] = []
-    for line_match in _LEVELING_RE.finditer(wikitext):
-        line = line_match.group(1)
-        for stat in _STAT_RE.finditer(line):
-            leveling.append((stat.group(1).strip(), line[stat.end() : stat.end() + 100]))
+    leveling = [
+        (stat.group(1).strip(), wikitext[stat.end() : stat.end() + 100])
+        for stat in _STAT_RE.finditer(wikitext)
+    ]
     return {
         "skill": fields.get("skill", ""),
         "targeting": fields.get("targeting", ""),
@@ -207,9 +214,40 @@ def parse_ability_fields(wikitext: str) -> dict[str, object]:
     }
 
 
-def _max_number(expr: str) -> float | None:
-    numbers = [float(n) for n in _NUMBER_RE.findall(expr)]
-    return max(numbers) if numbers else None
+def _template_value_parts(expr: str) -> list[str]:
+    """Paramètres positionnels porteurs de valeurs d'un template de barème.
+
+    `{{pp|changedisplay=true|1.25 to 1.75 for 3|1 to 13|type=…}}` : les params
+    `clé=valeur` sont ignorés et seul le PREMIER positionnel porte les valeurs
+    (les suivants sont les niveaux/rangs du barème — le « 13 » de Braum est un
+    niveau, pas une durée). Pour `{{ap|…}}`/`{{fd|…}}`, tout est valeur.
+    """
+    match = re.fullmatch(r"\{\{(\w+)\|(.*)\}\}", expr, re.DOTALL)
+    if not match:
+        return [expr]
+    name, body = match.group(1).lower(), match.group(2)
+    positional = [part for part in body.split("|") if "=" not in part]
+    if not positional:
+        return [body]
+    return positional[:1] if name == "pp" else positional
+
+
+def _mean_number(expr: str) -> float | None:
+    """Valeur moyenne d'une expression de barème (« 1 to 2 » → 1.5).
+
+    Dans un segment « X to Y … », seules les bornes comptent (« 1.25 to 1.75
+    for 3 » : le « for 3 » est un pas de niveaux, pas une valeur).
+    """
+    values: list[float] = []
+    for part in _template_value_parts(expr):
+        pair = _TO_PAIR_RE.search(part)
+        if pair:
+            values.extend((float(pair.group(1)), float(pair.group(2))))
+        else:
+            values.extend(float(n) for n in _NUMBER_RE.findall(part))
+    if not values:
+        return None
+    return round(sum(values) / len(values), 3)
 
 
 def extract_cc_properties(
@@ -219,10 +257,11 @@ def extract_cc_properties(
 ) -> CCProperties:
     """Durée / %slow / zone extraits de la prose, avec notes pour la relecture.
 
-    Durée : premier motif « for X second(s) » dans les 140 caractères suivant un
-    mot-clé du type de CC ; si l'expression est un barème ({{ap|1 to 2}}), on
-    retient le **max** (valeur au rang max) et on le note. Fallback : stat de
-    leveling dont le nom contient « duration ».
+    Durée : premier motif « for/over X second(s) » dans les 140 caractères
+    suivant un mot-clé du type de CC ; un barème ({{ap|1 to 2}}) retient la
+    **moyenne** des bornes (choix de relecture, 2026-07-10). Fallback : stat de
+    leveling dont le nom contient « duration ». Une durée de CC dur au-delà de
+    `MAX_PLAUSIBLE_HARD_CC_S` est écartée (extraction probablement fausse).
     """
     props = CCProperties()
     lowered = description.lower()
@@ -245,31 +284,63 @@ def extract_cc_properties(
                 break
         if duration:
             expr = duration.group(1)
-            props.duration_s = _max_number(expr)
+            props.duration_s = _mean_number(expr)
             if len(_NUMBER_RE.findall(expr)) > 1:
-                props.notes.append(f"durée variable ({expr}), max retenu")
+                props.notes.append(f"durée variable ({expr}), moyenne retenue")
 
     if props.duration_s is None:
-        for stat_name, expr in leveling:
-            if "duration" in stat_name.lower():
-                props.duration_s = _max_number(expr)
-                if props.duration_s is not None:
-                    props.notes.append(f"durée depuis leveling « {stat_name} », max retenu")
-                    break
+        for stat_name, expr in _duration_stats_for(cc_type, leveling):
+            props.duration_s = _mean_number(expr)
+            if props.duration_s is not None:
+                props.notes.append(f"durée depuis leveling « {stat_name} », moyenne retenue")
+                break
+
+    if (
+        props.duration_s is not None
+        and cc_type != "slow"
+        and props.duration_s > MAX_PLAUSIBLE_HARD_CC_S
+    ):
+        props.notes.append(
+            f"durée extraite {props.duration_s} s invraisemblable "
+            f"(> {MAX_PLAUSIBLE_HARD_CC_S} s), écartée — à vérifier"
+        )
+        props.duration_s = None
+
     if props.duration_s is None and cc_type != "slow":
         props.notes.append("durée introuvable")
 
     if cc_type == "slow":
         slow = _SLOW_RE.search(description)
         if slow:
-            props.slow_pct = _max_number(slow.group(1))
+            props.slow_pct = _mean_number(slow.group(1))
             if len(_NUMBER_RE.findall(slow.group(1))) > 1:
-                props.notes.append(f"%slow variable ({slow.group(1)}), max retenu")
+                props.notes.append(f"%slow variable ({slow.group(1)}), moyenne retenue")
         else:
             props.notes.append("%slow introuvable")
 
     props.area = any(marker in lowered for marker in _AREA_MARKERS)
     return props
+
+
+def _duration_stats_for(cc_type: str, leveling: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """Stats de leveling « … Duration » utilisables pour ce type de CC.
+
+    Une stat nommée d'après un AUTRE type (« Stun Duration » pour un slow) est
+    écartée ; les noms génériques (« Disable Duration ») restent acceptés, en
+    préférant toujours une stat qui nomme le type cherché.
+    """
+    own_keywords = _CC_KEYWORDS[cc_type]
+    other_keywords = [kw for t, kws in _CC_KEYWORDS.items() if t != cc_type for kw in kws]
+    matching, generic = [], []
+    for stat_name, expr in leveling:
+        name = stat_name.lower()
+        if "duration" not in name:
+            continue
+        if any(kw in name for kw in own_keywords):
+            matching.append((stat_name, expr))
+        elif not any(kw in name for kw in other_keywords):
+            generic.append((stat_name, expr))
+    return matching + generic
 
 
 def reliability_of(targeting: str) -> str:
@@ -280,3 +351,9 @@ def reliability_of(targeting: str) -> str:
 def availability_of(skill: str) -> str:
     """`skill` du template → disponibilité (`ultimate` si R, sinon `base`)."""
     return "ultimate" if skill.strip().upper().startswith("R") else "base"
+
+
+def slot_label(skill: str) -> str:
+    """Libellé du slot pour le CSV : le wiki note les passifs `I` (Innate) → `P`."""
+    cleaned = skill.strip().upper()
+    return "P" if cleaned == "I" else skill.strip()

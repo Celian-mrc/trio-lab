@@ -74,13 +74,14 @@ def build_rows() -> list[dict[str, object]]:
     pages = wiki.fetch_many(sorted({_data_page(e) for e in entries}))
 
     rows: list[dict[str, object]] = []
+    fandom_candidates: list[tuple[int, parse.SourceEntry]] = []
     for entry in entries:
         wikitext = pages.get(_data_page(entry))
         if wikitext is None:
             rows.append(
                 {
                     "champion": entry.champion,
-                    "sort": entry.ability_ref,
+                    "sort": parse.slot_label(entry.ability_ref),
                     "type_cc": entry.cc_type,
                     "duree_s": "",
                     "pct_slow": "",
@@ -99,7 +100,7 @@ def build_rows() -> list[dict[str, object]]:
         rows.append(
             {
                 "champion": entry.champion,
-                "sort": fields["skill"] or entry.ability_ref,
+                "sort": parse.slot_label(fields["skill"] or entry.ability_ref),
                 "type_cc": entry.cc_type,
                 "duree_s": "" if props.duration_s is None else props.duration_s,
                 "pct_slow": "" if props.slow_pct is None else props.slow_pct,
@@ -110,8 +111,52 @@ def build_rows() -> list[dict[str, object]]:
                 "note_relecture": " ; ".join(props.notes),
             }
         )
+        if props.duration_s is None:
+            fandom_candidates.append((len(rows) - 1, entry))
+
+    _fill_from_fandom(rows, fandom_candidates)
     rows.sort(key=lambda r: (r["champion"], r["sort"], r["type_cc"]))
     return rows
+
+
+def _fill_from_fandom(
+    rows: list[dict[str, object]],
+    candidates: list[tuple[int, parse.SourceEntry]],
+) -> None:
+    """2e passe : durées manquantes cherchées sur l'ancien wiki (Fandom).
+
+    Même moteur MediaWiki et mêmes templates, prose souvent plus chiffrée.
+    Contenu possiblement daté (wiki migré en 2024) → chaque valeur récupérée
+    reste annotée pour la relecture.
+    """
+    if not candidates:
+        return
+    pages = wiki.fetch_many(
+        sorted({_data_page(e) for _, e in candidates}), api_url=wiki.FANDOM_API_URL
+    )
+    filled = 0
+    for index, entry in candidates:
+        wikitext = pages.get(_data_page(entry))
+        if wikitext is None:
+            continue
+        fields = parse.parse_ability_fields(wikitext)
+        props = parse.extract_cc_properties(
+            fields["description"], entry.cc_type, fields["leveling"]
+        )
+        if props.duration_s is None:
+            continue
+        row = rows[index]
+        row["duree_s"] = props.duration_s
+        notes = [
+            n for n in str(row["note_relecture"]).split(" ; ") if n and n != "durée introuvable"
+        ]
+        extra = [n for n in props.notes if "moyenne retenue" in n]
+        notes.append("durée via wiki Fandom (contenu possiblement daté)")
+        row["note_relecture"] = " ; ".join(notes + extra)
+        if row["pct_slow"] == "" and props.slow_pct is not None:
+            row["pct_slow"] = props.slow_pct
+        filled += 1
+    logger.info("2e passe Fandom : %d durées complétées sur %d candidates", filled, len(candidates))
 
 
 def write_draft(rows: list[dict[str, object]], path: Path = DRAFT_PATH) -> Path:
