@@ -3,12 +3,13 @@
 Phase par phase : la phase N+1 ne démarre pas avant que la phase N soit verte
 (tests passent, commit fait, cases cochées ici).
 
-## Phase 0 — Cadrage et squelette ✅ (en cours)
+## Phase 0 — Cadrage et squelette ✅
 
 - [x] Décisions de cadrage (scope Emerald+ NA/EUW/KR, Postgres Railway,
       réutilisation collector macro-lab, usage perso d'abord)
 - [x] Docs de cadrage (PROJECT.md, ROADMAP.md, CLAUDE.md)
-- [ ] Schéma Postgres v0 en pseudo-code, validé avant implémentation
+- [x] Schéma Postgres v0 en pseudo-code, validé avant implémentation
+      (`migrations/001_init.sql`)
 
 ## Phase 1 — Collector
 
