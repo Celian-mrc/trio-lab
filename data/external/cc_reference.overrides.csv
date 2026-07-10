@@ -6,114 +6,114 @@
 # dans l'ordre du fichier, une ligne consommée par override.
 # Barèmes convertis en moyenne (règle du 2026-07-10). Zones : durée = 2 s
 # (politique « min(durée de zone, 2 s) », à confirmer).
-champion,sort,type_cc,action,duree_s,pct_slow,conditionnel,note
 # --- CC appliqués au lanceur ou à un allié : pas des CC ennemis ---
-Blitzcrank,W,slow,exclude,,,,se slow lui-même
-Galio,W,slow,exclude,,,,se slow lui-même
-Kalista,R,silence,exclude,,,,c'est l'allié qui est « silence »
-Pantheon,Q,slow,exclude,,,,se slow lui-même
-Poppy,R,slow,exclude,,,,se slow elle-même
-Quinn,R,slow,exclude,,,,se slow elle-même pendant l'incantation
-Renata Glasc,Q,slow,exclude,,,,se slow elle-même
-Ryze,R,root,exclude,,,,se root lui-même
-Ryze,R,silence,exclude,,,,se silence lui-même
-Samira,R,slow,exclude,,,,se slow elle-même
-Tahm Kench,R,ground,exclude,,,,il est lui-même grounded
-Tahm Kench,R,slow,exclude,,,,il est lui-même slow
-Urgot,W,slow,exclude,,,,se slow lui-même
-Varus,Q,slow,exclude,,,,se slow lui-même
-Vi,Q,slow,exclude,,,,se slow elle-même
-Viego,W,slow,exclude,,,,se slow lui-même
-Xerath,Q,slow,exclude,,,,se slow lui-même
 # --- Lignes erronées (le sort n'applique pas ce CC) ---
-Nunu,W,slow,exclude,,,,le sort n'applique pas de slow
-Talon,W,slow,exclude,,,,ne slow pas
-Naafiri,R,slow,exclude,,,,pas de slow
-Rell,E,stun,exclude,,,,pas de stun (fandom)
-Ivern,R,stun,exclude,,,,pas un stun : airborne (ligne airborne conservée)
-Thresh,Q,airborne,exclude,,,,tirs pendant le stun de 1.5 s : CC simultané déjà couvert
 # --- Valeurs corrigées / complétées ---
-Anivia,Q,slow,set,3.0,,,slow 3 s (fandom)
-Ashe,P,slow,set,2.0,,,slow 2 s (fandom)
-Ashe,R,stun,set,2.25,,,1 à 3.5 s selon la distance — moyenne retenue
-Briar,R,slow,set,1.5,,,slow 1.5 s
-Cassiopeia,R,stun,set,2.0,,1,stun 2 s si l'ennemi fait face
-Darius,E,slow,set,1.0,,,slow 1 s
-Fiddlesticks,Q,slow,set,1.6,,,slow 1.6 s
-Fiora,W,stun,set,2.0,,1,stun conditionnel 2 s (parade)
-Hecarim,R,slow,set,1.125,,,slow 1.125 s
-Ivern,R,airborne,set,1.0,,,airborne 1 s (fandom)
-Jayce,E,root,set,0.25,,,root 0.25 s
-K'Sante,W,stun,set,1.125,,,0.5 à 1.75 s selon la charge — moyenne retenue
-K'Sante,R,airborne,set,0.25,,,airborne 0.25 s
-K'Sante,R,root,set,0.5,,,root 0.5 s
-K'Sante,R,stun,set,0.5,,,stun 0.5 s (si la ligne existe côté wiki)
-Kled,Q,airborne,set,0.5,,,durée 2.5 s invraisemblable pour un pull — défaut 0.5 s
-Kled,Q,slow,set,1.5,,,slow 1.5 s
-Lee Sin,R,root,set,0.25,,,root 0.25 s (cibles secondaires)
-Leona,R,stun,set,1.75,,,stun 1.75 s
-Lulu,W,slow,set,,83.0,,vitesse fixée à 60 ≈ 83 % vs ~355 de médiane — à valider
-Maokai,R,root,set,1.5,,,0.75 à 2.25 s selon la distance — moyenne retenue
-Mordekaiser,R,slow,set,0.5,,,slow 0.5 s
-Morgana,R,slow,set,3.0,,,slow 3 s
-Nasus,W,slow,set,5.0,,,slow 5 s croissant
-Neeko,E,root,set,1.1,,,1.8 à 3 s si le projectile traverse une unité (base 1.1 s conservée)
-Nilah,R,airborne,set,0.5,,,airborne bref (250 unités) — le slow 3 s est une ligne séparée
-Nocturne,E,fear,set,1.75,,1,fear conditionnel 1.25-2.25 s — moyenne retenue
-Nocturne,E,slow,set,1.75,90.0,1,mêmes durées que le fear ; 90 %
-Ornn,E,airborne,set,,,1,conditionnel : collision avec un mur
-Ornn,P,airborne,set,,,1,conditionnel : cible brittle
-Ornn,Q,airborne,set,0.25,,,le pilier dure 4 s mais le hop est très court
-Ornn,W,slow,exclude,,,,le W ne slow pas : il applique l'état brittle
-Pyke,E,stun,set,1.25,,,base 1.25 s (+0.1 s par 10 léthalité) — scaling à traiter plus tard
-Renata Glasc,Q,stun,set,0.5,,1,stun conditionnel
-Rell,R,airborne,set,0.5,,,+ attirance progressive vers Rell pendant 2 s
-Rengar,E,root,set,1.75,,,root 1.75 s
-Ryze,W,root,set,1.5,,1,root conditionnel (cible marquée Flux) 1.5 s
-Sett,E,stun,set,1.0,,1,stun conditionnel
-Seraphine,E,root,set,1.3,,1,root si la cible est déjà slow (stun si déjà root)
-Shaco,W,fear,set,1.0,,,fear ~1 s vs champions (2.2 s vs non-champions)
-Shaco,W,slow,set,1.25,73.0,,vitesse fixée à 100 (~73 % vs ~375) pendant fear + 0.25 s — à valider
-Shaco,R,slow,set,,73.0,,vitesse fixée à 100 (~73 %) — à valider
-Shen,E,taunt,set,1.0,,,0.5 à 1.5 s — moyenne retenue
-Shen,Q,slow,set,2.0,,,slow 2 s
-Shyvana,E,slow,set,0.85,,,0.5/0.75/1/1/1 s — moyenne retenue
-Singed,E,airborne,set,1.25,,,0.75 à 1.75 s — moyenne retenue
-Singed,W,ground,set,2.0,,1,zone — politique 2 s à valider
-Sion,Q,stun,set,1.75,,,1.25 à 2.25 s selon la charge — moyenne retenue
-Smolder,R,slow,set,2.0,40.0,,slow 40 % pendant 2 s
-Swain,E,airborne,set,,,1,airborne uniquement à la réactivation
-Taliyah,E,stun,set,0.75,,1,stun conditionnel 0.75 s (dash à travers les mines)
-Taliyah,R,airborne,set,0.5,,,le mur dure mais le hop est de 0.5 s
-Tryndamere,W,slow,set,4.0,,1,slow conditionnel 4 s (cible dos tourné)
-Urgot,R,slow,set,4.0,75.0,,à l'impact : 0-75 % selon les PV manquants pendant 4 s
-Urgot,R,slow,exclude,,,,doublon — l'effet « exécution » (75 % 1.5 s autour d'Urgot) noté sur l'autre ligne
-Vex,P,slow,set,1.125,,,slow 1.125 s
-Warwick,E,slow,set,1.0,,,slow 1 s
-Xerath,E,stun,set,1.5,,,0.75 à 2.25 s selon la distance — moyenne retenue
-Xin Zhao,R,stun,set,0.75,,,stun 0.75 s
-Zac,Q,root,set,0.5,,,root 0.5 s avant le déplacement
-Zac,R,slow,set,1.0,,,slow 1 s
-Zilean,E,slow,set,2.5,,,slow 2.5 s
-Zyra,E,root,set,1.5,,,1 à 2 s selon le rang — moyenne retenue
 # --- Zones (politique : durée = min(durée de zone, 2 s), à confirmer) ---
-Aurelion Sol,E,slow,set,2.0,,,zone + attirance progressive vers le centre
-Braum,R,slow,set,2.0,,,zone de slow
-Cassiopeia,W,ground,set,2.0,,,zone de CC
-Cassiopeia,W,slow,set,2.0,,,zone de CC
-Karma,Q,slow,set,,,,le RQ crée une zone de slow en plus du slow direct
-Kog'Maw,E,slow,set,2.0,,,zone de slow
-Miss Fortune,E,slow,set,2.0,,,zone de slow
-Poppy,Q,slow,set,2.0,,,zone de slow
-Rumble,R,slow,set,2.0,,,zone de slow
-Singed,W,slow,set,2.0,,,zone de slow
-Soraka,E,silence,set,2.0,,,zone de silence
-Taliyah,E,slow,set,2.0,,,zone de slow
-Twitch,W,slow,set,2.0,,,zone de slow
-Udyr,R,slow,set,2.0,,,zone de slow
-Varus,E,slow,set,2.0,,,zone de slow
-Vladimir,W,slow,set,2.0,,,zone de slow autour de lui
 # --- Cas à trancher (gardés avec note) ---
-Bard,R,stun,set,2.5,,,stase type Zhonya 2.5 s (protège aussi la cible) — poids à trancher
-Mordekaiser,E,airborne,set,0.5,,,attirance de 250 unités — durée par défaut de pull
-Yuumi,R,slow,set,,,,non vérifiable sur le fandom — valeurs extraites conservées
+champion,sort,type_cc,action,duree_s,pct_slow,conditionnel,zone,fiabilite,note
+Blitzcrank,W,slow,exclude,,,,,,se slow lui-même
+Galio,W,slow,exclude,,,,,,se slow lui-même
+Kalista,R,silence,exclude,,,,,,c'est l'allié qui est « silence »
+Pantheon,Q,slow,exclude,,,,,,se slow lui-même
+Poppy,R,slow,exclude,,,,,,se slow elle-même
+Quinn,R,slow,exclude,,,,,,se slow elle-même pendant l'incantation
+Renata Glasc,Q,slow,exclude,,,,,,se slow elle-même
+Ryze,R,root,exclude,,,,,,se root lui-même
+Ryze,R,silence,exclude,,,,,,se silence lui-même
+Samira,R,slow,exclude,,,,,,se slow elle-même
+Tahm Kench,R,ground,exclude,,,,,,il est lui-même grounded
+Tahm Kench,R,slow,exclude,,,,,,il est lui-même slow
+Urgot,W,slow,exclude,,,,,,se slow lui-même
+Varus,Q,slow,exclude,,,,,,se slow lui-même
+Vi,Q,slow,exclude,,,,,,se slow elle-même
+Viego,W,slow,exclude,,,,,,se slow lui-même
+Xerath,Q,slow,exclude,,,,,,se slow lui-même
+Nunu,W,slow,exclude,,,,,,le sort n'applique pas de slow
+Talon,W,slow,exclude,,,,,,ne slow pas
+Naafiri,R,slow,exclude,,,,,,pas de slow
+Rell,E,stun,exclude,,,,,,pas de stun (fandom)
+Ivern,R,stun,exclude,,,,,,pas un stun : airborne (ligne airborne conservée)
+Thresh,Q,airborne,exclude,,,,,,tirs pendant le stun de 1.5 s : CC simultané déjà couvert
+Anivia,Q,slow,set,3.0,,,,,slow 3 s (fandom)
+Ashe,P,slow,set,2.0,,,,,slow 2 s (fandom)
+Ashe,R,stun,set,2.25,,,,,1 à 3.5 s selon la distance — moyenne retenue
+Briar,R,slow,set,1.5,,,,,slow 1.5 s
+Cassiopeia,R,stun,set,2.0,,1,,,stun 2 s si l'ennemi fait face
+Darius,E,slow,set,1.0,,,,,slow 1 s
+Fiddlesticks,Q,slow,set,1.6,,,,,slow 1.6 s
+Fiora,W,stun,set,2.0,,1,,,stun conditionnel 2 s (parade)
+Hecarim,R,slow,set,1.125,,,,,slow 1.125 s
+Ivern,R,airborne,set,1.0,,,,,airborne 1 s (fandom)
+Jayce,E,root,set,0.25,,,,,root 0.25 s
+K'Sante,W,stun,set,1.125,,,,,0.5 à 1.75 s selon la charge — moyenne retenue
+K'Sante,R,airborne,set,0.25,,,,,airborne 0.25 s
+K'Sante,R,root,set,0.5,,,,,root 0.5 s
+K'Sante,R,stun,set,0.5,,,,,stun 0.5 s (si la ligne existe côté wiki)
+Kled,Q,airborne,set,0.5,,,,,durée 2.5 s invraisemblable pour un pull — défaut 0.5 s
+Kled,Q,slow,set,1.5,,,,,slow 1.5 s
+Lee Sin,R,root,set,0.25,,,,,root 0.25 s (cibles secondaires)
+Leona,R,stun,set,1.75,,,,,stun 1.75 s
+Lulu,W,slow,set,,83.0,,,,vitesse fixée à 60 ≈ 83 % vs ~355 de médiane — à valider
+Maokai,R,root,set,1.5,,,,,0.75 à 2.25 s selon la distance — moyenne retenue
+Mordekaiser,R,slow,set,0.5,,,,,slow 0.5 s
+Morgana,R,slow,set,3.0,,,,,slow 3 s
+Nasus,W,slow,set,5.0,,,,,slow 5 s croissant
+Neeko,E,root,set,1.1,,,,,1.8 à 3 s si le projectile traverse une unité (base 1.1 s conservée)
+Nilah,R,airborne,set,0.5,,,,,airborne bref (250 unités) — le slow 3 s est une ligne séparée
+Nocturne,E,fear,set,1.75,,1,,,fear conditionnel 1.25-2.25 s — moyenne retenue
+Nocturne,E,slow,set,1.75,90.0,1,,,mêmes durées que le fear ; 90 %
+Ornn,E,airborne,set,,,1,,,conditionnel : collision avec un mur
+Ornn,P,airborne,set,,,1,,,conditionnel : cible brittle
+Ornn,Q,airborne,set,0.25,,,,,le pilier dure 4 s mais le hop est très court
+Ornn,W,slow,exclude,,,,,,le W ne slow pas : il applique l'état brittle
+Pyke,E,stun,set,1.25,,,,,base 1.25 s (+0.1 s par 10 léthalité) — scaling à traiter plus tard
+Renata Glasc,Q,stun,set,0.5,,1,,,stun conditionnel
+Rell,R,airborne,set,0.5,,,,,+ attirance progressive vers Rell pendant 2 s
+Rengar,E,root,set,1.75,,,,,root 1.75 s
+Ryze,W,root,set,1.5,,1,,,root conditionnel (cible marquée Flux) 1.5 s
+Sett,E,stun,set,1.0,,1,,,stun conditionnel
+Seraphine,E,root,set,1.3,,1,,,root si la cible est déjà slow (stun si déjà root)
+Shaco,W,fear,set,1.0,,,,,fear ~1 s vs champions (2.2 s vs non-champions)
+Shaco,W,slow,set,1.25,73.0,,,,vitesse fixée à 100 (~73 % vs ~375) pendant fear + 0.25 s — à valider
+Shaco,R,slow,set,,73.0,,,,vitesse fixée à 100 (~73 %) — à valider
+Shen,E,taunt,set,1.0,,,,,0.5 à 1.5 s — moyenne retenue
+Shen,Q,slow,set,2.0,,,,,slow 2 s
+Shyvana,E,slow,set,0.85,,,,,0.5/0.75/1/1/1 s — moyenne retenue
+Singed,E,airborne,set,1.25,,,,,0.75 à 1.75 s — moyenne retenue
+Singed,W,ground,set,2.0,,1,,,zone — politique 2 s à valider
+Sion,Q,stun,set,1.75,,,,,1.25 à 2.25 s selon la charge — moyenne retenue
+Smolder,R,slow,set,2.0,40.0,,,,slow 40 % pendant 2 s
+Swain,E,airborne,set,,,1,,,airborne uniquement à la réactivation
+Taliyah,E,stun,set,0.75,,1,,,stun conditionnel 0.75 s (dash à travers les mines)
+Taliyah,R,airborne,set,0.5,,,,,le mur dure mais le hop est de 0.5 s
+Tryndamere,W,slow,set,4.0,,1,,,slow conditionnel 4 s (cible dos tourné)
+Urgot,R,slow,set,4.0,75.0,,,,à l'impact : 0-75 % selon les PV manquants pendant 4 s
+Urgot,R,slow,exclude,,,,,,doublon — l'effet « exécution » (75 % 1.5 s autour d'Urgot) noté sur l'autre ligne
+Vex,P,slow,set,1.125,,,,,slow 1.125 s
+Warwick,E,slow,set,1.0,,,,,slow 1 s
+Xerath,E,stun,set,1.5,,,,,0.75 à 2.25 s selon la distance — moyenne retenue
+Xin Zhao,R,stun,set,0.75,,,,,stun 0.75 s
+Zac,Q,root,set,0.5,,,,,root 0.5 s avant le déplacement
+Zac,R,slow,set,1.0,,,,,slow 1 s
+Zilean,E,slow,set,2.5,,,,,slow 2.5 s
+Zyra,E,root,set,1.5,,,,,1 à 2 s selon le rang — moyenne retenue
+Aurelion Sol,E,slow,set,2.0,,,,,zone + attirance progressive vers le centre
+Braum,R,slow,set,2.0,,,,,zone de slow
+Cassiopeia,W,ground,set,2.0,,,,,zone de CC
+Cassiopeia,W,slow,set,2.0,,,,,zone de CC
+Karma,Q,slow,set,,,,,,le RQ crée une zone de slow en plus du slow direct
+Kog'Maw,E,slow,set,2.0,,,,,zone de slow
+Miss Fortune,E,slow,set,2.0,,,,,zone de slow
+Poppy,Q,slow,set,2.0,,,,,zone de slow
+Rumble,R,slow,set,2.0,,,,,zone de slow
+Singed,W,slow,set,2.0,,,,,zone de slow
+Soraka,E,silence,set,2.0,,,,,zone de silence
+Taliyah,E,slow,set,2.0,,,,,zone de slow
+Twitch,W,slow,set,2.0,,,,,zone de slow
+Udyr,R,slow,set,2.0,,,,,zone de slow
+Varus,E,slow,set,2.0,,,,,zone de slow
+Vladimir,W,slow,set,2.0,,,,,zone de slow autour de lui
+Bard,R,stun,set,2.5,,,,,stase type Zhonya 2.5 s — poids plein conservé (setup de combos en sortie de stase, décision Célian 2026-07-11)
+Mordekaiser,E,airborne,set,0.5,,,,,attirance de 250 unités — durée par défaut de pull
+Yuumi,R,slow,set,,,,,,non vérifiable sur le fandom — valeurs extraites conservées

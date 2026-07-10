@@ -53,7 +53,7 @@ Azir,R,airborne,1.0,,mono,skillshot,ultimate,1,0,
 Bard,P,slow,1.0,50.0,multi,skillshot,base,0,0,"%slow variable ({{pp|type = number of Chimes|key=%|25 to 75 for 6|5;25;45;60;75;85}}), moyenne retenue"
 Bard,Q,slow,1.4,60.0,mono,skillshot,base,0,0,"durée depuis leveling « Disable Duration », moyenne retenue"
 Bard,Q,stun,1.4,,mono,skillshot,base,0,1,"durée depuis leveling « Disable Duration », moyenne retenue ; conditionnel (collision/charge) — heuristique, à vérifier"
-Bard,R,stun,2.5,,multi,skillshot,ultimate,0,0,relecture : stase type Zhonya 2.5 s (protège aussi la cible) — poids à trancher
+Bard,R,stun,2.5,,multi,skillshot,ultimate,0,0,relecture : stase type Zhonya 2.5 s — poids plein conservé (setup de combos en sortie de stase
 Bel'Veth,W,airborne,0.75,,multi,skillshot,base,0,0,
 Bel'Veth,W,slow,1.75,50.0,multi,skillshot,base,0,0,"durée depuis leveling « Slow Duration », moyenne retenue"
 Blitzcrank,E,airborne,1.0,,mono,point_click,base,0,0,

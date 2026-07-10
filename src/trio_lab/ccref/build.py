@@ -216,11 +216,14 @@ def apply_overrides(
             excluded.add(index)
             continue
         row = rows[index]
-        for field, column in (("duree_s", "duree_s"), ("pct_slow", "pct_slow")):
-            if override[field].strip():
-                row[column] = float(override[field])
-        if override["conditionnel"].strip():
+        for field in ("duree_s", "pct_slow"):
+            if override.get(field, "").strip():
+                row[field] = float(override[field])
+        if override.get("conditionnel", "").strip():
             row["conditionnel"] = int(override["conditionnel"])
+        for field in ("zone", "fiabilite"):
+            if override.get(field, "").strip():
+                row[field] = override[field].strip()
         row["note_relecture"] = f"relecture : {override['note']}"
     kept = [row for i, row in enumerate(rows) if i not in excluded]
     logger.info(
