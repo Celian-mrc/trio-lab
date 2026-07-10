@@ -43,7 +43,8 @@ async def pg_conn():
     db.apply_migrations(TEST_DSN)
     conn = await db.connect(TEST_DSN)
     await conn.execute(
-        "TRUNCATE players, matches, match_fetch_journal, agg_champion, agg_duo, agg_trio CASCADE"
+        "TRUNCATE players, matches, match_fetch_journal,"
+        " agg_champion, agg_duo, agg_trio, score_duo, score_trio CASCADE"
     )
     try:
         yield conn

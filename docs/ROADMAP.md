@@ -63,12 +63,19 @@ Phase par phase : la phase N+1 ne démarre pas avant que la phase N soit verte
 
 ## Phase 3 — Scores de synergie
 
-- [ ] WR individuels par champion/rôle/patch (baseline)
-- [ ] Synergie duo (validation contre les valeurs dpm.lol)
-- [ ] Synergie trio + lissage bayésien vers la prédiction issue des duos
-- [ ] Fenêtre multi-patchs glissante (1-3 patchs, pondération décroissante,
-      coupure sur rework d'un membre du trio)
-- [ ] Intervalles de confiance et tiers de fiabilité
+- [x] WR individuels par champion/rôle/patch (baseline, pondérés fenêtre)
+- [x] Synergie duo (`score_duo`, synergie brute publiée)
+- [ ] Validation des synergies duo contre les valeurs dpm.lol — **en attente
+      de volume de collecte** (contrôle manuel sur duos très joués)
+- [x] Synergie trio + lissage bayésien vers la prédiction issue des duos
+      (prédiction = moyenne des 3 synergies de duo, elles-mêmes rétrécies vers
+      0 pour éviter les priors extraits des mêmes matchs à faible volume ;
+      k = 200 games-équivalents, à recalibrer avec le volume)
+- [x] Fenêtre multi-patchs glissante (1-3 patchs, poids 1.0/0.6/0.35,
+      coupure sur rework d'un membre — `REWORKS` dans windows.py, vide au
+      démarrage 16.13)
+- [x] Intervalles de confiance (Wilson 95 % sur n effectif) et tiers de
+      fiabilité (faible < 50 ≤ moyen < 400 ≤ élevé)
 
 ## Phase 4 — Counters
 
