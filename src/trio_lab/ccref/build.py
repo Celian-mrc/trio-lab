@@ -13,6 +13,7 @@ from __future__ import annotations
 import csv
 import datetime as dt
 import logging
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -60,6 +61,44 @@ def _data_page(entry: parse.SourceEntry) -> str:
     return f"Template:Data {entry.champion}/{entry.ability_ref}"
 
 
+# Défauts de durée des CC de déplacement jamais chiffrés par les wikis
+# (principe validé par Célian le 2026-07-10) : appliqués en dernier recours
+# après les deux wikis, TOUJOURS annotés « défaut appliqué » pour la relecture.
+def default_duration(cc_type: str, displaces: bool, wall: bool) -> tuple[float, str] | None:
+    """(durée par défaut, libellé) pour un CC sans durée chiffrée, sinon None."""
+    if cc_type == "airborne":
+        if wall:
+            return 0.25, "knock-up très court (mur/pilier)"
+        if displaces:
+            return 0.5, "knockback/pull"
+        return 0.75, "knock-up"
+    if cc_type == "suppression":
+        return 1.25, "suppression liée à un déplacement"
+    return None
+
+
+def _apply_defaults(rows: list[dict[str, object]], walls: dict[int, bool]) -> int:
+    """Applique les défauts aux lignes restées sans durée. Retourne le nombre appliqué."""
+    applied = 0
+    for index, row in enumerate(rows):
+        if row["duree_s"] != "":
+            continue
+        default = default_duration(
+            str(row["type_cc"]), bool(row["repositionnement"]), walls.get(index, False)
+        )
+        if default is None:
+            continue
+        value, label = default
+        row["duree_s"] = value
+        notes = [
+            n for n in str(row["note_relecture"]).split(" ; ") if n and n != "durée introuvable"
+        ]
+        notes.append(f"défaut appliqué : {label} {value} s — à vérifier")
+        row["note_relecture"] = " ; ".join(notes)
+        applied += 1
+    return applied
+
+
 def build_rows() -> list[dict[str, object]]:
     """Interroge le wiki et construit les lignes du brouillon (triées)."""
     sources_wikitext = wiki.fetch_wikitext(SOURCES_PAGE)
@@ -76,6 +115,7 @@ def build_rows() -> list[dict[str, object]]:
 
     rows: list[dict[str, object]] = []
     fandom_candidates: list[tuple[int, parse.SourceEntry]] = []
+    walls: dict[int, bool] = {}  # index de ligne → le sort crée un mur/pilier
     for entry in entries:
         champion = parse.FORM_TO_CHAMPION.get(entry.champion, entry.champion)
         form_note = [f"forme {entry.champion}"] if champion != entry.champion else []
@@ -116,10 +156,15 @@ def build_rows() -> list[dict[str, object]]:
                 "note_relecture": " ; ".join(props.notes + form_note),
             }
         )
+        walls[len(rows) - 1] = bool(
+            re.search(r"\bwall|\bpillar", fields["description"], re.IGNORECASE)
+        )
         if props.duration_s is None or (entry.cc_type == "slow" and props.slow_pct is None):
             fandom_candidates.append((len(rows) - 1, entry))
 
     _fill_from_fandom(rows, fandom_candidates)
+    applied = _apply_defaults(rows, walls)
+    logger.info("défauts de durée appliqués : %d lignes", applied)
     rows.sort(key=lambda r: (r["champion"], r["sort"], r["type_cc"]))
     return rows
 

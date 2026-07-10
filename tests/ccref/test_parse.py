@@ -246,6 +246,41 @@ def test_slow_percentage_from_movement_speed_stat_truncated_at_percent():
     assert props.slow_pct == 30.0
 
 
+def test_self_slow_only_is_flagged_for_exclusion():
+    """W de Viego / Q de Vi : le slow s'applique au lanceur, pas un CC ennemi."""
+    props = parse.extract_cc_properties(
+        "charges up, {{tip|slow|slowing}} himself by 15% during the channel",
+        "slow",
+        [("Slow", "{{ap|15}}%}}")],  # le leveling « Slow » du lanceur ne doit pas fuiter
+    )
+    assert props.duration_s is None
+    assert props.slow_pct is None
+    assert any("lanceur" in n for n in props.notes)
+
+
+def test_passive_voice_self_slow_is_flagged():
+    """W de Viego / Q de Vi : « charges while being slowed by 10% » = malus du lanceur."""
+    props = parse.extract_cc_properties(
+        "'''Viego''' {{tip|channel|charges}} while being {{tip|slow|slowed}} by 10% "
+        "for up to 3 seconds to increase missile range",
+        "slow",
+        [("Slow", "{{ap|10}}%}}")],
+    )
+    assert props.duration_s is None
+    assert props.slow_pct is None
+    assert any("lanceur" in n for n in props.notes)
+
+
+def test_mixed_self_and_enemy_slow_keeps_enemy_values():
+    props = parse.extract_cc_properties(
+        "{{tip|slow|slowing}} herself by 15% while charging, then {{tip|slow|slows}} "
+        "enemies hit by 30% for 2 seconds",
+        "slow",
+    )
+    assert props.slow_pct == 30.0
+    assert props.duration_s == 2.0
+
+
 def test_area_heuristic():
     multi = parse.extract_cc_properties(
         "{{tip|stun|stunning}} all enemies hit for 1 second", "stun"

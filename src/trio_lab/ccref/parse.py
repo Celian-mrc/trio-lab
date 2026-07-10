@@ -104,6 +104,13 @@ _SLOW_RE = re.compile(r"slow[^.]{0,90}?by\s+(\{\{[^{}]+\}\}|\d+(?:\.\d+)?\s*%)",
 _NUMBER_RE = re.compile(r"\d+(?:\.\d+)?")
 # « 1.25 to 1.75 » : bornes d'un barème par rang/niveau.
 _TO_PAIR_RE = re.compile(r"([\d.]+)\s*to\s*([\d.]+)")
+# CC subi par le LANCEUR, voix passive : « charges while being {{tip|slow|slowed}} »
+# (W de Viego, Q de Vi). Appliqué aux ~30 caractères précédant le mot-clé — le
+# mot-clé peut être le 2e paramètre du template ({{tip|slow|slowed}}), d'où le
+# préfixe optionnel `{{tip|xxx|`.
+_SELF_BEFORE_RE = re.compile(
+    r"(?:while\s+being|becoming)\s*(?:\{\{tip\|(?:[\w ]+\|)?)?$", re.IGNORECASE
+)
 # Durée de CC dur au-delà de ce seuil = extraction très probablement fausse
 # (ex. niveau attrapé dans un {{pp}}) → valeur écartée, note de relecture.
 MAX_PLAUSIBLE_HARD_CC_S = 4.0
@@ -281,13 +288,21 @@ def extract_cc_properties(
     # TOUTES les occurrences des mots-clés, en ordre de texte : la première
     # mention d'un CC est souvent sans durée (annonce), le chiffre arrivant
     # dans le recast ou une condition (constaté : R de Yasuo, E de Briar).
-    positions = sorted(
+    all_positions = sorted(
         {
             match.start()
             for keyword in _CC_KEYWORDS[cc_type]
             for match in re.finditer(re.escape(keyword), lowered)
         }
     )
+    # Mentions appliquées au LANCEUR (« slowing himself », « charges while
+    # being slowed » : W de Viego, Q de Vi…) : pas un CC ennemi, fenêtres
+    # écartées. Si TOUTES les mentions d'un slow sont self, la ligne entière
+    # est suspecte — la page Sources liste ces sorts à cause du malus du lanceur.
+    positions = [p for p in all_positions if not _is_self_mention(description, lowered, p)]
+    if cc_type == "slow" and all_positions and not positions:
+        props.notes.append("slow appliqué au lanceur (self), pas un CC ennemi — à exclure ?")
+        return props
     if not positions:
         props.notes.append(f"mot-clé {cc_type} introuvable dans la description")
     for window_start in positions:
@@ -328,7 +343,14 @@ def extract_cc_properties(
         props.notes.append("durée introuvable")
 
     if cc_type == "slow":
-        slow = _SLOW_RE.search(description)
+        slow = next(
+            (
+                m
+                for m in _SLOW_RE.finditer(description)
+                if not _is_self_mention(description, lowered, m.start())
+            ),
+            None,
+        )
         if slow:
             props.slow_pct = _mean_number(slow.group(1))
             if len(_NUMBER_RE.findall(slow.group(1))) > 1:
@@ -351,6 +373,13 @@ def extract_cc_properties(
 
     props.area = any(marker in lowered for marker in _AREA_MARKERS)
     return props
+
+
+def _is_self_mention(description: str, lowered: str, pos: int) -> bool:
+    """Vrai si la mention de CC en `pos` s'applique au lanceur, pas à un ennemi."""
+    if "self" in lowered[pos : pos + 30]:
+        return True
+    return bool(_SELF_BEFORE_RE.search(description[max(0, pos - 30) : pos]))
 
 
 def _duration_stats_for(cc_type: str, leveling: list[tuple[str, str]]) -> list[tuple[str, str]]:
