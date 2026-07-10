@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 
 SOURCES_PAGE = "Types of Crowd Control/Sources"
 DRAFT_PATH = config.PROJECT_ROOT / "data" / "external" / "cc_reference.draft.csv"
+# Arbitrages de relecture humaine, appliqués APRÈS toutes les passes automatiques
+# (ils priment) : les décisions de Célian survivent ainsi aux régénérations.
+OVERRIDES_PATH = config.PROJECT_ROOT / "data" / "external" / "cc_reference.overrides.csv"
 
 CSV_COLUMNS = [
     "champion",
@@ -171,8 +174,62 @@ def build_rows() -> list[dict[str, object]]:
     _fill_from_fandom(rows, fandom_candidates)
     applied = _apply_defaults(rows, walls)
     logger.info("défauts de durée appliqués : %d lignes", applied)
+    rows = apply_overrides(rows, load_overrides())
     rows.sort(key=lambda r: (r["champion"], r["sort"], r["type_cc"]))
     return rows
+
+
+def load_overrides(path: Path = OVERRIDES_PATH) -> list[dict[str, str]]:
+    """Charge les arbitrages de relecture (liste ordonnée ; vide si pas de fichier)."""
+    if not path.exists():
+        return []
+    with path.open(encoding="utf-8-sig", newline="") as fh:
+        return list(csv.DictReader(line for line in fh if not line.startswith("#")))
+
+
+def apply_overrides(
+    rows: list[dict[str, object]], overrides: list[dict[str, str]]
+) -> list[dict[str, object]]:
+    """Applique les arbitrages humains : `set` écrase les champs fournis,
+    `exclude` retire la ligne. Les overrides s'appliquent dans l'ordre du
+    fichier ; chaque override consomme la première ligne correspondante non
+    encore traitée (gère les doublons de clé). Un override sans correspondance
+    est signalé (ligne disparue du wiki, typo…).
+    """
+    consumed: set[int] = set()
+    excluded: set[int] = set()
+    for override in overrides:
+        key = (override["champion"], override["sort"], override["type_cc"])
+        index = next(
+            (
+                i
+                for i, row in enumerate(rows)
+                if i not in consumed and (row["champion"], str(row["sort"]), row["type_cc"]) == key
+            ),
+            None,
+        )
+        if index is None:
+            logger.warning("override sans correspondance : %s %s %s", *key)
+            continue
+        consumed.add(index)
+        if override["action"] == "exclude":
+            excluded.add(index)
+            continue
+        row = rows[index]
+        for field, column in (("duree_s", "duree_s"), ("pct_slow", "pct_slow")):
+            if override[field].strip():
+                row[column] = float(override[field])
+        if override["conditionnel"].strip():
+            row["conditionnel"] = int(override["conditionnel"])
+        row["note_relecture"] = f"relecture : {override['note']}"
+    kept = [row for i, row in enumerate(rows) if i not in excluded]
+    logger.info(
+        "overrides appliqués : %d set, %d exclusions (%d lignes restantes)",
+        len(consumed) - len(excluded),
+        len(excluded),
+        len(kept),
+    )
+    return kept
 
 
 def _retry_forms(pages: dict[str, str | None], entries: list[parse.SourceEntry]) -> None:

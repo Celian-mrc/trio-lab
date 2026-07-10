@@ -31,6 +31,91 @@ def test_no_default_for_other_cc_types():
         assert build.default_duration(cc_type, displaces=False, wall=False) is None
 
 
+def _row(champion, sort, type_cc, **extra):
+    base = {
+        "champion": champion,
+        "sort": sort,
+        "type_cc": type_cc,
+        "duree_s": "",
+        "pct_slow": "",
+        "conditionnel": 0,
+        "repositionnement": 0,
+        "note_relecture": "durée introuvable",
+    }
+    base.update(extra)
+    return base
+
+
+def test_apply_overrides_set_exclude_and_duplicates():
+    rows = [
+        _row("Viego", "W", "slow", pct_slow=10.0),
+        _row("Urgot", "R", "slow"),  # doublon 1 : effet à l'impact
+        _row("Urgot", "R", "slow"),  # doublon 2 : effet à l'exécution
+        _row("Sett", "E", "stun", duree_s=1.0),
+    ]
+    overrides = [
+        {
+            "champion": "Viego",
+            "sort": "W",
+            "type_cc": "slow",
+            "action": "exclude",
+            "duree_s": "",
+            "pct_slow": "",
+            "conditionnel": "",
+            "note": "self",
+        },
+        {
+            "champion": "Urgot",
+            "sort": "R",
+            "type_cc": "slow",
+            "action": "set",
+            "duree_s": "4.0",
+            "pct_slow": "75.0",
+            "conditionnel": "",
+            "note": "impact",
+        },
+        {
+            "champion": "Urgot",
+            "sort": "R",
+            "type_cc": "slow",
+            "action": "exclude",
+            "duree_s": "",
+            "pct_slow": "",
+            "conditionnel": "",
+            "note": "doublon",
+        },
+        {
+            "champion": "Sett",
+            "sort": "E",
+            "type_cc": "stun",
+            "action": "set",
+            "duree_s": "",
+            "pct_slow": "",
+            "conditionnel": "1",
+            "note": "conditionnel",
+        },
+        {
+            "champion": "Fantome",
+            "sort": "Q",
+            "type_cc": "stun",
+            "action": "set",
+            "duree_s": "9",
+            "pct_slow": "",
+            "conditionnel": "",
+            "note": "sans correspondance",
+        },
+    ]
+    kept = build.apply_overrides(rows, overrides)
+
+    assert len(kept) == 2  # Viego W et le doublon Urgot exclus
+    urgot = next(r for r in kept if r["champion"] == "Urgot")
+    assert (urgot["duree_s"], urgot["pct_slow"]) == (4.0, 75.0)
+    assert urgot["note_relecture"].startswith("relecture :")
+    sett = next(r for r in kept if r["champion"] == "Sett")
+    assert sett["conditionnel"] == 1
+    assert sett["duree_s"] == 1.0  # champ vide dans l'override : non touché
+
+
 def test_apply_defaults_annotates_and_fills():
     rows = [
         {
