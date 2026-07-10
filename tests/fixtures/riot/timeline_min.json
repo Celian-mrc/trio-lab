@@ -1,0 +1,33 @@
+{
+  "metadata": {
+    "matchId": "EUW1_TEST0001",
+    "participants": ["puuid-1", "puuid-2"]
+  },
+  "info": {
+    "frameInterval": 60000,
+    "participants": [
+      {"participantId": 1, "puuid": "puuid-1"},
+      {"participantId": 2, "puuid": "puuid-2"}
+    ],
+    "frames": [
+      {
+        "timestamp": 0,
+        "participantFrames": {
+          "1": {"participantId": 1, "currentGold": 500, "totalGold": 500, "level": 1, "xp": 0, "minionsKilled": 0, "jungleMinionsKilled": 0, "position": {"x": 0, "y": 0}},
+          "2": {"participantId": 2, "currentGold": 500, "totalGold": 500, "level": 1, "xp": 0, "minionsKilled": 0, "jungleMinionsKilled": 0, "position": {"x": 14800, "y": 14800}}
+        },
+        "events": []
+      },
+      {
+        "timestamp": 60000,
+        "participantFrames": {
+          "1": {"participantId": 1, "currentGold": 800, "totalGold": 900, "level": 3, "xp": 600, "minionsKilled": 12, "jungleMinionsKilled": 0, "position": {"x": 3000, "y": 3000}},
+          "2": {"participantId": 2, "currentGold": 700, "totalGold": 850, "level": 2, "xp": 500, "minionsKilled": 10, "jungleMinionsKilled": 0, "position": {"x": 11000, "y": 11000}}
+        },
+        "events": [
+          {"timestamp": 45000, "type": "CHAMPION_KILL", "killerId": 1, "victimId": 2, "assistingParticipantIds": [], "position": {"x": 5000, "y": 5000}, "bounty": 300}
+        ]
+      }
+    ]
+  }
+}

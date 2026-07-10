@@ -13,13 +13,21 @@ Phase par phase : la phase N+1 ne démarre pas avant que la phase N soit verte
 
 ## Phase 1 — Collector
 
-- [ ] Extraire/adapter le client Riot de macro-lab (throttling, back-off 429)
-- [ ] Support des 3 régions de routage (americas/europe/asia), budgets séparés
-- [ ] Découverte des joueurs Emerald+ (league-v4) par région
-- [ ] Récupération match + timeline, filtrage ranked soloQ, dédoublonnage
+- [x] Extraire/adapter le client Riot de macro-lab (throttling, back-off 429)
+- [x] Support des 3 régions de routage (americas/europe/asia), budgets séparés
+      (limiteur pulsefire par région, une boucle async par plateforme)
+- [x] Découverte des joueurs Emerald+ (league-v4) par région (apex +
+      entries paginé EMERALD/DIAMOND, plafonné par `--max-pages`)
+- [x] Récupération match + timeline, filtrage ranked soloQ, dédoublonnage
+      (PK `match_id` + journal `002_collector_journal.sql` ; timelines brutes
+      archivées en JSON.gz local, jamais en base — extraction en Phase 2)
 - [ ] Écriture dans Postgres (local d'abord, via docker/desktop ou Postgres
-      Railway distant)
-- [ ] Tests : parsing, dédoublonnage, respect des rate limits (mock)
+      Railway distant) — code + tests d'intégration écrits
+      (`test_storage_pg.py`), **reste à valider contre une vraie base** :
+      définir `DATABASE_URL`/`TEST_DATABASE_URL` puis `python -m trio_lab.db`
+      et `pytest`
+- [x] Tests : parsing, dédoublonnage, respect des rate limits (mock)
+      (45 tests, aucun appel réseau ; back-off 429/5xx prouvé via aioresponses)
 
 ## Phase 2 — Extraction des stats par match
 

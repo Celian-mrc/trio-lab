@@ -1,0 +1,181 @@
+"""Orchestrateur de collecte (Phase 1) : découverte → file de joueurs → Postgres.
+
+Pipeline par plateforme, les trois plateformes (na1/euw1/kr) tournant en
+concurrence dans le même process — les budgets de rate-limit restent séparés
+car le limiteur pulsefire compte par région de routage (americas/europe/asia).
+
+Boucle d'une plateforme :
+1. **découverte** (rafraîchie toutes les DISCOVERY_TTL_S) : Emerald+ → `players` ;
+2. **file** : joueur le moins récemment scanné (`matches_fetched_at NULLS FIRST`) ;
+3. **fan-out** : match_ids SoloQ bornés au patch, filtrés du déjà-fait ;
+4. **téléchargement** : detail → inclusion → parsing → timeline → Postgres
+   (+ archive JSON.gz), échecs journalisés.
+
+Reprenable et idempotent : tout l'état (joueurs, matchs, journal) vit en base ;
+relancer ignore le déjà-fait. Le débit est cadencé par le rate-limit API (~1
+match = 2 appels), le téléchargement est donc séquentiel par plateforme — la
+concurrence utile est entre régions, pas dans la région.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import time
+from collections import Counter
+from pathlib import Path
+
+import psycopg
+
+from trio_lab import config, db
+from trio_lab.collector import inclusion, ladder, parsing, patches, storage
+from trio_lab.collector.client import RiotClient
+
+logger = logging.getLogger(__name__)
+
+# Période de rafraîchissement de la découverte des joueurs (1 h).
+DISCOVERY_TTL_S = 3600
+# Heartbeat de log : état de la collecte tous les N matchs traités.
+LOG_EVERY = 50
+
+
+async def run(
+    *,
+    platforms: list[str],
+    patch: str,
+    target: int | None = None,
+    max_pages: int = ladder.DEFAULT_MAX_PAGES,
+    max_attempts: int = storage.DEFAULT_MAX_ATTEMPTS,
+    data_dir: Path | None = None,
+    dsn: str | None = None,
+) -> dict[str, int]:
+    """Collecte sur plusieurs plateformes en concurrence. Retourne les compteurs agrégés.
+
+    `target` = nombre de matchs téléchargés **par plateforme** avant arrêt ;
+    `None` = boucle sans fin (mode service 24/24, Phase 6).
+    """
+    patches.bounds_for(patch)  # échec immédiat si le patch n'est pas renseigné
+    resolved_dir = data_dir if data_dir is not None else config.DATA_DIR
+    results = await asyncio.gather(
+        *(
+            _collect_platform(
+                platform=p,
+                patch=patch,
+                target=target,
+                max_pages=max_pages,
+                max_attempts=max_attempts,
+                data_dir=resolved_dir,
+                dsn=dsn,
+            )
+            for p in platforms
+        )
+    )
+    totals: Counter[str] = Counter()
+    for counts in results:
+        totals.update(counts)
+    logger.info("collecte terminée : %s", dict(totals))
+    return dict(totals)
+
+
+async def _collect_platform(
+    *,
+    platform: str,
+    patch: str,
+    target: int | None,
+    max_pages: int,
+    max_attempts: int,
+    data_dir: Path,
+    dsn: str | None,
+) -> Counter[str]:
+    """Boucle de collecte d'une plateforme. Une connexion Postgres dédiée par boucle."""
+    counts: Counter[str] = Counter()
+    start_s, end_s = patches.epoch_bounds_for(patch)
+    last_discovery = float("-inf")
+    conn = await db.connect(dsn)
+    try:
+        async with RiotClient() as client:
+            while target is None or counts["downloaded"] < target:
+                if time.monotonic() - last_discovery > DISCOVERY_TTL_S:
+                    rows = await ladder.discover_players(
+                        client, platform=platform, max_pages=max_pages
+                    )
+                    await storage.upsert_players(conn, rows)
+                    last_discovery = time.monotonic()
+                    logger.info("%s : découverte → %d joueurs Emerald+", platform, len(rows))
+
+                puuid = await storage.next_player(conn, platform=platform)
+                if puuid is None:
+                    logger.warning("%s : aucun joueur en file, arrêt", platform)
+                    break
+
+                match_ids = await client.get_match_ids_by_puuid(
+                    puuid, platform=platform, start_time=start_s, end_time=end_s
+                )
+                todo = await storage.filter_new_match_ids(conn, match_ids)
+                for match_id in todo:
+                    if target is not None and counts["downloaded"] >= target:
+                        break
+                    await _process_match(
+                        client,
+                        conn,
+                        platform=platform,
+                        patch=patch,
+                        match_id=match_id,
+                        max_attempts=max_attempts,
+                        data_dir=data_dir,
+                        counts=counts,
+                    )
+                    processed = counts["downloaded"] + counts["excluded"] + counts["errors"]
+                    if processed % LOG_EVERY == 0:
+                        logger.info(
+                            "%s : %d ok / %d exclus / %d erreurs (rate restant : %s)",
+                            platform,
+                            counts["downloaded"],
+                            counts["excluded"],
+                            counts["errors"],
+                            client.rate.remaining,
+                        )
+                await storage.mark_player_fetched(conn, puuid)
+                counts["players_scanned"] += 1
+    finally:
+        await conn.close()
+    logger.info("%s : fin de collecte, %s", platform, dict(counts))
+    return counts
+
+
+async def _process_match(
+    client: RiotClient,
+    conn: psycopg.AsyncConnection,
+    *,
+    platform: str,
+    patch: str,
+    match_id: str,
+    max_attempts: int,
+    data_dir: Path,
+    counts: Counter[str],
+) -> None:
+    """Télécharge et ingère un match ; toute issue est journalisée, rien ne remonte."""
+    try:
+        detail = await client.get_match(match_id, platform=platform)
+        included, reason = inclusion.is_included(detail, patch)
+        if not included:
+            await storage.journal_exclusion(conn, match_id, platform=platform, reason=reason)
+            counts["excluded"] += 1
+            return
+        # Parsing AVANT l'appel timeline : ne pas dépenser une requête API sur
+        # un match aux données dégradées (rôles incohérents → exclusion).
+        row = parsing.match_row(detail, platform=platform)
+        participants = parsing.participant_rows(detail)
+        timeline = await client.get_match_timeline(match_id, platform=platform)
+        storage.archive_timeline(data_dir, platform, patch, match_id, timeline)
+        await storage.insert_match(conn, row, participants)
+        counts["downloaded"] += 1
+    except parsing.ParseError as exc:
+        await storage.journal_exclusion(conn, match_id, platform=platform, reason=f"parse: {exc}")
+        counts["excluded"] += 1
+    except Exception as exc:  # noqa: BLE001 — on journalise et on continue
+        status = await storage.journal_failure(
+            conn, match_id, platform=platform, error=str(exc), max_attempts=max_attempts
+        )
+        counts["errors"] += 1
+        logger.warning("échec %s (%s) → %s", match_id, exc, status)

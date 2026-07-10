@@ -12,6 +12,20 @@ Small-sample trios are smoothed with a Bayesian prior built from their three
 duo synergies. See `docs/PROJECT.md` for the full design and `docs/ROADMAP.md`
 for progress.
 
+## Development
+
+```bash
+python -m venv .venv && .venv/Scripts/python -m pip install -e ".[dev]"
+cp .env.example .env          # then fill RIOT_API_KEY and DATABASE_URL
+.venv/Scripts/python -m trio_lab.db                            # apply migrations
+.venv/Scripts/python -m trio_lab.collector --patch 16.13 --target 100
+.venv/Scripts/python -m pytest                                 # tests
+```
+
+Postgres integration tests (`tests/collector/test_storage_pg.py`) run only when
+`TEST_DATABASE_URL` points to a disposable test database; they are skipped
+otherwise.
+
 ## Disclaimer
 
 Trio Lab is a personal project. It is **not endorsed by Riot Games** and does
