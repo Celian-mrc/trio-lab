@@ -38,6 +38,10 @@ logger = logging.getLogger(__name__)
 DISCOVERY_TTL_S = 3600
 # Heartbeat de log : état de la collecte tous les N matchs traités.
 LOG_EVERY = 50
+# Pause après une erreur de boucle (429 résiduel ayant épuisé les retries du
+# middleware, réseau, base indisponible) avant de reprendre — un collector
+# 24/24 ne meurt pas sur une erreur transitoire.
+RETRY_PAUSE_S = 30
 
 
 async def run(
@@ -96,48 +100,59 @@ async def _collect_platform(
     try:
         async with RiotClient() as client:
             while target is None or counts["downloaded"] < target:
-                if time.monotonic() - last_discovery > DISCOVERY_TTL_S:
-                    rows = await ladder.discover_players(
-                        client, platform=platform, max_pages=max_pages
-                    )
-                    await storage.upsert_players(conn, rows)
-                    last_discovery = time.monotonic()
-                    logger.info("%s : découverte → %d joueurs Emerald+", platform, len(rows))
-
-                puuid = await storage.next_player(conn, platform=platform)
-                if puuid is None:
-                    logger.warning("%s : aucun joueur en file, arrêt", platform)
-                    break
-
-                match_ids = await client.get_match_ids_by_puuid(
-                    puuid, platform=platform, start_time=start_s, end_time=end_s
-                )
-                todo = await storage.filter_new_match_ids(conn, match_ids)
-                for match_id in todo:
-                    if target is not None and counts["downloaded"] >= target:
-                        break
-                    await _process_match(
-                        client,
-                        conn,
-                        platform=platform,
-                        patch=patch,
-                        match_id=match_id,
-                        max_attempts=max_attempts,
-                        data_dir=data_dir,
-                        counts=counts,
-                    )
-                    processed = counts["downloaded"] + counts["excluded"] + counts["errors"]
-                    if processed % LOG_EVERY == 0:
-                        logger.info(
-                            "%s : %d ok / %d exclus / %d erreurs (rate restant : %s)",
-                            platform,
-                            counts["downloaded"],
-                            counts["excluded"],
-                            counts["errors"],
-                            client.rate.remaining,
+                try:
+                    if time.monotonic() - last_discovery > DISCOVERY_TTL_S:
+                        rows = await ladder.discover_players(
+                            client, platform=platform, max_pages=max_pages
                         )
-                await storage.mark_player_fetched(conn, puuid)
-                counts["players_scanned"] += 1
+                        await storage.upsert_players(conn, rows)
+                        last_discovery = time.monotonic()
+                        logger.info("%s : découverte → %d joueurs Emerald+", platform, len(rows))
+
+                    puuid = await storage.next_player(conn, platform=platform)
+                    if puuid is None:
+                        logger.warning("%s : aucun joueur en file, arrêt", platform)
+                        break
+
+                    match_ids = await client.get_match_ids_by_puuid(
+                        puuid, platform=platform, start_time=start_s, end_time=end_s
+                    )
+                    todo = await storage.filter_new_match_ids(conn, match_ids)
+                    for match_id in todo:
+                        if target is not None and counts["downloaded"] >= target:
+                            break
+                        await _process_match(
+                            client,
+                            conn,
+                            platform=platform,
+                            patch=patch,
+                            match_id=match_id,
+                            max_attempts=max_attempts,
+                            data_dir=data_dir,
+                            counts=counts,
+                        )
+                        processed = counts["downloaded"] + counts["excluded"] + counts["errors"]
+                        if processed % LOG_EVERY == 0:
+                            logger.info(
+                                "%s : %d ok / %d exclus / %d erreurs (rate restant : %s)",
+                                platform,
+                                counts["downloaded"],
+                                counts["excluded"],
+                                counts["errors"],
+                                client.rate.remaining,
+                            )
+                    await storage.mark_player_fetched(conn, puuid)
+                    counts["players_scanned"] += 1
+                except Exception as exc:  # noqa: BLE001 — boucle 24/24 : pause et reprise
+                    # Le joueur n'est pas marqué scanné : il sera retenté.
+                    counts["loop_errors"] += 1
+                    logger.warning(
+                        "%s : erreur de boucle (%s), reprise dans %d s",
+                        platform,
+                        exc,
+                        RETRY_PAUSE_S,
+                    )
+                    await asyncio.sleep(RETRY_PAUSE_S)
     finally:
         await conn.close()
     logger.info("%s : fin de collecte, %s", platform, dict(counts))

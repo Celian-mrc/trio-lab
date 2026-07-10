@@ -227,6 +227,32 @@ async def test_failures_become_permanent_after_max_attempts(store, tmp_path, mon
     assert not store.matches
 
 
+class _FlakyFanoutClient(_FakeClient):
+    """Le fan-out échoue une fois (429 résiduel simulé) puis fonctionne."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.failed_once = False
+
+    async def get_match_ids_by_puuid(self, puuid, **kwargs):
+        if not self.failed_once:
+            self.failed_once = True
+            raise RuntimeError("429, message='Too Many Requests'")
+        return await super().get_match_ids_by_puuid(puuid, **kwargs)
+
+
+async def test_loop_survives_transient_fanout_error(store, tmp_path, monkeypatch):
+    """Un 429 ayant épuisé les retries du client ne tue pas la boucle 24/24."""
+    monkeypatch.setattr(collect, "RiotClient", _FlakyFanoutClient)
+    monkeypatch.setattr(collect, "RETRY_PAUSE_S", 0)
+    counts = await collect.run(platforms=["euw1"], patch=PATCH, target=100, data_dir=tmp_path)
+
+    assert counts["loop_errors"] == 1
+    # Le joueur en échec n'a pas été marqué scanné : il a été retenté, tout est là.
+    assert counts["downloaded"] == 2
+    assert counts["players_scanned"] == 2
+
+
 class _PerPlatformClient(_FakeClient):
     """Joueurs et matchs distincts par plateforme (insensible à l'ordonnancement)."""
 
