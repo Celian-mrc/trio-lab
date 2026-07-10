@@ -45,7 +45,9 @@ Hecarim,R,slow,set,1.125,,,slow 1.125 s
 Ivern,R,airborne,set,1.0,,,airborne 1 s (fandom)
 Jayce,E,root,set,0.25,,,root 0.25 s
 K'Sante,W,stun,set,1.125,,,0.5 à 1.75 s selon la charge — moyenne retenue
-K'Sante,R,airborne,set,0.25,,,airborne 0.25 s (relecture : root 0.5 s et stun 0.5 s non listés par le wiki)
+K'Sante,R,airborne,set,0.25,,,airborne 0.25 s
+K'Sante,R,root,set,0.5,,,root 0.5 s
+K'Sante,R,stun,set,0.5,,,stun 0.5 s (si la ligne existe côté wiki)
 Kled,Q,airborne,set,0.5,,,durée 2.5 s invraisemblable pour un pull — défaut 0.5 s
 Kled,Q,slow,set,1.5,,,slow 1.5 s
 Lee Sin,R,root,set,0.25,,,root 0.25 s (cibles secondaires)
