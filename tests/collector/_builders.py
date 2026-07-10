@@ -26,12 +26,21 @@ def build_detail(
     participants = []
     for team_index, team in enumerate(TEAMS):
         for role_index, role in enumerate(ROLES):
+            pid = 5 * team_index + role_index + 1
             participants.append(
                 {
+                    "participantId": pid,
                     "teamId": team,
                     "teamPosition": role,
                     "championId": 10 * team_index + role_index + 1,
                     "win": team == winning_team,
+                    # Stats de fin de match déterministes (tests d'extraction Phase 2).
+                    "visionScore": pid,
+                    "timeCCingOthers": pid * 2,
+                    "totalDamageDealtToChampions": pid * 1000,
+                    "firstBloodKill": False,
+                    "firstBloodAssist": False,
+                    "challenges": {"turretPlatesTaken": 1},
                 }
             )
     return {

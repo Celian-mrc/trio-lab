@@ -13,9 +13,8 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
-import sys
 
-from trio_lab import config
+from trio_lab import config, db
 from trio_lab.collector import collect, ladder, storage
 
 
@@ -51,10 +50,7 @@ def main() -> None:
         level=config.LOG_LEVEL,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
-    # psycopg async ne supporte pas le ProactorEventLoop (défaut Windows) ;
-    # no-op sur Linux (Railway).
-    if sys.platform == "win32":
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    db.use_selector_event_loop()
     asyncio.run(
         collect.run(
             platforms=[p.strip() for p in args.platforms.split(",") if p.strip()],

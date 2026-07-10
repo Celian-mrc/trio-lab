@@ -10,7 +10,9 @@ Usage CLI : `python -m trio_lab.db` applique les migrations sur DATABASE_URL.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import sys
 from pathlib import Path
 
 import psycopg
@@ -20,6 +22,16 @@ from trio_lab import config
 logger = logging.getLogger(__name__)
 
 MIGRATIONS_DIR = config.PROJECT_ROOT / "migrations"
+
+
+def use_selector_event_loop() -> None:
+    """Bascule sur SelectorEventLoop sous Windows, avant tout `asyncio.run`.
+
+    psycopg async ne supporte pas le ProactorEventLoop (défaut Windows) ;
+    no-op sur Linux (Railway). À appeler par chaque point d'entrée async.
+    """
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
 def require_dsn(dsn: str | None = None) -> str:

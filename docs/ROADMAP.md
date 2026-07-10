@@ -27,18 +27,23 @@ Phase par phase : la phase N+1 ne démarre pas avant que la phase N soit verte
 - [x] Tests : parsing, dédoublonnage, respect des rate limits (mock)
       (45 tests, aucun appel réseau ; back-off 429/5xx prouvé via aioresponses)
 
-## Phase 2 — Extraction des stats par match
+## Phase 2 — Extraction des stats par match ✅
 
-- [ ] Identification du trio (jgl/mid/supp) par équipe et par match
-- [ ] Extraction timeline : gold diff à 5/10/15/…, objectifs (grubs, héraut,
+- [x] Identification du trio (jgl/mid/supp) par équipe et par match
+      (`stats/extract.py`, branché à l'ingestion dans le collector +
+      `stats/backfill.py` pour les matchs pré-Phase 2)
+- [x] Extraction timeline : gold diff à 5/10/15/…, objectifs (grubs, héraut,
       drakes + ordre, Atakhan, Nashor), tours + emplacements + plaques,
       first blood, kill participation < 15 min
-- [ ] Stats de fin de match : vision, dégâts (part du trio), CC empirique
+      (⚠️ `DRAGON_SOUL_GIVEN` = annonce du type d'âme, pas son obtention —
+      l'âme se déduit du cumul de 4 drakes ; constaté sur timelines 16.13)
+- [x] Stats de fin de match : vision, dégâts (part du trio), CC empirique
       (`timeCCingOthers`), durée
-- [ ] Tables agrégées : par champion (WR individuel), par duo, par trio —
-      toujours segmentées par `patch` (fenêtre multi-patchs appliquée à la
-      lecture, jamais au stockage)
-- [ ] Tests sur timelines réelles archivées
+- [x] Tables agrégées : par champion (WR individuel), par duo, par trio —
+      grain (patch, platform), rafraîchissement idempotent par patch
+      (`003_aggregates.sql`, `python -m trio_lab.stats.aggregate`)
+- [x] Tests sur timelines réelles archivées (2 matchs 16.13, valeurs attendues
+      calculées indépendamment des extracteurs ; 79 tests au total)
 
 ## Phase 2b — Score CC théorique (parallélisable avec la Phase 3)
 

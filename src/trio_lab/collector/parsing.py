@@ -25,12 +25,20 @@ class ParseError(ValueError):
     """
 
 
+def winning_team_of(detail: dict[str, Any]) -> int:
+    """Équipe gagnante (100/200) d'un détail de match. Lève `ParseError` si indéterminée.
+
+    Partagé avec l'extraction des stats trio (`trio_lab.stats.extract`).
+    """
+    winners = [t["teamId"] for t in detail["info"].get("teams", []) if t.get("win")]
+    if len(winners) != 1 or winners[0] not in TEAMS:
+        raise ParseError(f"équipe gagnante indéterminée : {winners!r}")
+    return winners[0]
+
+
 def match_row(detail: dict[str, Any], *, platform: str) -> dict[str, Any]:
     """Ligne `matches` d'un détail de match. Lève `ParseError` si incohérent."""
     info = detail["info"]
-    winners = [t["teamId"] for t in info.get("teams", []) if t.get("win")]
-    if len(winners) != 1 or winners[0] not in TEAMS:
-        raise ParseError(f"équipe gagnante indéterminée : {winners!r}")
     return {
         "match_id": detail["metadata"]["matchId"],
         "platform": platform,
@@ -39,7 +47,7 @@ def match_row(detail: dict[str, Any], *, platform: str) -> dict[str, Any]:
         "queue_id": info["queueId"],
         "game_creation": datetime.fromtimestamp(info["gameCreation"] / 1000, tz=UTC),
         "game_duration_s": inclusion.game_duration_ms(info) // 1000,
-        "winning_team": winners[0],
+        "winning_team": winning_team_of(detail),
     }
 
 

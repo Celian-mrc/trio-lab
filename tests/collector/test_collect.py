@@ -14,6 +14,7 @@ import pytest
 
 from trio_lab.collector import collect, patches
 
+from ..stats._builders import build_timeline
 from ._builders import build_detail
 
 PATCH = "16.98"
@@ -53,7 +54,7 @@ class _FakeClient:
         return build_detail(match_id, patch=PATCH)
 
     async def get_match_timeline(self, match_id, *, platform):
-        return {"metadata": {"matchId": match_id}}
+        return build_timeline(match_id)  # extractible : le pipeline appelle extract_match
 
 
 class _FailingClient(_FakeClient):
@@ -84,6 +85,7 @@ class _FakeStore:
     def __init__(self):
         self.players: dict[str, dict] = {}  # puuid → {platform, fetched}
         self.matches: dict[str, tuple[dict, list[dict]]] = {}
+        self.trio_stats: dict[str, tuple[list, list]] = {}
         self.journal: dict[str, dict] = {}
         self.archived: list[str] = []
 
@@ -132,10 +134,11 @@ class _FakeStore:
         )
         return entry["status"]
 
-    async def insert_match(self, conn, row, participants):
+    async def insert_match(self, conn, row, participants, trio_stats=None, objective_events=None):
         if row["match_id"] in self.matches:
             return False
         self.matches[row["match_id"]] = (row, participants)
+        self.trio_stats[row["match_id"]] = (trio_stats or [], objective_events or [])
         self.journal.pop(row["match_id"], None)
         return True
 
@@ -176,6 +179,10 @@ async def test_pipeline_dedup_exclude_and_store(store, tmp_path):
     # Les 10 participants extraits accompagnent chaque match.
     _row, participants = store.matches["EUW1_p1"]
     assert len(participants) == 10
+    # Les stats trio (Phase 2) sont extraites et transmises dans la même écriture.
+    trio_rows, _events = store.trio_stats["EUW1_p1"]
+    assert [r["team_id"] for r in trio_rows] == [100, 200]
+    assert trio_rows[0]["jgl_champion"] == 2  # builder : JUNGLE équipe 100 = champion 2
 
 
 async def test_second_run_downloads_nothing(store, tmp_path):

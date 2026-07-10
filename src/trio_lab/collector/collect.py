@@ -30,6 +30,7 @@ import psycopg
 from trio_lab import config, db
 from trio_lab.collector import inclusion, ladder, parsing, patches, storage
 from trio_lab.collector.client import RiotClient
+from trio_lab.stats import extract
 
 logger = logging.getLogger(__name__)
 
@@ -167,8 +168,9 @@ async def _process_match(
         row = parsing.match_row(detail, platform=platform)
         participants = parsing.participant_rows(detail)
         timeline = await client.get_match_timeline(match_id, platform=platform)
+        trio_stats, objective_events = extract.extract_match(detail, timeline)
         storage.archive_timeline(data_dir, platform, patch, match_id, timeline)
-        await storage.insert_match(conn, row, participants)
+        await storage.insert_match(conn, row, participants, trio_stats, objective_events)
         counts["downloaded"] += 1
     except parsing.ParseError as exc:
         await storage.journal_exclusion(conn, match_id, platform=platform, reason=f"parse: {exc}")
