@@ -1,0 +1,585 @@
+This article lists each type of crowd control and their sources.
+
+=== {{tip|Airborne}} ===
+==== Knock aside ====
+{{Column|2|width=65%|
+* {{cai|E|Draven}}
+* {{cai|R|Jarvan IV}}
+* {{cai|Q|Ornn}}
+* {{cai|W|Taliyah}} and {{ai|R|Taliyah}}
+* {{cai|E|Urgot}} (to non-champions)
+* {{cai|R|Vi}}
+* {{cai|W|Yorick}}
+* {{uis|Rift Herald}} charge
+}}
+
+==== Knock back ====
+{{Column|2|width=65%|
+* {{cai|W|Alistar}}
+* {{cai|W|Anivia}}
+* {{cai|R|Azir}}
+* {{cai|E|Briar}}
+* {{cai|Wall Dive|Camille}} and {{ai|R|Camille}}
+* {{cai|R|Fizz}}
+*{{cai|R|Galio}}
+* {{cai|R|Gnar}}
+* {{cai|E|Gragas}} and {{ai|R|Gragas}}
+* {{cai|I|Graves}} (to non-champions)
+* {{cai|E|Hecarim}}
+* {{cai|R|Janna}}
+* {{cai|Thundering Blow|Jayce}}
+* {{cai|Chaaaaaaaarge!!!|Kled}}
+* {{cai|W|K'Sante}} and {{ai|R|K'Sante}}
+* {{cai|R|Lee Sin}}
+* {{cai|Q|Maokai}}
+* {{cai|Q|Milio}}
+* {{cai|I|Ornn}}
+* {{cai|E|Poppy}} and {{ai|R|Poppy}}
+* {{cai|R|Qiyana}}
+* {{cai|E|Quinn}}
+* {{cai|Q|Rammus}}
+* {{cai|Q|Renata Glasc}}
+*{{cai|Q|Riven}}
+*{{cai|W|Sejuani}} (to non-champions) and {{ai|E|Sejuani}} {{tt|*|Does not apply airborne debuff}}
+* {{cai|E|Sion}} (to non-champions)
+*{{cai|E|Swain}}
+* {{cai|E|Syndra}}
+* {{cai|Regurgitate|Tahm Kench}}
+* {{cai|W|Taliyah}}
+* {{cai|E|Thresh}}
+* {{cai|R|Tristana}}
+* {{cai|E|Trundle}}
+* {{cai|E|Vayne}}
+* {{cai|E|Vel'Koz}}
+* {{cai|Q|Vi}}
+* {{cai|R|Viego}}
+* {{cai|R|Xin Zhao}}
+* {{cai|R|Zac}}
+* {{cai|W|Ziggs}}
+* {{ui|Baron Nashor}} on-spawn
+* {{ui|Dragon}} upon entering combat
+* {{uis|Rift Herald}} charge and attacks against minions (in summoned form)
+* {{ui|Blast Cone}}
+}}
+
+==== Knock up ====
+{{Column|2|width=65%|
+* {{cai|Q|Aatrox}}
+* {{cai|Q|Alistar}}
+* {{cai|The Skies Descend|Aurelion Sol}}
+* {{cai|W|Bel'Veth}}
+* {{cai|E|Blitzcrank}}
+* {{cai|R|Braum}}
+* {{cai|Q|Cho'Gath}}
+*{{cai|E|Darius}}
+* {{cai|R|Fizz}}
+* {{cai|E|Galio}}
+* {{cai|R|Ivern}}
+* {{cai|Q|Janna}}
+* {{cai|Q|Jarvan IV}}
+* {{cai|R|Kalista}}
+* {{cai|R|K'Sante}}
+* {{cai|R|Lee Sin}}
+* {{cai|R|Lulu}}
+* {{cai|R|Malphite}}
+* {{cai|R|Nami}}
+* {{cai|R|Nautilus}}
+* {{cai|R|Neeko}}
+* {{cai|W|Nunu}}
+* {{cai|E|Ornn}} and {{ai|R|Ornn}}
+* {{cai|W|Poppy}} and {{ai|R|Poppy}}
+* {{cai|W|Rakan}}
+* {{cai|R|Rammus}}
+* {{cai|Unburrow|Rek'Sai}}
+* {{cai|Ferromancy: Crash Down|Rell}}
+* {{cai|Blade's Reach R|Rhaast|Blade's Reach}}
+* {{cai|I|Samira}}
+* {{cai|Q|Sejuani}}
+* {{cai|Q|Sion}} and {{ai|R|Sion}}
+* {{cai|Abduct|Sylas}}
+* {{cai|W|Tahm Kench}}
+* {{cai|E|Vel'Koz}}
+* {{cai|R|Vi}}
+* {{cai|R|Wukong}}
+* {{cai|Q|Xin Zhao}}
+* {{cai|Steel Tempest 3|Yasuo|Steel Tempest}} and {{ai|R|Yasuo}}
+* {{cai|Mortal Steel 2|Yone|Mortal Steel}} and {{ai|R|Yone}}
+* {{cai|Q|Zaahen}}
+* {{cai|Q|Zac}} and {{ai|E|Zac}}
+* {{cai|R|Zyra}}
+* {{uis|Baron Nashor}} tentacle
+* [[File:Rift Herald Rodeo buff.png|20px|link=Rift_Herald#Abilities_2]] [[Rift_Herald#Abilities_2|Rift Herald Rodeo]]
+}}
+
+==== Pull ====
+{{Column|2|width=65%|
+* {{cai|W|Aatrox}}
+* {{cai|Q|Blitzcrank}}
+* {{cai|E|Darius}}
+* {{cai|R|Diana}}
+* {{cai|Crushing Maw|Hwei}}
+* {{cai|Bear Trap on a Rope|Kled}} and {{ai|Jousting|Kled}} (to non-champions)
+* {{cai|Ntofo Strikes 3|K'Sante|Ntofo Strikes}}
+* {{cai|E|Mordekaiser}}
+* {{cai|Q|Nautilus}}
+* {{cai|R|Nilah}}
+* {{cai|Q|Nunu}} (to non-champions)
+* {{cai|R|Orianna}}
+* {{cai|Q|Pyke}}
+* {{cai|Ferromancy: Mount Up|Rell}} and {{ai|R|Rell}}
+* {{cai|E|Sett}}
+* {{cai|E|Singed}}
+* {{cai|R|Sion}}
+* {{cai|Nevermove 2|Swain|Nevermove}}
+* {{cai|W|Taliyah}}
+* {{cai|Q|Thresh}} and {{ai|E|Thresh}}
+* {{cai|E|Urgot}}
+* {{cai|Q|Vi}} (to non-champions)
+* {{cai|R|Yone}}
+* {{cai|W|Zaahen}}
+* {{cai|Q|Zac}}
+}}
+
+=== {{tip|Blind}} ===
+* {{cai|Q|Teemo}}
+
+=== {{tip|Cripple}} ===
+{{Column|2|width=65%|
+* {{cai|W|Fiora}}
+* {{cai|E|Malphite}}
+* {{cai|W|Nasus}}
+* {{ii|Frozen Heart}}
+}}
+
+;Attack speed reduction
+* {{cai|R|Mordekaiser}}
+
+=== {{tip|Disarm}} ===
+{{Column|2|width=65%|
+* {{cai|W|Lulu}}
+* {{cai|Q|Quinn}} (to non-champions)
+* {{cai|R|Ryze}} (self/allies)
+}}
+
+;Reloading
+{{Column|2|width=65%|
+* {{cai|I|Graves}}
+* {{cai|I|Jhin}}
+}}
+
+=== {{tip|Disrupt}} ===
+{{Column|2|width=65%|
+* {{cai|R|Briar}}
+* {{cai|R|Camille}}
+* {{cai|Q|Kassadin}}
+* {{cai|R|Viktor}}
+}}
+
+=== {{tip|Forced Action}} ===
+;{{tip|Berserk}}
+* {{cai|R|Renata Glasc}}
+
+;{{tip|Charm}}
+{{Column|2|width=65%|
+* {{cai|E|Ahri}}
+* {{cai|W|Evelynn}}
+* {{cai|R|Rakan}}
+* {{cai|R|Seraphine}}
+}}
+
+;{{tip|Fear|Fear / Flee}}
+{{Column|2|width=65%|
+* {{cai|R|Aatrox}} (to non-champions)
+* {{cai|R|Briar}}
+* {{cai|R|Darius}} (to non-champions)
+* {{cai|Q|Fiddlesticks}}
+* {{cai|R|Hecarim}}
+* {{cai|Grim Visage|Hwei}}
+* {{cai|E|Nocturne}}
+* {{cai|W|Shaco}} and {{ai|R|Shaco}}
+* {{cai|R|Shyvana}}
+* {{cai|Fear Beyond Death 2|Urgot|Mercy}}
+* {{cai|I|Vex}}
+* {{cai|E|Warwick}}
+}}
+
+;{{tip|Taunt}}
+{{Column|2|width=65%|
+* {{cai|W|Galio}}
+* {{cai|E|Rammus}}
+* {{cai|E|Shen}}
+
+}}
+
+=== {{tip|Ground}} ===
+{{Column|2|width=65%|
+* {{cai|W|Cassiopeia}}
+* {{cai|W|Poppy}}
+* {{cai|W|Singed}}
+* {{cai|R|Tahm Kench}} (self)
+}}
+
+=== {{tip|Kinematics}} ===
+* {{cai|E|Aurelion Sol}}
+* {{cai|R|Rell}}
+
+=== {{tip|Knockdown}} ===
+{{Column|2|width=65%|
+* {{cai|E|Ahri}}
+* {{cai|R|Amumu}}
+* {{cai|Grim Visage|Hwei}}
+* {{cai|E|Jinx}}
+* {{cai|R|Lissandra}}
+* {{cai|R|Malzahar}}
+* {{cai|E|Veigar}}
+* {{cai|I|Vex}}
+* {{cai|W|Viktor}}
+* {{cai|R|Warwick}}
+* {{cai|R|Yone}}
+* {{cai|Q|Zac}}
+}}
+
+=== {{tip|Nearsight}} ===
+{{Column|2|width=65%|
+* {{cai|W|Graves}}
+* {{cai|R|Nocturne}}
+* {{cai|Q|Quinn}}
+}}
+
+=== {{tip|Silence}} ===
+{{Column|2|width=65%|
+* {{cai|R|Blitzcrank}}
+* {{cai|W|Cho'Gath}}
+* {{cai|E|Fiddlesticks}}
+* {{cai|Q|Garen}}
+* {{cai|R|Kalista}} (to ally)
+* {{cai|Q|Malzahar}}
+* {{cai|R|Ryze}} (self/allies)
+* {{cai|E|Soraka}}
+}}
+
+;{{tip|Polymorph}}
+* {{cai|W|Lulu}}
+
+=== {{tip|Drowsy}} & {{tip|Sleep}} ===
+{{Column|2|width=65%|
+* {{cai|R|Lillia}}
+* {{cai|E|Zoe}}
+}}
+
+=== {{tip|Slow}} ===
+{{Column|3|
+* {{cai|W|Aatrox}} and {{ai|R|Aatrox}} (to non-champions)
+* {{cai|E|Ahri}}
+* {{cai|Q|Akali}}
+* {{cai|E|Ambessa}}
+* {{cai|Q|Anivia}} and {{ai|R|Anivia}}
+* {{cai|Gravitum|Aphelios}}
+* {{cai|I|Ashe}}
+* {{cai|The Skies Descend|Aurelion Sol}}
+* {{cai|E|Aurora}} and {{ai|R|Aurora}}
+* {{cai|Q|Azir}}
+* {{cai|I|Bard}} and {{ai|Q|Bard}}
+* {{cai|W|Bel'Veth}}
+* {{cai|W|Blitzcrank}} (self)
+* {{cai|R|Brand}}
+* {{cai|Q|Braum}} and {{ai|R|Braum}}
+* {{cai|E|Briar}} and {{ai|R|Briar}}
+* {{cai|E|Caitlyn}}
+* {{cai|W|Camille}}
+* {{cai|W|Cassiopeia}} and {{ai|R|Cassiopeia}}
+* {{cai|Q|Cho'Gath}} and {{ai|E|Cho'Gath}}
+* {{cai|W|Darius}}, {{ai|E|Darius}}, and {{ai|R|Darius}} (to non-champions)
+* {{cai|R|Diana}}
+* {{cai|E|Draven}}
+* {{cai|Q|Dr. Mundo}}
+* {{cai|Q|Ekko}} and {{ai|W|Ekko}}
+* {{cai|W|Evelynn}}
+* {{cai|Q|Fiddlesticks}} and {{ai|E|Fiddlesticks}}
+* {{cai|W|Fiora}} and {{ai|E|Fiora}}
+* {{cai|E|Fizz}} and {{ai|R|Fizz}}
+* {{cai|W|Galio}} (self)
+* {{cai|E|Gangplank}} and {{ai|R|Gangplank}}
+* {{cai|Q|Gnar}}, {{ai|Boulder Toss|Gnar}}, {{ai|E|Gnar}}, {{ai|Crunch|Gnar}}, and {{ai|R|Gnar}}
+* {{cai|Q|Gragas}}
+* {{cai|W|Graves}}
+* {{cai|R|Gwen}}
+* {{cai|R|Hecarim}}
+* {{cai|E|Heimerdinger}} and {{ai|CH-3X Lightning Grenade|Heimerdinger}}
+* {{cai|Molten Fissure|Hwei}}, {{ai|Grim Visage|Hwei}}, {{ai|Crushing Maw|Hwei}} and {{ai|Spiraling Despair|Hwei}}
+* {{cai|E|Illaoi}}
+* {{cai|R|Irelia}}
+* {{cai|E|Ivern}}
+* {{cai|W|Janna}}
+* {{cai|W|Jarvan IV}}
+* {{cai|To the Skies!|Jayce}}
+* {{cai|E|Jhin}} and {{ai|R|Jhin}}
+* {{cai|W|Jinx}}
+* {{cai|E|Kalista}}
+* {{cai|Q|Karma}} and {{ai|Soulflare|Karma}}
+* {{cai|W|Karthus}}
+* {{cai|E|Kassadin}}
+* {{cai|Q|Kayle}}
+* {{cai|W|Kayn}}
+* {{cai|I|Kha'Zix}} and {{ai|Evolved Spike Racks|Kha'Zix}}
+* {{cai|W|Kindred}} (to monsters) and {{ai|E|Kindred}}
+* {{cai|Bear Trap on a Rope|Kled}}
+* {{cai|E|Kog'Maw}}
+* {{cai|Q|K'Sante}}
+* {{cai|Cripple|Lee Sin}}
+* {{cai|R|Leona}}
+* {{cai|E|Lillia}} and {{ai|R|Lillia}}
+* {{cai|I|Lissandra}}, {{ai|Q|Lissandra}}, and {{ai|R|Lissandra}}
+* {{cai|Q|Locke}} and {{ai|R|Locke}}
+* {{cai|Q|Lulu}} and {{ai|R|Lulu}}
+* {{cai|E|Lux}}
+* {{cai|Q|Malphite}}
+* {{cai|Q|Maokai}} and {{ai|E|Maokai}}
+* {{cai|E|Mel}}
+* {{cai|Q|Milio}}
+* {{cai|E|Miss Fortune}}
+* {{cai|R|Mordekaiser}}
+* {{cai|R|Morgana}}
+* {{cai|Hounds' Pursuit|Naafiri}}
+* {{cai|E|Nami}} and {{ai|R|Nami}}
+* {{cai|W|Nasus}}
+* {{cai|E|Nautilus}}
+* {{cai|R|Nilah}}
+* {{cai|E|Nocturne}}
+* {{cai|W|Nunu}} (self), {{ai|E|Nunu}} and {{ai|R|Nunu}}
+* {{cai|Q|Olaf}}
+* {{cai|W|Orianna}}
+* {{cai|Q|Ornn}} and {{ai|R|Ornn}}
+* {{cai|Q|Pantheon}} (self) and {{ai|R|Pantheon}}
+* {{cai|Q|Poppy}}, {{ai|W|Poppy}}, and {{ai|R|Poppy}} (self)
+* {{cai|Q|Pyke}} (self and target)
+* {{cai|Elemental Wrath|Qiyana}}
+* {{cai|E|Quinn}} and {{ai|R|Quinn}} (self)
+* {{cai|R|Rakan}}
+* {{cai|Q|Rammus}} and {{ai|R|Rammus}}
+* {{cai|E|Renata Glasc}}
+* {{cai|E|Rengar}}
+*{{cai|W|Rhaast}}
+* {{cai|E|Rumble}} and {{ai|R|Rumble}}
+* {{cai|W|Ryze}}
+* {{cai|W|Sejuani}} and {{ai|R|Sejuani}}
+* {{cai|Q|Senna}}
+* {{cai|E|Seraphine}} and {{ai|R|Seraphine}}
+* {{cai|E|Sett}} and {{ai|R|Sett}}
+* {{cai|E|Shaco}}
+* {{cai|Q|Shen}}
+* {{cai|E|Shyvana}}
+* {{cai|W|Singed}}
+* {{cai|Q|Sion}}, {{ai|E|Sion}}, and {{ai|R|Sion}}
+* {{cai|Q|Skarner}}, {{ai|Upheaval|Skarner}}, and {{ai|W|Skarner}}
+* {{cai|W|Smolder}} and {{ai|R|Smolder}}
+* {{cai|I|Sona}}
+* {{cai|Q|Soraka}}
+* {{cai|W|Swain}} and {{ai|Demonflare|Swain}}
+* {{cai|Q|Sylas}}
+* {{cai|W|Syndra}} and {{ai|Scatter the Weak 2|Syndra|Scatter the Weak}}
+* {{cai|Q|Tahm Kench}} and {{ai|R|Tahm Kench}} (self)
+* {{cai|Q|Taliyah}} and {{ai|E|Taliyah}}
+* {{cai|W|Talon}}
+* {{cai|R|Teemo}}
+* {{cai|Q|Thresh}} (self), {{ai|E|Thresh}}, and {{ai|R|Thresh}}
+* {{cai|W|Tristana}}
+* {{cai|Q|Trundle}} and {{ai|E|Trundle}}
+* {{cai|W|Tryndamere}}
+* {{cai|W|Twisted Fate}}
+* {{cai|W|Twitch}}
+*{{cai|R|Udyr}}
+* {{cai|Q|Urgot}} and {{ai|Fear Beyond Death|Urgot}} / {{ai|Fear Beyond Death 2|Urgot|Mercy}}
+* {{cai|Q|Varus}} (self) and {{ai|E|Varus}}
+* {{cai|Q|Vel'Koz}} and {{ai|R|Vel'Koz}}
+* {{cai|I|Vex}} and {{ai|E|Vex}}
+* {{cai|Q|Vi}} (self)
+* {{cai|W|Viego}} (self) and {{ai|R|Viego}}
+* {{cai|W|Viktor}}
+* {{cai|W|Vladimir}} and {{ai|E|Vladimir}} (self and enemies)
+* {{cai|E|Volibear}} and {{ai|R|Volibear}}
+* {{cai|E|Warwick}}
+* {{cai|Q|Xerath}} (self) and {{ai|W|Xerath}}
+* {{cai|W|Xin Zhao}} and {{ai|E|Xin Zhao}}
+* {{cai|E|Yorick}}
+* {{cai|Q|Yuumi}} and {{ai|R|Yuumi}}
+* {{cai|W|Yunara}} and {{ai|Arc of Ruin|Yunara}}
+* {{cai|Q|Zac}} and {{ai|R|Zac}}
+* {{cai|E|Zed}}
+* {{cai|W|Zeri}}
+* {{cai|E|Ziggs}}
+* {{cai|E|Zilean}}
+* {{cai|E|Zoe}}
+* {{cis|Zyra}} [[File:Zyra Grasping Roots Render.png|20px|link=Zyra/LoL#Pets]] ''[[Zyra/LoL#Pets|Vine Lasher]]''
+* {{ii|Blade of the Ruined King}}
+* {{ii|Celestial Opposition}}
+* {{ii|Hextech Gunblade}}
+* {{ii|Iceborn Gauntlet}}
+* {{ii|Randuin's Omen}}
+* {{ii|Rylai's Crystal Scepter}}
+* {{ii|Scorchclaw Pup}}
+* {{ii|Serylda's Grudge}}
+* {{ii|Stridebreaker}}
+* {{ii|Zeke's Convergence}}
+* {{uis|Baron Nashor}} acid pool
+* {{uis|Hextech Drake}} empowered attacks
+* {{uis|Ocean Drake}} attacks
+* {{si|Exhaust}}
+* {{si|Unleashed Smite}} / {{si|Primal Smite}}
+* {{ri|Glacial Augment}}
+* {{bi|Crest of Cinders}} and {{bi|Hextech Dragon Soul}}
+}}
+
+;Movement speed reductions
+{{Column|2|width=65%|
+* {{cai|E|Aurelion Sol}} (to minions and monsters)
+* {{cai|W|Galio}}
+*{{cai|W|Lulu}}
+* {{cai|W|Ornn}} (self)
+* {{cai|Q|Renata Glasc}} (self)
+* {{cai|R|Samira}} (self)
+* {{cai|W|Shaco}} and {{ai|R|Shaco}}
+* {{cai|W|Urgot}} (self)
+}}
+
+=== {{tip|Root}} ===
+{{Column|2|width=65%|
+* {{cai|Binding Eclipse|Aphelios}}
+* {{cai|W|Caitlyn}}
+* {{cai|Gaze of the Abyss|Hwei}}
+* {{cai|Q|Ivern}}
+* {{cai|Thundering Blow|Jayce}}
+* {{cai|W|Jhin}}
+* {{cai|E|Jinx}}
+* {{cai|W|Karma}} and {{ai|Renewal|Karma}}
+* {{cai|R|K'Sante}}
+* {{cai|E|LeBlanc}}
+* {{cai|R|Lee Sin}}
+* {{cai|E|Leona}}
+* {{cai|W|Lissandra}}
+* {{cai|Q|Lux}}
+* {{cai|W|Maokai}} and {{ai|R|Maokai}}
+* {{cai|E|Mel}}
+* {{cai|Q|Morgana}}
+* {{cai|I|Nautilus}}
+* {{cai|E|Neeko}}
+* {{cai|E|Nunu}}
+* {{cai|Elemental Wrath|Qiyana}}
+* {{cai|Q|Renata Glasc}}
+* {{cai|Bola Strike 2|Rengar|Empowered Bola Strike}}
+* {{cai|W|Ryze}} and {{ai|R|Ryze}} (self/allies)
+* {{cai|W|Senna}}
+* {{cai|E|Seraphine}}
+* {{cai|W|Shaco}} and {{ai|R|Shaco}}
+* {{cai|E|Singed}}
+* {{cai|E|Soraka}}
+* {{cai|E|Swain}}
+* {{cai|R|Varus}}
+* {{cai|E|Xayah}}
+* {{cai|Q|Zac}}
+* {{cai|E|Zyra}}
+}}
+
+=== {{tip|Stasis}} ===
+{{Column|2|width=65%|
+* {{cai|R|Bard}} (self, allies, and enemies)
+* {{cai|R|Ekko}} (self)
+* {{cai|R|Lissandra}} (self)
+* {{cai|I|Sion}} (self)
+* {{cai|W|Syndra}} (to non-champions)
+* {{ii|Zhonya's Hourglass}} (self)
+}}
+
+=== {{tip|Stun}} ===
+{{Column|2|width=65%|
+* {{cai|Q|Alistar}}, {{ai|W|Alistar}}, and {{ai|E|Alistar}}
+* {{cai|R|Ambessa}}
+* {{cai|Q|Amumu}} and {{ai|R|Amumu}}
+* {{cai|Q|Anivia}}
+* {{cai|I|Annie}}
+* {{cai|R|Ashe}}
+* {{cai|R|Aurelion Sol}}
+* {{cai|Q|Bard}} and {{ai|R|Bard}}
+* {{cai|Q|Blitzcrank}}
+* {{cai|I|Braum}}
+* {{cai|Q|Briar}} and {{ai|E|Briar}}
+* {{cai|Q|Brand}}
+* {{cai|Wall Dive|Camille}}
+* {{cai|R|Cassiopeia}}
+* {{cai|W|Ekko}}
+* {{cai|Cocoon|Elise}}
+* {{cai|W|Fiora}}
+* {{cai|Wallop|Gnar}} and {{ai|R|Gnar}}
+* {{cai|E|Gragas}}
+* {{cai|E|Hecarim}}
+* {{cai|E|Heimerdinger}} and {{ai|CH-3X Lightning Grenade|Heimerdinger}}
+* {{cai|E|Irelia}}
+* {{cai|R|Ivern}}
+* {{cai|E|Jax}}
+* {{cai|I|Kennen}}
+* {{cai|Ntofo Strikes 3|K'Sante|Ntofo Strikes}}, {{ai|W|K'Sante}}, and {{ai|R|K'Sante}}
+* {{cai|Q|Leona}} and {{ai|R|Leona}}
+* {{cai|R|Lissandra}}
+* {{cai|Q|Maokai}}
+* {{cai|Q|Milio}}
+* {{cai|R|Morgana}}
+* {{cai|Q|Nautilus}} and {{ai|R|Nautilus}}
+* {{cai|R|Neeko}}
+* {{cai|Q|Nunu}} (to non-champions) and {{ai|W|Nunu}}
+* {{cai|R|Orianna}}
+* {{cai|E|Ornn}} and {{ai|R|Ornn}}
+* {{cai|W|Pantheon}}
+* {{cai|E|Poppy}}
+* {{cai|E|Pyke}}
+* {{cai|R|Qiyana}}
+* {{cai|Q|Rammus}}
+* {{cai|Q|Rell}}, {{ai|Ferromancy: Crash Down|Rell}}, {{ai|Ferromancy: Mount Up|Rell}}, and {{ai|E|Rell}}
+* {{cai|Q|Renata Glasc}}
+* {{cai|W|Renekton}}
+* {{cai|W|Riven}}
+* {{cai|E|Sejuani}} and {{ai|R|Sejuani}}
+* {{cai|E|Seraphine}}
+* {{cai|E|Sett}}
+* {{cai|Q|Sion}}, {{ai|E|Sion}} (to non-champions), and {{ai|R|Sion}} (self and enemies)
+* {{cai|E|Skarner}}
+* {{cai|R|Sona}}
+* {{cai|Abduct|Sylas}}
+* {{cai|E|Syndra}}
+* {{cai|Q|Tahm Kench}} and {{ai|W|Tahm Kench}}
+* {{cai|Q|Taliyah}} (to monsters) and {{ai|E|Taliyah}}
+* {{cai|E|Taric}}
+* {{cai|R|Tristana}}
+* {{cai|W|Twisted Fate}}
+* {{cai|E|Udyr}}
+* {{cai|E|Urgot}}
+* {{cai|E|Vayne}}
+* {{cai|E|Veigar}}
+* {{cai|E|Vel'Koz}}
+* {{cai|R|Vi}}
+* {{cai|W|Viego}}
+* {{cai|W|Viktor}}
+* {{cai|Q|Volibear}}
+* {{cai|E|Xerath}}
+* {{cai|R|Xin Zhao}}
+* {{cai|R|Yone}}
+* {{cai|W|Zaahen}}
+* {{cai|Q|Zac}} and {{ai|E|Zac}}
+* {{cai|Q|Zilean}}
+* {{uis|Baron Nashor}} rear attack
+* {{si|Teleport}} (to target)
+}}
+
+;{{tip|Suspension}}
+* {{cai|Q|Nami}}
+
+=== {{tip|Suppression}} ===
+{{Column|2|width=65%|
+* {{cai|R|Ambessa}}
+* {{cai|R|Malzahar}}
+* {{cai|R|Sett}}
+* {{cai|E|Skarner}} and {{ai|R|Skarner}}
+* {{cai|R|Tahm Kench}}
+* {{cai|Fear Beyond Death 2|Urgot|Mercy}}
+* {{cai|R|Warwick}}
+}}
+[[Category:Lists]]

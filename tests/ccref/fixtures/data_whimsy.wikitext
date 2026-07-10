@@ -1,0 +1,35 @@
+{{{{{1<noinclude>|Ability data</noinclude>}}}|Whimsy|{{{2|}}}|{{{3|}}}|{{{4|}}}|{{{5|}}}
+|champion     = Lulu
+|skill        = W
+|icon         = Whimsy.png
+|blurb        = {{sbc|Active:}} {{ci|Lulu}} can cast ''Whimsy'' on herself or the target champion.
+|blurb2      = {{sbc|Enemy cast:}} '''Lulu''' sends a spell to the target that {{tip|polymorph|polymorphs}} them into a harmless critter, {{tip|disarm|disarms}} them, and reduces their {{sti|{{as|movement speed}}}} for a short time.
+|blurb3      = {{sbc|Ally cast:}} '''Lulu''' instantly casts a spell on the target that grants {{sti|as|{{as|'''bonus''' attack speed}}}} and {{sti|ms|{{as|'''bonus''' movement speed}}}} for a few seconds.
+|description  = {{sbc|Active:}} '''Lulu''' can cast ''Whimsy'' on herself or a champion.
+|description2 = {{sbc|Enemy Cast:}} '''Lulu''' launches a spell onto the target enemy champion that {{tip|polymorph|polymorphs}} them into a harmless critter for a duration, during which their {{as|movement speed}} is reduced by {{as|60|ms}}, and {{tip|disarm|disarms}} them for the same duration.
+|leveling2    = {{st|Disable Duration|{{ap|1.2 to 2}} seconds}}
+|description3 = {{sbc|Self / Ally Cast:}} '''Lulu''' instantly casts erratic magic upon the target allied champion or herself, granting the target {{sti|{{as|'''bonus''' attack speed}}}} and {{sti|ms|{{as|25%|ms}} {{as|(+ 5% per 100 AP)}} {{as|'''bonus''' movement speed}}}} for a duration.
+|leveling3    = {{st|Bonus Attack Speed|{{ap|20 to 30}}%}}
+{{st|Effect Duration|{{ap|3 to 4}} seconds}}
+|cooldown     = 18
+|cast time    = {{dv|{{tt|{{fd|0.2419}}|Enemy cast}}|{{tt|None|Self/ally cast}}}}
+|cost         = 65
+|costtype     = Mana
+|target range = {{tip|cr|icononly = true}} 650
+|speed        = {{tt|2250|Polymorph travel speed}}
+|targeting    = Unit
+|affects      = Enemies / Allies / Self
+|damagetype   = 
+|spellshield  = True
+|spelleffects = 
+|projectile   = True
+|callforhelp  = false
+|grounded     = 
+|knockdown    = 
+|notes        = 
+* ''Whimsy's'' {{as|movement speed}} reduction will apply to the target's '''bonus''' movement speed.
+** If their '''bonus''' movement speed would be reduced below 0, their '''base''' movement speed is reduced instead equal to the remaining reduction, or by the full amount if the target has no '''bonus''' movement speed.
+* ''Whimsy's'' movement speed reduction is not affected by {{tip|slow resist}}.
+* If the target becomes {{tip|untargetable}}, {{tip|death|dies}}, or is too far away or no longer in {{tip|sight}} during the cast time, this ability will cancel but still go on {{sti|cooldown}} and pay its cost.{{bug}}
+** This only applies to the enemy cast.
+}}

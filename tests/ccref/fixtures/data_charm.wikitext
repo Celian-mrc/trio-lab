@@ -1,0 +1,27 @@
+{{{{{1<noinclude>|Ability data</noinclude>}}}|Charm|{{{2|}}}|{{{3|}}}|{{{4|}}}|{{{5|}}}
+|champion     = Ahri
+|skill        = E
+|icon         = Charm.png
+|description  = {{sbc|Active:}} '''Ahri''' blows forth a kiss in the target direction that deals {{as|magic damage}} to the first enemy hit, {{tip|knockdown|knocking them down}} and {{tip|charm|charming}} and {{tip|slow|slowing}} them by 65% for a duration.
+|leveling     = {{st|Magic Damage|{{ap|80 to 240}} {{as|(+ 85% AP)}}}}
+{{st|Disable Duration|{{ap|1.2 to 1.8}} seconds}}
+|range        = {{tip|cr|icononly = true}} 1000
+|width        = {{tip|er|icononly = true}} 120
+|speed        = 1550
+|cooldown     = 12
+|cast time    = {{fd|0.25}}
+|cost         = 60
+|costtype     = mana
+|targeting    = Direction
+|affects      = Enemies
+|damagetype   = Magic
+|spellshield  = True
+|spelleffects = spell
+|projectile   = True
+|notes        = 
+* ''Charm'' is able to {{tip|slow}} targets otherwise {{tip|slow immunity|immune to slows}} upon {{tip|charm|charming}} them.{{bug|1}}
+* This ability's damage is calculated based on the caster's stats at the time of its application.
+{{Effect at cast time end}}
+<!-- Blurb -->
+|blurb        = {{sbc|Active:}} {{ci|Ahri}} blows forth a kiss that {{tip|charms}} the first enemy hit, dealing {{as|magic damage}} and {{tip|knockdown|knocking them down}}.
+}}

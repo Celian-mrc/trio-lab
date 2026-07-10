@@ -1,0 +1,40 @@
+{{{{{1<noinclude>|Ability data</noinclude>}}}|Rocket Grab|{{{2|}}}|{{{3|}}}|{{{4|}}}|{{{5|}}}
+|champion     = Blitzcrank
+|skill        = Q
+|icon         = Rocket Grab.png
+|blurb        = {{sbc|Active:}} {{ci|Blitzcrank}} fires the right hand which deals {{as|magic damage}} and {{tip|stun|stuns}} the first enemy hit. The target is also {{tip|airborne|pulled}} towards '''Blitzcrank'''.
+|description  = {{sbc|Active:}} '''Blitzcrank''' fires their right hand in the target direction that catches the first enemy hit, dealing them {{as|magic damage}}, {{tip|stun|stunning}} them for {{fd|0.65 seconds}}, and {{tip|airborne|pulling}} them towards '''Blitzcrank''', during which they are {{tip|standard sight|revealed}}.
+|description2 = '''''Blitzcrank''' is {{tip|lockout|unable}} to move or attack while Rocket Grab is in flight and for {{tt|{{fd|0.25}}|Estimated}} seconds after it hits an enemy.''
+|leveling     = {{st|Magic Damage|{{ap|110 to 310}} {{as|(+ 120% AP)}}}}
+|cast time    = {{fd|0.25}}
+|width        = {{dv|{{tip|er|icononly = true}} {{tt|140|Missile collision width}}|{{tip|cr|icononly = true}} {{tt|60|Width of rectangle check at the end, unusually thin}}}}
+|range        = {{dv|{{tip|cr|icononly = true}} {{tt|1115|Missile + rectangle check combined range. Supposed to be 1150, but currently bugged}}|{{tip|er|icononly = true}} {{tt|1020|Maximum range via other check}}}}
+|speed        = {{dv|{{tt|1800|Missile speed}}|{{tt|1800|Pull speed}}}}
+|cooldown     = {{ap|20 to 16}}
+|cost         = 100
+|costtype     = mana
+|targeting    = Direction
+|affects      = Enemies
+|damagetype   = Magic
+|spellshield  = True
+|spelleffects = spell
+|grounded     = 
+|knockdown    = 
+|projectile   = True
+|notes        = 
+* ''Rocket Grab's'' range is composed of a missile with 1080 range, and a smaller center-range area check at the end (colloquially known as a 'lollipop').
+** The area check is currently half as long as it is supposed to be, reducing the intended 1150 range of the ability to 1115 range. 
+*** Hitting an enemy with this area check only also fails to play the ability's hit SFX. This makes it possible to easily distinguish whether the target was picked up by the missile collision or 'lollipop'.
+** Targets {{tip|size|larger than 95 units in radius}} can be hit by a different edge-range circle check at the end of the missile.
+* The {{tip|airborne}} debuff lasts for up-to 1 second but will end prematurely when the target's movement stops, while the stun will persist (if duration permits).
+* {{tip|Displacement immunity}} will not resist the application of the {{tip|stun}}.
+* The target's destination lies 75 units in front of '''Blitzcrank''' at the start of cast time. 
+** If the target is closer than this, the effect will still move them to this location.
+** If this location would be inside static terrain, the target's destination will end up on '''Blitzcrank's''' side, even if that means pulling them right on top of '''Blitzcrank'''.
+*** This can occasionally fail.{{bug}}
+* If '''Blitzcrank''' is being moved (e.g. {{tip|Airborne}}, {{tip|Kinematics}} or {{ai|Fate's Call|Kalista}}) during the grab, the target will be pulled towards '''Blitzcrank'''s old location.
+* '''Blitzcrank''' will be ordered to {{tip|basic attack}} the target once the target arrives.
+* If the target dies to ''Rocket Grab's'' damage, they will not be pulled.
+{{Effect at cast time end}}
+{{ct|cast|spells=true,false,false,false,false}}
+}}

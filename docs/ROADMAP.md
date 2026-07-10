@@ -47,8 +47,11 @@ Phase par phase : la phase N+1 ne démarre pas avant que la phase N soit verte
 
 ## Phase 2b — Score CC théorique (parallélisable avec la Phase 3)
 
-- [ ] Script one-shot d'import via l'API MediaWiki du wiki LoL (~15 pages de
-      types de CC) → brouillon de `cc_reference.csv`
+- [x] Script one-shot d'import via l'API MediaWiki du wiki LoL → brouillon
+      `data/external/cc_reference.draft.csv` (503 sorts, 165 champions ;
+      page « Types of Crowd Control/Sources » + templates de données des
+      sorts, durées depuis la prose + fallback leveling, 253 lignes annotées
+      `note_relecture`)
 - [ ] Relecture humaine du brouillon, puis gel en
       `data/external/cc_reference.csv` (champion, sort, type_cc, durée, %slow,
       zone, fiabilité, disponibilité, repositionnement + attribution CC BY-SA)
