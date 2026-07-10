@@ -16,7 +16,7 @@
 champion,sort,type_cc,duree_s,pct_slow,zone,fiabilite,disponibilite,repositionnement,note_relecture
 Aatrox,Q,airborne,0.25,,multi,skillshot,base,0,
 Aatrox,W,airborne,,,mono,skillshot,base,1,durée introuvable
-Aatrox,W,slow,1.5,,mono,skillshot,base,0,%slow introuvable
+Aatrox,W,slow,1.5,30.0,mono,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Ahri,E,charm,1.5,,mono,skillshot,base,0,"durée depuis leveling « Disable Duration », moyenne retenue"
 Ahri,E,slow,1.5,65.0,mono,skillshot,base,0,"durée depuis leveling « Disable Duration », moyenne retenue"
 Akali,Q,slow,0.5,50.0,multi,skillshot,base,0,
@@ -59,11 +59,11 @@ Blitzcrank,Q,stun,0.65,,mono,skillshot,base,0,
 Blitzcrank,R,silence,0.5,,multi,point_click,ultimate,0,
 Blitzcrank,W,slow,1.5,30.0,mono,point_click,base,0,
 Brand,Q,stun,1.75,,mono,skillshot,base,0,
-Brand,R,slow,0.25,,multi,point_click,ultimate,0,%slow introuvable
+Brand,R,slow,0.25,45.0,multi,point_click,ultimate,0,"%slow depuis leveling « Slow », moyenne retenue"
 Braum,P,stun,1.5,,mono,skillshot,base,0,"durée variable ({{pp|changedisplay=true|1.25 to 1.75 for 3|1 to 13|type=his level|label1=level}}), moyenne retenue"
 Braum,Q,slow,2.0,70.0,mono,skillshot,base,0,
 Braum,R,airborne,0.6,,multi,skillshot,ultimate,0,
-Braum,R,slow,,,multi,skillshot,ultimate,0,%slow introuvable
+Braum,R,slow,,50.0,multi,skillshot,ultimate,0,"%slow depuis leveling « Slow », moyenne retenue"
 Briar,E,airborne,0.5,,multi,skillshot,base,1,
 Briar,E,slow,0.5,80.0,multi,skillshot,base,0,
 Briar,E,stun,1.5,,multi,skillshot,base,0,
@@ -79,8 +79,8 @@ Camille,W,slow,2.0,80.0,multi,skillshot,base,0,
 Cassiopeia,R,slow,2.0,40.0,multi,skillshot,ultimate,0,
 Cassiopeia,R,stun,,,multi,skillshot,ultimate,0,durée introuvable
 Cassiopeia,W,ground,,,multi,skillshot,base,0,durée introuvable
-Cassiopeia,W,slow,,,multi,skillshot,base,0,%slow introuvable
-Cho'Gath,E,slow,1.5,,multi,point_click,base,0,%slow introuvable
+Cassiopeia,W,slow,,60.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
+Cho'Gath,E,slow,1.5,40.0,multi,point_click,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Cho'Gath,Q,airborne,1.0,,multi,skillshot,base,0,
 Cho'Gath,Q,slow,1.5,60.0,multi,skillshot,base,0,
 Cho'Gath,W,silence,1.8,,multi,skillshot,base,0,"durée depuis leveling « Silence Duration », moyenne retenue"
@@ -88,47 +88,47 @@ Darius,E,airborne,1.0,,multi,skillshot,base,1,
 Darius,E,slow,1.0,40.0,multi,skillshot,base,0,
 Darius,W,slow,1.0,90.0,mono,point_click,base,0,
 Diana,R,airborne,2.0,,multi,point_click,ultimate,1,
-Diana,R,slow,2.0,,multi,point_click,ultimate,0,%slow introuvable
+Diana,R,slow,2.0,50.0,multi,point_click,ultimate,0,"%slow depuis leveling « Slow », moyenne retenue"
 Dr. Mundo,Q,slow,2.0,40.0,mono,skillshot,base,0,
 Draven,E,airborne,2.0,,multi,skillshot,base,1,
-Draven,E,slow,2.0,,multi,skillshot,base,0,%slow introuvable
-Ekko,Q,slow,1.75,,multi,skillshot,base,0,%slow introuvable
+Draven,E,slow,2.0,30.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
+Ekko,Q,slow,1.75,50.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Ekko,W,slow,2.0,40.0,multi,skillshot,base,0,
 Ekko,W,stun,2.25,,multi,skillshot,base,0,
 Elise,E,stun,2.0,,mono,skillshot,base,0,"durée depuis leveling « Stun Duration », moyenne retenue"
 Evelynn,W,charm,1.75,,mono,point_click,base,0,"durée depuis leveling « Disable Duration », moyenne retenue"
 Evelynn,W,slow,0.75,45.0,mono,point_click,base,0,
 Fiddlesticks,E,silence,1.25,,multi,skillshot,base,0,
-Fiddlesticks,E,slow,1.25,,multi,skillshot,base,0,%slow introuvable
+Fiddlesticks,E,slow,1.25,40.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Fiddlesticks,Q,fear,1.6,,mono,point_click,base,0,"durée depuis leveling « Fear Duration », moyenne retenue"
 Fiddlesticks,Q,slow,,90.0,mono,point_click,base,0,
 Fiora,E,slow,1.0,30.0,mono,point_click,base,0,
 Fiora,W,slow,2.0,25.0,multi,skillshot,base,0,
 Fiora,W,stun,,,multi,skillshot,base,0,durée introuvable
-Fizz,E,slow,2.0,,multi,skillshot,base,0,%slow introuvable
+Fizz,E,slow,2.0,50.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Fizz,R,airborne,2.0,,multi,skillshot,ultimate,1,
 Fizz,R,slow,2.0,,multi,skillshot,ultimate,0,%slow introuvable
 Galio,E,airborne,0.75,,mono,skillshot,base,0,
 Galio,R,airborne,0.75,,multi,point_click,ultimate,1,
 Galio,W,slow,,15.0,mono,point_click,base,0,
 Galio,W,taunt,1.0,,mono,point_click,base,0,"durée variable ({{pp|type=channel time|0.5 to 1.5 for 9|0 to 1.25|formula=0.5+(0.125 per 0.16 seconds channeled).}}), moyenne retenue"
-Gangplank,E,slow,2.0,,multi,skillshot,base,0,%slow introuvable
+Gangplank,E,slow,2.0,60.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Gangplank,R,slow,0.5,30.0,multi,skillshot,ultimate,0,
 Garen,Q,silence,1.5,,mono,point_click,base,0,
 Gnar,E,slow,0.5,80.0,mono,skillshot,base,0,
 Gnar,E,slow,0.5,80.0,multi,skillshot,base,0,
-Gnar,Q,slow,2.0,,multi,skillshot,base,0,%slow introuvable
-Gnar,Q,slow,2.0,,multi,skillshot,base,0,%slow introuvable
+Gnar,Q,slow,2.0,25.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
+Gnar,Q,slow,2.0,40.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Gnar,R,airborne,1.5,,multi,skillshot,ultimate,1,"durée depuis leveling « Disable Duration », moyenne retenue"
 Gnar,R,slow,1.5,45.0,multi,skillshot,ultimate,0,"durée depuis leveling « Disable Duration », moyenne retenue"
 Gnar,R,stun,1.5,,multi,skillshot,ultimate,0,"durée depuis leveling « Disable Duration », moyenne retenue"
 Gnar,W,stun,1.25,,multi,skillshot,base,0,
 Gragas,E,airborne,1.0,,multi,skillshot,base,1,
 Gragas,E,stun,1.0,,multi,skillshot,base,0,
-Gragas,Q,slow,2.0,,multi,skillshot,base,0,%slow introuvable
+Gragas,Q,slow,2.0,50.0,multi,skillshot,base,0,"%slow depuis leveling « Minimum Slow », moyenne retenue"
 Gragas,R,airborne,,,multi,skillshot,ultimate,1,durée introuvable
 Graves,W,slow,0.5,50.0,multi,skillshot,base,0,
-Gwen,R,slow,1.5,,multi,skillshot,ultimate,0,%slow introuvable
+Gwen,R,slow,1.5,45.0,multi,skillshot,ultimate,0,"%slow depuis leveling « Slow », moyenne retenue"
 Hecarim,E,airborne,,,mono,point_click,base,1,durée introuvable
 Hecarim,E,stun,0.25,,mono,point_click,base,0,
 Hecarim,R,fear,1.125,,multi,skillshot,ultimate,0,"durée variable ({{pp|type=distance traveled|0.75 to 1.5 for 11|0 to 1000}}), moyenne retenue"
@@ -139,7 +139,7 @@ Heimerdinger,E,stun,1.5,,multi,skillshot,base,0,
 Heimerdinger,E,stun,1.5,,multi,skillshot,base,0,
 Hwei,E,airborne,,,multi,skillshot,base,1,durée introuvable
 Hwei,E,slow,,35.0,multi,skillshot,base,0,
-Hwei,E,slow,1.25,,multi,skillshot,base,0,
+Hwei,E,slow,1.25,55.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Hwei,Q,fear,1.25,,mono,skillshot,base,0,"durée depuis leveling « Disable Duration », moyenne retenue"
 Hwei,Q,slow,1.25,85.4,mono,skillshot,base,0,"durée depuis leveling « Disable Duration », moyenne retenue ; %slow variable ({{pp|type=distance from '''Hwei'''|70;78;86;94;99|0;300;600;900;1100|key=%|changedisplay=true|formula=70% + 1% for every 38 units the target is away from Hwei at the time of being hit}}), moyenne retenue"
 Hwei,R,slow,0.25,10.0,multi,skillshot,ultimate,0,
@@ -147,25 +147,25 @@ Hwei,W,root,1.6,,mono,skillshot,base,0,"durée depuis leveling « Root Duration 
 Illaoi,E,slow,1.5,80.0,mono,skillshot,base,0,
 Irelia,E,stun,0.75,,multi,skillshot,base,0,
 Irelia,R,slow,1.5,90.0,multi,skillshot,ultimate,0,
-Ivern,E,slow,2.0,,multi,point_click,base,0,%slow introuvable
+Ivern,E,slow,2.0,50.0,multi,point_click,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Ivern,Q,root,1.8,,mono,skillshot,base,0,"durée depuis leveling « Root Duration », moyenne retenue"
 Ivern,R,airborne,,,mono,skillshot,ultimate,0,mot-clé airborne introuvable dans la description ; durée introuvable
 Ivern,R,stun,,,mono,skillshot,ultimate,0,mot-clé stun introuvable dans la description ; durée introuvable
 Janna,Q,airborne,0.875,,multi,skillshot,base,0,"durée variable ({{pp|type=seconds charged|0.5 to 1.25|0 to 1.5 by 0.1}}), moyenne retenue"
 Janna,R,airborne,0.5,,multi,point_click,ultimate,1,
-Janna,W,slow,2.0,,mono,point_click,base,0,%slow introuvable
+Janna,W,slow,2.0,8.0,mono,point_click,base,0,"%slow depuis leveling « Bonus Movement Speed », moyenne retenue"
 Jarvan IV,Q,airborne,0.75,,multi,skillshot,base,0,
 Jarvan IV,R,airborne,0.15,,multi,point_click,ultimate,1,
-Jarvan IV,W,slow,2.0,,multi,point_click,base,0,%slow introuvable
+Jarvan IV,W,slow,2.0,25.0,multi,point_click,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Jax,E,stun,1.0,,multi,point_click,base,0,
 Jayce,E,airborne,0.4,,mono,point_click,base,1,
 Jayce,E,root,,,mono,point_click,base,0,durée introuvable
-Jayce,Q,slow,2.0,,multi,point_click,base,0,%slow introuvable
+Jayce,Q,slow,2.0,47.5,multi,point_click,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Jhin,E,slow,2.0,35.0,multi,skillshot,base,0,
 Jhin,R,slow,0.5,80.0,multi,skillshot,ultimate,0,
 Jhin,W,root,1.75,,multi,skillshot,base,0,"durée depuis leveling « Root Duration », moyenne retenue"
 Jinx,E,root,1.5,,multi,skillshot,base,0,
-Jinx,W,slow,2.0,,mono,skillshot,base,0,%slow introuvable
+Jinx,W,slow,2.0,60.0,mono,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 K'Sante,Q,airborne,0.65,,multi,skillshot,base,1,
 K'Sante,Q,slow,0.5,80.0,multi,skillshot,base,0,
 K'Sante,Q,stun,0.8,,multi,skillshot,base,0,
@@ -174,16 +174,16 @@ K'Sante,R,root,,,mono,point_click,ultimate,0,durée introuvable
 K'Sante,R,stun,0.3,,mono,point_click,ultimate,0,
 K'Sante,W,airborne,,,mono,skillshot,base,1,durée introuvable
 K'Sante,W,stun,,,mono,skillshot,base,0,durée introuvable
-Kalista,E,slow,2.0,,multi,skillshot,base,0,%slow introuvable
+Kalista,E,slow,2.0,26.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Kalista,R,airborne,1.0,,multi,skillshot,ultimate,0,
 Kalista,R,silence,,,multi,skillshot,ultimate,0,durée introuvable
 Karma,Q,slow,1.5,40.0,multi,skillshot,base,0,
 Karma,Q,slow,,50.0,multi,skillshot,base,0,
 Karma,W,root,1.8,,mono,point_click,base,0,"durée depuis leveling « Root Duration », moyenne retenue"
 Karma,W,root,0.875,,mono,point_click,base,0,"durée depuis leveling « Root Duration Increase », moyenne retenue"
-Karthus,W,slow,5.0,,mono,skillshot,base,0,%slow introuvable
-Kassadin,E,slow,1.0,,multi,skillshot,base,0,%slow introuvable
-Kayle,Q,slow,2.0,,mono,skillshot,base,0,%slow introuvable
+Karthus,W,slow,5.0,60.0,mono,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
+Kassadin,E,slow,1.0,60.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
+Kayle,Q,slow,2.0,35.0,mono,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Kayn,W,airborne,1.0,,multi,skillshot,base,0,forme Rhaast
 Kayn,W,slow,1.5,90.0,multi,skillshot,base,0,
 Kayn,W,slow,1.5,90.0,multi,skillshot,base,0,forme Rhaast
@@ -193,11 +193,11 @@ Kha'Zix,W,slow,2.0,40.0,multi,skillshot,base,0,
 Kindred,E,slow,1.0,30.0,mono,point_click,base,0,
 Kindred,W,slow,2.0,50.0,mono,skillshot,base,0,
 Kled,Q,airborne,2.5,,multi,skillshot,base,1,
-Kled,Q,slow,2.5,,multi,skillshot,base,0,%slow introuvable
+Kled,Q,slow,2.5,40.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Kled,R,airborne,,,mono,skillshot,ultimate,1,durée introuvable
-Kog'Maw,E,slow,,,multi,skillshot,base,0,%slow introuvable
+Kog'Maw,E,slow,,50.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 LeBlanc,E,root,1.5,,mono,skillshot,base,0,
-Lee Sin,E,slow,4.0,,multi,skillshot,base,0,%slow introuvable
+Lee Sin,E,slow,4.0,55.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Lee Sin,R,airborne,0.8,,mono,point_click,ultimate,1,
 Lee Sin,R,root,,,mono,point_click,ultimate,0,durée introuvable
 Leona,E,root,0.5,,multi,skillshot,base,0,
@@ -208,20 +208,20 @@ Lillia,E,slow,3.0,40.0,multi,skillshot,base,0,
 Lillia,R,sleep,1.5,,mono,point_click,ultimate,0,
 Lillia,R,slow,2.0,10.0,mono,point_click,ultimate,0,
 Lissandra,P,slow,4.0,25.0,multi,skillshot,base,0,
-Lissandra,Q,slow,1.5,,multi,skillshot,base,0,%slow introuvable
-Lissandra,R,slow,0.5,,mono,point_click,ultimate,0,%slow introuvable
+Lissandra,Q,slow,1.5,28.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
+Lissandra,R,slow,0.5,60.0,mono,point_click,ultimate,0,"%slow depuis leveling « Slow », moyenne retenue"
 Lissandra,R,stun,1.5,,mono,point_click,ultimate,0,
 Lissandra,W,root,1.45,,multi,point_click,base,0,"durée depuis leveling « Root Duration », moyenne retenue"
 Locke,Q,slow,1.0,25.0,multi,skillshot,base,0,
 Locke,R,slow,2.0,99.0,multi,skillshot,ultimate,0,
 Lulu,Q,slow,2.0,80.0,multi,skillshot,base,0,
 Lulu,R,airborne,1.0,,multi,point_click,ultimate,0,
-Lulu,R,slow,0.25,,multi,point_click,ultimate,0,%slow introuvable
+Lulu,R,slow,0.25,45.0,multi,point_click,ultimate,0,"%slow depuis leveling « Slow », moyenne retenue"
 Lulu,W,polymorph,1.6,,mono,point_click,base,0,"durée depuis leveling « Disable Duration », moyenne retenue"
 Lulu,W,slow,1.6,,mono,point_click,base,0,"mot-clé slow introuvable dans la description ; durée depuis leveling « Disable Duration », moyenne retenue ; %slow introuvable"
-Lux,E,slow,1.0,,multi,skillshot,base,0,%slow introuvable
+Lux,E,slow,1.0,35.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Lux,Q,root,2.0,,multi,skillshot,base,0,
-Malphite,Q,slow,3.0,,mono,point_click,base,0,%slow introuvable
+Malphite,Q,slow,3.0,30.0,mono,point_click,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Malphite,R,airborne,1.5,,multi,skillshot,ultimate,0,
 Malzahar,Q,silence,1.5,,mono,skillshot,base,0,"durée depuis leveling « Silence Duration », moyenne retenue"
 Malzahar,R,suppression,,,multi,point_click,ultimate,0,durée introuvable
@@ -234,7 +234,7 @@ Maokai,W,root,1.2,,mono,point_click,base,0,"durée depuis leveling « Root Durat
 Mel,E,root,1.5,,multi,skillshot,base,0,
 Mel,E,slow,0.25,30.0,multi,skillshot,base,0,
 Milio,Q,airborne,1.0,,multi,skillshot,base,1,
-Milio,Q,slow,1.5,,multi,skillshot,base,0,%slow introuvable
+Milio,Q,slow,1.5,50.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Milio,Q,stun,1.0,,multi,skillshot,base,0,
 Miss Fortune,E,slow,,40.0,multi,skillshot,base,0,
 Mordekaiser,E,airborne,,,multi,skillshot,base,1,durée introuvable
@@ -243,12 +243,12 @@ Morgana,Q,root,2.5,,mono,skillshot,base,0,"durée depuis leveling « Root Durati
 Morgana,R,slow,,20.0,mono,skillshot,ultimate,0,
 Morgana,R,stun,1.75,,mono,skillshot,ultimate,0,"durée depuis leveling « Stun Duration », moyenne retenue"
 Naafiri,R,slow,0.25,99.0,mono,point_click,ultimate,0,
-Nami,E,slow,1.0,,mono,point_click,base,0,%slow introuvable
+Nami,E,slow,1.0,25.0,mono,point_click,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Nami,Q,airborne,,,multi,skillshot,base,0,mot-clé airborne introuvable dans la description ; durée introuvable
 Nami,R,airborne,,,multi,skillshot,ultimate,0,durée introuvable
 Nami,R,slow,3.0,70.0,multi,skillshot,ultimate,0,"durée variable ({{pp|type=distance traveled|2 to 4 by 0.2|0 to 2750|formula = ''Capped at 2750 range.''}}), moyenne retenue"
 Nasus,W,slow,,35.0,mono,point_click,base,0,
-Nautilus,E,slow,1.5,,multi,point_click,base,0,%slow introuvable
+Nautilus,E,slow,1.5,40.0,multi,point_click,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Nautilus,P,root,1.125,,mono,skillshot,base,0,"durée variable ({{pp|changedisplay=true|0.75 to 1.5 for 4|1 to 16}}), moyenne retenue"
 Nautilus,Q,airborne,0.9,,mono,skillshot,base,1,
 Nautilus,Q,stun,1.0,,mono,skillshot,base,0,
@@ -261,23 +261,23 @@ Nilah,R,airborne,3.0,,multi,point_click,ultimate,1,
 Nilah,R,slow,3.0,10.0,multi,point_click,ultimate,0,
 Nocturne,E,fear,2.0,,mono,point_click,base,0,
 Nocturne,E,slow,1.75,90.0,mono,point_click,base,0,"durée depuis leveling « Disable Duration », moyenne retenue"
-Nunu,E,root,1.0,,multi,skillshot,base,0,"durée variable ({{pp|0.5 + (1.5-0.5)/17*(x-1) for 20}}), moyenne retenue ; durée extraite 6.75 s invraisemblable (> 4.0 s), écartée — à vérifier ; durée via wiki Fandom (contenu possiblement daté) ; durée variable ({{pp|0.5 to 1.5}}), moyenne retenue"
-Nunu,E,slow,1.0,,multi,skillshot,base,0,%slow introuvable
+Nunu,E,root,1.0,,multi,skillshot,base,0,"durée variable ({{pp|0.5 + (1.5-0.5)/17*(x-1) for 20}}), moyenne retenue ; durée extraite 6.75 s invraisemblable (> 4.0 s), écartée — à vérifier ; durée variable ({{pp|0.5 to 1.5}}), moyenne retenue ; complété via wiki Fandom (contenu possiblement daté)"
+Nunu,E,slow,1.0,40.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Nunu,R,slow,1.5,72.5,multi,point_click,ultimate,0,"durée variable ({{pp|type=channel time|0 to 3 for 13|0 to 3}}), moyenne retenue ; %slow variable ({{pp|type=channel time|key=%|0;50 to 95 for 11;95|0 to 3|formula=Increases by 4.5% every 0.25 seconds. ''Starts at 0.25 seconds and finishes at 2.75 seconds''}}), moyenne retenue"
 Nunu,W,airborne,0.625,,multi,skillshot,base,0,"durée variable ({{pp|type=charge time|0.5;0.5 to 0.75 for 5|0 to 5|formula=Increases linearly after 1 second into the duration.}}), moyenne retenue"
 Nunu,W,slow,,,multi,skillshot,base,0,%slow introuvable
-Nunu,W,stun,0.25,,multi,skillshot,base,0,"durée via wiki Fandom (contenu possiblement daté) ; durée variable ({{pp|type=charge time|0;0;0;0 to 0.5 for 9|0;1;2 to 5|formula=Increases per game tick after 2.33 seconds.}}), moyenne retenue"
-Olaf,Q,slow,2.0,,mono,skillshot,base,0,"durée variable ({{pp|type=distance traveled|1 to 3 for 9|400 to 1000|formula=1+(0.25 per 75 units traveled)}}), moyenne retenue ; %slow introuvable"
+Nunu,W,stun,0.25,,multi,skillshot,base,0,"durée variable ({{pp|type=charge time|0;0;0;0 to 0.5 for 9|0;1;2 to 5|formula=Increases per game tick after 2.33 seconds.}}), moyenne retenue ; complété via wiki Fandom (contenu possiblement daté)"
+Olaf,Q,slow,2.0,40.0,mono,skillshot,base,0,"durée variable ({{pp|type=distance traveled|1 to 3 for 9|400 to 1000|formula=1+(0.25 per 75 units traveled)}}), moyenne retenue ; %slow depuis leveling « Slow », moyenne retenue"
 Orianna,R,airborne,,,multi,point_click,ultimate,1,durée introuvable
 Orianna,R,stun,0.75,,multi,point_click,ultimate,0,
-Orianna,W,slow,2.0,,multi,point_click,base,0,%slow introuvable
+Orianna,W,slow,2.0,30.0,multi,point_click,base,0,"%slow depuis leveling « Movement Speed Modifier », moyenne retenue"
 Ornn,E,airborne,1.25,,multi,skillshot,base,0,
 Ornn,E,stun,1.25,,multi,skillshot,base,0,
 Ornn,P,airborne,,,multi,skillshot,base,1,durée introuvable
 Ornn,Q,airborne,4.0,,multi,skillshot,base,1,
 Ornn,Q,slow,2.0,40.0,multi,skillshot,base,0,
 Ornn,R,airborne,1.0,,mono,skillshot,ultimate,0,
-Ornn,R,slow,2.0,,mono,skillshot,ultimate,0,%slow introuvable
+Ornn,R,slow,2.0,50.0,mono,skillshot,ultimate,0,"%slow depuis leveling « Slow », moyenne retenue"
 Ornn,R,stun,1.0,,mono,skillshot,ultimate,0,
 Ornn,W,slow,,,multi,skillshot,base,0,mot-clé slow introuvable dans la description ; %slow introuvable
 Pantheon,Q,slow,,10.0,multi,skillshot,base,0,
@@ -285,7 +285,7 @@ Pantheon,R,slow,2.0,50.0,multi,skillshot,ultimate,0,
 Pantheon,W,stun,1.0,,mono,point_click,base,0,
 Poppy,E,airborne,,,mono,point_click,base,1,durée introuvable
 Poppy,E,stun,1.8,,mono,point_click,base,0,"durée depuis leveling « Stun Duration », moyenne retenue"
-Poppy,Q,slow,,,multi,skillshot,base,0,%slow introuvable
+Poppy,Q,slow,,30.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Poppy,R,airborne,0.5,,multi,skillshot,ultimate,1,
 Poppy,R,slow,,15.0,multi,skillshot,ultimate,0,
 Poppy,W,airborne,0.5,,multi,point_click,base,0,
@@ -300,16 +300,16 @@ Qiyana,R,airborne,,,multi,skillshot,ultimate,1,durée introuvable
 Qiyana,R,stun,0.75,,multi,skillshot,ultimate,0,"durée variable ({{pp|changedisplay=true|type=proximity|0.5;1|0;X}}), moyenne retenue"
 Quinn,E,airborne,0.5,,mono,point_click,base,1,
 Quinn,E,slow,1.5,50.0,mono,point_click,base,0,
-Quinn,R,slow,,,mono,point_click,ultimate,0,mot-clé slow introuvable dans la description ; %slow introuvable
+Quinn,R,slow,,100.0,mono,point_click,ultimate,0,"mot-clé slow introuvable dans la description ; %slow depuis leveling « Total Movement Speed Increase », moyenne retenue"
 Rakan,R,charm,1.25,,mono,point_click,ultimate,0,"durée depuis leveling « Disable Duration », moyenne retenue"
 Rakan,R,slow,1.25,75.0,mono,point_click,ultimate,0,"durée depuis leveling « Disable Duration », moyenne retenue"
 Rakan,W,airborne,1.0,,multi,skillshot,base,0,
 Rammus,E,taunt,1.6,,mono,point_click,base,0,"durée depuis leveling « Taunt Duration », moyenne retenue"
 Rammus,Q,airborne,,,multi,point_click,base,1,durée introuvable
-Rammus,Q,slow,1.0,,multi,point_click,base,0,%slow introuvable
+Rammus,Q,slow,1.0,60.0,multi,point_click,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Rammus,Q,stun,1.0,,multi,point_click,base,0,
 Rammus,R,airborne,0.75,,multi,skillshot,ultimate,0,
-Rammus,R,slow,1.5,,multi,skillshot,ultimate,0,%slow introuvable
+Rammus,R,slow,1.5,40.0,multi,skillshot,ultimate,0,"%slow depuis leveling « Slow », moyenne retenue"
 Rek'Sai,W,airborne,1.0,,multi,point_click,base,0,
 Rell,E,stun,,,mono,point_click,base,0,mot-clé stun introuvable dans la description ; durée introuvable
 Rell,Q,stun,0.65,,multi,skillshot,base,0,
@@ -325,10 +325,10 @@ Renata Glasc,Q,slow,,,mono,skillshot,base,0,mot-clé slow introuvable dans la de
 Renata Glasc,Q,stun,0.5,,mono,skillshot,base,0,
 Renekton,W,stun,0.75,,mono,point_click,base,0,
 Rengar,E,root,,,mono,skillshot,base,0,durée introuvable
-Rengar,E,slow,1.75,,mono,skillshot,base,0,%slow introuvable
+Rengar,E,slow,1.75,60.0,mono,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Riven,Q,airborne,0.5,,multi,point_click,base,1,
 Riven,W,stun,0.75,,multi,point_click,base,0,
-Rumble,E,slow,2.0,,mono,skillshot,base,0,%slow introuvable
+Rumble,E,slow,2.0,3.0,mono,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Rumble,R,slow,,35.0,multi,skillshot,ultimate,0,
 Ryze,R,root,,,mono,skillshot,ultimate,0,durée introuvable
 Ryze,R,silence,,,mono,skillshot,ultimate,0,durée introuvable
@@ -354,32 +354,32 @@ Sett,E,slow,0.5,70.0,multi,skillshot,base,0,
 Sett,E,stun,1.0,,multi,skillshot,base,0,
 Sett,R,slow,1.0,99.0,multi,point_click,ultimate,0,
 Sett,R,suppression,,,multi,point_click,ultimate,0,durée introuvable
-Shaco,E,slow,2.0,,mono,point_click,base,0,%slow introuvable
+Shaco,E,slow,2.0,25.0,mono,point_click,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Shaco,R,fear,1.0,,multi,skillshot,ultimate,0,
 Shaco,R,root,0.5,,multi,skillshot,ultimate,0,
 Shaco,R,slow,,,multi,skillshot,ultimate,0,mot-clé slow introuvable dans la description ; %slow introuvable
-Shaco,W,fear,1.0,,multi,skillshot,base,0,"durée extraite 5.0 s invraisemblable (> 4.0 s), écartée — à vérifier ; durée via wiki Fandom (contenu possiblement daté) ; durée depuis leveling « Fear Duration », moyenne retenue"
+Shaco,W,fear,1.0,,multi,skillshot,base,0,"durée extraite 5.0 s invraisemblable (> 4.0 s), écartée — à vérifier ; durée depuis leveling « Fear Duration », moyenne retenue ; complété via wiki Fandom (contenu possiblement daté)"
 Shaco,W,root,0.9,,multi,skillshot,base,0,"durée depuis leveling « Root Duration », moyenne retenue"
 Shaco,W,slow,0.9,,multi,skillshot,base,0,"mot-clé slow introuvable dans la description ; durée depuis leveling « Slow Duration », moyenne retenue ; %slow introuvable"
 Shen,E,taunt,1.5,,mono,skillshot,base,0,
-Shen,Q,slow,,,multi,point_click,base,0,%slow introuvable
+Shen,Q,slow,,35.0,multi,point_click,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Shyvana,E,slow,2.0,30.0,multi,skillshot,base,0,
 Shyvana,R,fear,0.75,,multi,skillshot,ultimate,0,
 Singed,E,airborne,,,mono,point_click,base,1,durée introuvable
 Singed,E,root,1.5,,mono,point_click,base,0,"durée depuis leveling « Root Duration », moyenne retenue"
 Singed,W,ground,,,multi,skillshot,base,0,durée introuvable
-Singed,W,slow,,,multi,skillshot,base,0,%slow introuvable
-Sion,E,slow,2.5,,mono,skillshot,base,0,%slow introuvable
+Singed,W,slow,,60.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
+Sion,E,slow,2.5,50.0,mono,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Sion,Q,airborne,,,multi,skillshot,base,0,durée introuvable
 Sion,Q,slow,0.25,50.0,multi,skillshot,base,0,
 Sion,Q,stun,,,multi,skillshot,base,0,durée introuvable
 Sion,R,airborne,0.5,,multi,skillshot,ultimate,1,
-Sion,R,slow,3.0,,multi,skillshot,ultimate,0,%slow introuvable
+Sion,R,slow,3.0,45.0,multi,skillshot,ultimate,0,"%slow depuis leveling « Slow », moyenne retenue"
 Sion,R,stun,0.5,,multi,skillshot,ultimate,0,
 Skarner,E,stun,1.1,,mono,skillshot,base,0,
 Skarner,E,suppression,,,mono,skillshot,base,0,durée introuvable
 Skarner,Q,slow,1.0,40.0,mono,point_click,base,0,
-Skarner,Q,slow,1.25,40.0,mono,skillshot,base,0,%slow introuvable ; durée via wiki Fandom (contenu possiblement daté)
+Skarner,Q,slow,1.25,40.0,mono,skillshot,base,0,complété via wiki Fandom (contenu possiblement daté)
 Skarner,R,suppression,1.5,,multi,skillshot,ultimate,0,
 Skarner,W,slow,1.0,20.0,multi,point_click,base,0,
 Smolder,R,slow,2.0,40.0,multi,skillshot,ultimate,0,
@@ -396,7 +396,7 @@ Swain,R,slow,1.5,50.0,multi,point_click,ultimate,0,
 Swain,W,slow,1.5,50.0,multi,skillshot,base,0,
 Sylas,E,airborne,0.5,,mono,skillshot,base,0,
 Sylas,E,stun,0.5,,mono,skillshot,base,0,
-Sylas,Q,slow,1.5,,multi,skillshot,base,0,%slow introuvable
+Sylas,Q,slow,1.5,25.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Syndra,E,airborne,1.25,,multi,skillshot,base,1,
 Syndra,E,slow,1.25,70.0,multi,skillshot,base,0,
 Syndra,E,stun,1.25,,multi,skillshot,base,0,
@@ -411,16 +411,16 @@ Tahm Kench,W,airborne,1.0,,multi,skillshot,base,0,
 Tahm Kench,W,stun,1.0,,multi,skillshot,base,0,
 Taliyah,E,slow,,20.0,multi,skillshot,base,0,
 Taliyah,E,stun,0.75,,multi,skillshot,base,0,
-Taliyah,Q,slow,1.5,,multi,skillshot,base,0,%slow introuvable
+Taliyah,Q,slow,1.5,30.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Taliyah,Q,stun,3.0,,multi,skillshot,base,0,
 Taliyah,R,airborne,4.0,,mono,skillshot,ultimate,1,
 Taliyah,W,airborne,1.0,,multi,skillshot,base,1,
-Talon,W,slow,1.0,,multi,skillshot,base,0,%slow introuvable
+Talon,W,slow,1.0,50.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Taric,E,stun,1.5,,multi,skillshot,base,0,
 Teemo,Q,blind,2.5,,mono,point_click,base,0,"durée depuis leveling « Blind Duration », moyenne retenue"
-Teemo,R,slow,4.0,,multi,skillshot,ultimate,0,%slow introuvable
+Teemo,R,slow,4.0,40.0,multi,skillshot,ultimate,0,"%slow depuis leveling « Slow », moyenne retenue"
 Thresh,E,airborne,1.0,,multi,skillshot,base,1,
-Thresh,E,slow,1.0,,multi,skillshot,base,0,%slow introuvable
+Thresh,E,slow,1.0,30.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Thresh,Q,airborne,,,mono,skillshot,base,1,durée introuvable
 Thresh,Q,slow,1.0,20.0,mono,skillshot,base,0,
 Thresh,R,slow,2.0,99.0,mono,point_click,ultimate,0,
@@ -428,23 +428,23 @@ Tristana,R,airborne,,,mono,point_click,ultimate,1,durée introuvable
 Tristana,R,stun,0.55,,mono,point_click,ultimate,0,"durée depuis leveling « Stun Duration », moyenne retenue"
 Tristana,W,slow,2.0,40.0,multi,skillshot,base,0,
 Trundle,E,airborne,,,multi,skillshot,base,1,durée introuvable
-Trundle,E,slow,,,multi,skillshot,base,0,%slow introuvable
+Trundle,E,slow,,42.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Trundle,Q,slow,0.1,75.0,mono,point_click,base,0,
-Tryndamere,W,slow,,,mono,skillshot,base,0,%slow introuvable
-Twisted Fate,W,slow,2.5,,mono,point_click,base,0,%slow introuvable
+Tryndamere,W,slow,,40.0,mono,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
+Twisted Fate,W,slow,2.5,40.0,mono,point_click,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Twisted Fate,W,stun,1.5,,mono,point_click,base,0,"durée depuis leveling « Stun Duration », moyenne retenue"
-Twitch,W,slow,,,multi,skillshot,base,0,%slow introuvable
+Twitch,W,slow,,40.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Udyr,E,stun,0.75,,mono,point_click,base,0,
-Udyr,R,slow,,,multi,point_click,ultimate,0,%slow introuvable
+Udyr,R,slow,,22.5,multi,point_click,ultimate,0,"%slow depuis leveling « Slow », moyenne retenue"
 Urgot,E,airborne,1.0,,mono,skillshot,base,1,
 Urgot,E,stun,1.0,,mono,skillshot,base,0,
-Urgot,Q,slow,1.25,,multi,skillshot,base,0,%slow introuvable
+Urgot,Q,slow,1.25,55.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Urgot,R,fear,1.5,,multi,skillshot,ultimate,0,
 Urgot,R,slow,,75.0,multi,skillshot,ultimate,0,
 Urgot,R,slow,,75.0,multi,skillshot,ultimate,0,
 Urgot,R,suppression,,,multi,skillshot,ultimate,0,durée introuvable
 Urgot,W,slow,,125.0,mono,point_click,base,0,
-Varus,E,slow,,,multi,skillshot,base,0,%slow introuvable
+Varus,E,slow,,40.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Varus,Q,slow,,20.0,multi,skillshot,base,0,
 Varus,R,root,2.0,,mono,skillshot,ultimate,0,
 Vayne,E,airborne,,,mono,point_click,base,1,durée introuvable
@@ -454,7 +454,7 @@ Vel'Koz,E,airborne,0.75,,multi,skillshot,base,1,
 Vel'Koz,E,stun,0.75,,multi,skillshot,base,0,
 Vel'Koz,Q,slow,1.8,70.0,multi,skillshot,base,0,"durée depuis leveling « Slow Duration », moyenne retenue"
 Vel'Koz,R,slow,1.0,20.0,multi,skillshot,ultimate,0,
-Vex,E,slow,2.0,,multi,skillshot,base,0,%slow introuvable
+Vex,E,slow,2.0,40.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Vex,P,fear,1.125,,multi,skillshot,base,0,"durée variable ({{pp|0.75 to 1.5 for 4|1;6;9;13}}), moyenne retenue"
 Vex,P,slow,,79.5,multi,skillshot,base,0,"%slow variable ({{pp|type=distance from '''Vex'''|60 to 99 for 11|250 to 800|key=%|formula=60% + 3.9% for every 55 units away from Vex}}), moyenne retenue"
 Vi,Q,airborne,0.75,,multi,skillshot,base,1,
@@ -484,7 +484,7 @@ Xin Zhao,E,slow,0.5,30.0,multi,point_click,base,0,
 Xin Zhao,Q,airborne,0.75,,mono,point_click,base,0,
 Xin Zhao,R,airborne,0.75,,multi,point_click,ultimate,1,
 Xin Zhao,R,stun,,,multi,point_click,ultimate,0,durée introuvable
-Xin Zhao,W,slow,1.5,50.0,multi,skillshot,base,0,durée via wiki Fandom (contenu possiblement daté)
+Xin Zhao,W,slow,1.5,50.0,multi,skillshot,base,0,complété via wiki Fandom (contenu possiblement daté)
 Yasuo,Q,airborne,0.9,,multi,skillshot,base,0,
 Yasuo,R,airborne,1.0,,mono,point_click,ultimate,0,
 Yone,Q,airborne,0.75,,multi,skillshot,base,0,
@@ -508,12 +508,12 @@ Zac,Q,stun,0.25,,multi,skillshot,base,0,
 Zac,R,airborne,1.0,,multi,point_click,ultimate,1,
 Zac,R,slow,,20.0,multi,point_click,ultimate,0,
 Zed,E,slow,1.5,50.0,multi,point_click,base,0,
-Zeri,W,slow,2.0,,multi,skillshot,base,0,%slow introuvable
-Ziggs,E,slow,1.5,,mono,skillshot,base,0,%slow introuvable
+Zeri,W,slow,2.0,40.0,multi,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
+Ziggs,E,slow,1.5,30.0,mono,skillshot,base,0,"%slow depuis leveling « Slow », moyenne retenue"
 Ziggs,W,airborne,0.5,,multi,skillshot,base,1,
-Zilean,E,slow,,,mono,point_click,base,0,%slow introuvable
+Zilean,E,slow,,74.667,mono,point_click,base,0,"%slow depuis leveling « Movement Speed Modifier », moyenne retenue"
 Zilean,Q,stun,1.3,,multi,skillshot,base,0,"durée depuis leveling « Stun Duration », moyenne retenue"
 Zoe,E,sleep,1.4,,mono,skillshot,base,0,
-Zoe,E,slow,2.25,,mono,skillshot,base,0,%slow introuvable
+Zoe,E,slow,2.25,20.0,mono,skillshot,base,0,"%slow depuis leveling « Maximum Slow », moyenne retenue"
 Zyra,E,root,,,multi,skillshot,base,0,"durée extraite 8.0 s invraisemblable (> 4.0 s), écartée — à vérifier ; durée introuvable"
 Zyra,R,airborne,1.0,,multi,skillshot,ultimate,0,

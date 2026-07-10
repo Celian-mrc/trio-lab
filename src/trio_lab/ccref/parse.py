@@ -333,7 +333,20 @@ def extract_cc_properties(
             props.slow_pct = _mean_number(slow.group(1))
             if len(_NUMBER_RE.findall(slow.group(1))) > 1:
                 props.notes.append(f"%slow variable ({slow.group(1)}), moyenne retenue")
-        else:
+        if props.slow_pct is None:
+            # Le % vit souvent en leveling seulement : stat « Slow » (Poppy Q)
+            # ou « Movement Speed Modifier » (Orianna W). On tronque au premier
+            # « % » : ce qui suit (cooldown, champs voisins) n'est pas la valeur.
+            for stat_name, expr in leveling:
+                name = stat_name.lower()
+                if ("slow" in name or "movement speed" in name) and "%" in expr:
+                    props.slow_pct = _mean_number(expr.split("%")[0])
+                    if props.slow_pct is not None:
+                        props.notes.append(
+                            f"%slow depuis leveling « {stat_name} », moyenne retenue"
+                        )
+                        break
+        if props.slow_pct is None:
             props.notes.append("%slow introuvable")
 
     props.area = any(marker in lowered for marker in _AREA_MARKERS)

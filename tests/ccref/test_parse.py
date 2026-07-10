@@ -224,6 +224,28 @@ def test_slow_percentage_mean_of_range():
     assert props.duration_s == 2.0
 
 
+def test_slow_percentage_from_leveling_stat():
+    """Q de Poppy : « slows enemies within » sans chiffre, stat « Slow » en leveling."""
+    props = parse.extract_cc_properties(
+        "{{tip|slow|slows}} enemies within, which then ruptures",
+        "slow",
+        [("Slow", "{{ap|20 to 40}}%}}\n{{st|Total Physical Damage|...")],
+    )
+    assert props.slow_pct == 30.0
+    assert any("leveling" in n for n in props.notes)
+
+
+def test_slow_percentage_from_movement_speed_stat_truncated_at_percent():
+    """W d'Orianna : stat « Movement Speed Modifier » ; les nombres après le %
+    (cooldown, champs voisins) ne doivent pas polluer la moyenne."""
+    props = parse.extract_cc_properties(
+        "{{tip|slow|slowing}} enemies inside briefly",
+        "slow",
+        [("Movement Speed Modifier", "{{ap|30}}%}}\n|cooldown     = 7\n|co")],
+    )
+    assert props.slow_pct == 30.0
+
+
 def test_area_heuristic():
     multi = parse.extract_cc_properties(
         "{{tip|stun|stunning}} all enemies hit for 1 second", "stun"

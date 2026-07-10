@@ -116,7 +116,7 @@ def build_rows() -> list[dict[str, object]]:
                 "note_relecture": " ; ".join(props.notes + form_note),
             }
         )
-        if props.duration_s is None:
+        if props.duration_s is None or (entry.cc_type == "slow" and props.slow_pct is None):
             fandom_candidates.append((len(rows) - 1, entry))
 
     _fill_from_fandom(rows, fandom_candidates)
@@ -146,7 +146,7 @@ def _fill_from_fandom(
     rows: list[dict[str, object]],
     candidates: list[tuple[int, parse.SourceEntry]],
 ) -> None:
-    """2e passe : durées manquantes cherchées sur l'ancien wiki (Fandom).
+    """2e passe : durées et %slow manquants cherchés sur l'ancien wiki (Fandom).
 
     Même moteur MediaWiki et mêmes templates, prose souvent plus chiffrée.
     Contenu possiblement daté (wiki migré en 2024) → chaque valeur récupérée
@@ -166,20 +166,22 @@ def _fill_from_fandom(
         props = parse.extract_cc_properties(
             fields["description"], entry.cc_type, fields["leveling"]
         )
-        if props.duration_s is None:
-            continue
         row = rows[index]
-        row["duree_s"] = props.duration_s
-        notes = [
-            n for n in str(row["note_relecture"]).split(" ; ") if n and n != "durée introuvable"
-        ]
-        extra = [n for n in props.notes if "moyenne retenue" in n]
-        notes.append("durée via wiki Fandom (contenu possiblement daté)")
-        row["note_relecture"] = " ; ".join(notes + extra)
+        resolved = []
+        if row["duree_s"] == "" and props.duration_s is not None:
+            row["duree_s"] = props.duration_s
+            resolved.append("durée introuvable")
         if row["pct_slow"] == "" and props.slow_pct is not None:
             row["pct_slow"] = props.slow_pct
+            resolved.append("%slow introuvable")
+        if not resolved:
+            continue
+        notes = [n for n in str(row["note_relecture"]).split(" ; ") if n and n not in resolved]
+        notes.extend(n for n in props.notes if "moyenne retenue" in n)
+        notes.append("complété via wiki Fandom (contenu possiblement daté)")
+        row["note_relecture"] = " ; ".join(dict.fromkeys(notes))
         filled += 1
-    logger.info("2e passe Fandom : %d durées complétées sur %d candidates", filled, len(candidates))
+    logger.info("2e passe Fandom : %d lignes complétées sur %d candidates", filled, len(candidates))
 
 
 def write_draft(rows: list[dict[str, object]], path: Path = DRAFT_PATH) -> Path:
