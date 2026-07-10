@@ -281,6 +281,24 @@ def test_mixed_self_and_enemy_slow_keeps_enemy_values():
     assert props.duration_s == 2.0
 
 
+def test_conditional_cc_detected_near_keyword():
+    """E de Poppy / E de Briar : le stun exige une collision avec le terrain."""
+    props = parse.extract_cc_properties(
+        "dashes to the target. If they collide with terrain, they are "
+        "{{tip|stun|stunned}} for {{ap|1.6 to 2.2}} seconds",
+        "stun",
+    )
+    assert props.conditional is True
+    assert any("conditionnel" in n for n in props.notes)
+
+
+def test_unconditional_cc_not_flagged():
+    props = parse.extract_cc_properties(
+        "{{tip|stun|stunning}} the first enemy hit for 1 second", "stun"
+    )
+    assert props.conditional is False
+
+
 def test_area_heuristic():
     multi = parse.extract_cc_properties(
         "{{tip|stun|stunning}} all enemies hit for 1 second", "stun"

@@ -115,6 +115,22 @@ _SELF_BEFORE_RE = re.compile(
 # (ex. niveau attrapé dans un {{pp}}) → valeur écartée, note de relecture.
 MAX_PLAUSIBLE_HARD_CC_S = 4.0
 
+# Marqueurs de prose d'un CC CONDITIONNEL : collision avec le terrain (E de
+# Poppy, Q de Bard, E de Briar), charge complète requise… Heuristique, à relire.
+_CONDITION_MARKERS = (
+    "collid",
+    "against terrain",
+    "into terrain",
+    "hits terrain",  # « If the target hits terrain » (E de Poppy)
+    "hits terrain or",  # « If the bolt hits terrain or a second enemy » (Q de Bard)
+    "against a wall",
+    "into a wall",
+    "hits a wall",
+    "if fully charged",
+    "charged for its full duration",
+    "if the charge",
+)
+
 # Marqueurs de prose suggérant un CC multi-cibles (heuristique, à relire).
 _AREA_MARKERS = (
     "enemies hit",
@@ -147,6 +163,7 @@ class CCProperties:
     duration_s: float | None = None
     slow_pct: float | None = None
     area: bool = False
+    conditional: bool = False  # CC sous condition (collision terrain, charge…)
     notes: list[str] = field(default_factory=list)
 
 
@@ -372,6 +389,16 @@ def extract_cc_properties(
             props.notes.append("%slow introuvable")
 
     props.area = any(marker in lowered for marker in _AREA_MARKERS)
+    # Conditionnel : marqueur à proximité d'une mention du CC (±160 caractères) —
+    # pas sur toute la description, où une autre partie du sort pourrait porter
+    # la condition.
+    props.conditional = any(
+        marker in lowered[max(0, pos - 160) : pos + 160]
+        for pos in positions
+        for marker in _CONDITION_MARKERS
+    )
+    if props.conditional:
+        props.notes.append("conditionnel (collision/charge) — heuristique, à vérifier")
     return props
 
 

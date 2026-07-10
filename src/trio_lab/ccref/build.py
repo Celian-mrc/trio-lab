@@ -35,6 +35,7 @@ CSV_COLUMNS = [
     "fiabilite",
     "disponibilite",
     "repositionnement",
+    "conditionnel",
     "note_relecture",
 ]
 
@@ -51,9 +52,12 @@ _HEADER_COMMENT = """\
 # (https://wiki.leagueoflegends.com), communauté des contributeurs.
 # League of Legends et Riot Games sont des marques de Riot Games, Inc.
 #
-# Colonnes : zone ∈ {{mono, multi}} (heuristique), fiabilite ∈ {{point_click, skillshot}},
-# disponibilite ∈ {{base, ultimate}}, repositionnement ∈ {{0, 1}} (airborne déplaçant).
-# Les coefficients (poids par type, coef_zone…) vivent dans la config, pas ici.
+# Colonnes : zone ∈ {{mono, multi}} (heuristique), fiabilite ∈ {{point_click, skillshot}}
+# (le ciblage, indépendant de la condition), disponibilite ∈ {{base, ultimate}},
+# repositionnement ∈ {{0, 1}} (airborne déplaçant), conditionnel ∈ {{0, 1}} (CC sous
+# condition : collision terrain, charge complète — E de Poppy, Q de Bard).
+# Les coefficients (poids par type, coef_zone, coef_conditionnel…) vivent dans la
+# config, pas ici.
 """
 
 
@@ -132,6 +136,7 @@ def build_rows() -> list[dict[str, object]]:
                     "fiabilite": "",
                     "disponibilite": "",
                     "repositionnement": int(entry.displaces),
+                    "conditionnel": 0,
                     "note_relecture": " ; ".join(
                         ["page de données introuvable sur le wiki", *form_note]
                     ),
@@ -153,6 +158,7 @@ def build_rows() -> list[dict[str, object]]:
                 "fiabilite": parse.reliability_of(fields["targeting"]),
                 "disponibilite": parse.availability_of(fields["skill"]),
                 "repositionnement": int(entry.displaces),
+                "conditionnel": int(props.conditional),
                 "note_relecture": " ; ".join(props.notes + form_note),
             }
         )
