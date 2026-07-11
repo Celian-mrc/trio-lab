@@ -1,79 +1,149 @@
-/* Trio Lab — style volontairement minimal (Phase 5 : « léger d'abord »). */
+/* Trio Lab — design system inspiré de shadcn/ui (palette zinc sombre,
+   bordures subtiles, rayons 8px, scrollbars fines). shadcn est une lib React :
+   ici on reprend ses tokens et son rendu en CSS pur. */
 :root {
-  --bg: #101418; --panel: #1a2129; --text: #e8e6e3; --muted: #9aa4af;
-  --accent: #4fc3f7; --pos: #66bb6a; --neg: #ef5350; --border: #2c3540;
+  --background: #09090b;   /* zinc-950 */
+  --card: #0c0c0f;
+  --foreground: #fafafa;   /* zinc-50 */
+  --muted: #18181b;        /* zinc-900 */
+  --muted-fg: #a1a1aa;     /* zinc-400 */
+  --border: #27272a;       /* zinc-800 */
+  --input: #27272a;
+  --primary: #fafafa;
+  --primary-fg: #18181b;
+  --accent: #38bdf8;       /* sky-400 */
+  --pos: #4ade80;          /* green-400 */
+  --neg: #f87171;          /* red-400 */
+  --radius: 8px;
 }
 * { box-sizing: border-box; }
+html { color-scheme: dark; }
 body {
-  margin: 0; background: var(--bg); color: var(--text);
-  font: 15px/1.5 system-ui, "Segoe UI", sans-serif;
+  margin: 0; background: var(--background); color: var(--foreground);
+  font: 14px/1.5 system-ui, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
+
+/* Scrollbars façon shadcn (ScrollArea) : fines, discrètes, arrondies. */
+* { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--border); border-radius: 9999px;
+  border: 2px solid transparent; background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover { background-color: #3f3f46; }
+
 header {
   display: flex; align-items: center; gap: 1.5rem;
-  padding: 0.7rem 1.2rem; background: var(--panel); border-bottom: 1px solid var(--border);
+  padding: 0.65rem 1.25rem; border-bottom: 1px solid var(--border);
+  background: var(--background); position: sticky; top: 0; z-index: 10;
 }
-.brand { font-weight: 700; font-size: 1.15rem; color: var(--accent); text-decoration: none; }
-nav a { color: var(--text); text-decoration: none; margin-right: 1rem; }
-nav a:hover { color: var(--accent); }
-.context { margin-left: auto; color: var(--muted); font-size: 0.85rem; }
-main { max-width: 1100px; margin: 0 auto; padding: 1.2rem; }
-footer { text-align: center; color: var(--muted); font-size: 0.8rem; padding: 1.5rem; }
-h1 { font-size: 1.4rem; }
-h2 { font-size: 1.1rem; margin-top: 1.6rem; }
+.brand { font-weight: 700; font-size: 1rem; color: var(--foreground); text-decoration: none; letter-spacing: -0.01em; }
+nav a {
+  color: var(--muted-fg); text-decoration: none; margin-right: 0.25rem;
+  font-size: 0.875rem; padding: 0.35rem 0.75rem; border-radius: 6px;
+}
+nav a:hover { color: var(--foreground); background: var(--muted); }
+.context { margin-left: auto; color: var(--muted-fg); font-size: 0.8rem; }
+main { max-width: 1400px; margin: 0 auto; padding: 1.25rem 1.5rem 2rem; }
+footer { text-align: center; color: var(--muted-fg); font-size: 0.75rem; padding: 1.5rem; border-top: 1px solid var(--border); margin-top: 2rem; }
+h1 { font-size: 1.25rem; letter-spacing: -0.02em; margin: 0.5rem 0 1rem; }
+h2 { font-size: 1rem; letter-spacing: -0.01em; margin-top: 1.75rem; }
+
+/* --- Filtres (Card + Input/Select/Button shadcn) --- */
 .filters {
-  display: flex; flex-wrap: wrap; gap: 0.8rem; align-items: end;
-  background: var(--panel); border: 1px solid var(--border);
-  border-radius: 8px; padding: 0.8rem 1rem; margin-bottom: 1rem;
+  display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: end;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 0.9rem 1rem; margin-bottom: 1rem;
 }
-.filters label { display: flex; flex-direction: column; font-size: 0.8rem; color: var(--muted); gap: 0.2rem; }
-.filters input, .filters select, .filters button {
-  background: var(--bg); color: var(--text); border: 1px solid var(--border);
-  border-radius: 5px; padding: 0.35rem 0.5rem; font-size: 0.9rem;
+.filters label { display: flex; flex-direction: column; font-size: 0.75rem; color: var(--muted-fg); gap: 0.3rem; font-weight: 500; }
+.filters input, .filters select {
+  background: transparent; color: var(--foreground); border: 1px solid var(--input);
+  border-radius: 6px; padding: 0.4rem 0.6rem; font-size: 0.85rem; min-height: 2.15rem;
 }
-.filters input[type="number"] { width: 6rem; }
-.filters button { background: var(--accent); color: #06232f; font-weight: 600; cursor: pointer; }
-table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 8px; overflow: hidden; }
-th, td { padding: 0.5rem 0.7rem; text-align: left; border-bottom: 1px solid var(--border); }
-th { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
-table.narrow { width: auto; min-width: 20rem; }
-table.kv td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
-.trio-cell a { color: var(--text); text-decoration: none; display: flex; gap: 0.9rem; }
-.trio-cell a:hover .champ { color: var(--accent); }
-.champ { display: inline-flex; align-items: center; gap: 0.35rem; }
-.champ img { border-radius: 4px; vertical-align: middle; }
-.champ.big { font-size: 1.15rem; margin-right: 1.2rem; }
-.champ.big small { color: var(--muted); font-size: 0.75rem; }
+.filters input:focus, .filters select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.filters select option { background: var(--card); }
+.filters input[type="number"] { width: 5.5rem; }
+.filters button {
+  background: var(--primary); color: var(--primary-fg); border: none;
+  border-radius: 6px; padding: 0.45rem 1rem; font-size: 0.85rem; font-weight: 600;
+  cursor: pointer; min-height: 2.15rem;
+}
+.filters button:hover { opacity: 0.9; }
+
+/* --- Tables (Table shadcn : lignes délimitées, header muted, hover) --- */
+table { width: 100%; border-collapse: collapse; }
+table.data { font-size: 0.8rem; }
+th, td { padding: 0.45rem 0.55rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
+th {
+  color: var(--muted-fg); font-size: 0.7rem; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;
+}
+tbody tr:hover { background: color-mix(in srgb, var(--muted) 55%, transparent); }
+th a { color: var(--muted-fg); text-decoration: none; }
+th a:hover { color: var(--foreground); }
+th a.active { color: var(--foreground); }
+td { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sub { display: block; color: var(--muted-fg); font-size: 0.68rem; line-height: 1.1; }
+.gold span { display: inline-block; min-width: 3.2em; }
+table.narrow { width: auto; min-width: 22rem; }
+table.kv td:last-child { text-align: right; }
+.empty { color: var(--muted-fg); text-align: center; padding: 1.5rem; }
+
+/* --- Cellule combo (champions + rôles) --- */
+.col-combo { min-width: 19rem; }
+.combo { display: flex; gap: 0.75rem; align-items: center; color: var(--foreground); text-decoration: none; }
+a.combo:hover .champ { color: var(--accent); }
+.champ { display: inline-flex; align-items: center; gap: 0.3rem; white-space: nowrap; }
+.champ img { border-radius: 4px; }
+.champ.big { font-size: 1.1rem; margin-right: 1.1rem; }
+.champ.big small { color: var(--muted-fg); font-size: 0.72rem; }
+.role-badge {
+  display: inline-block; padding: 0.05rem 0.28rem; border-radius: 4px;
+  font-size: 0.58rem; font-weight: 700; letter-spacing: 0.04em;
+  border: 1px solid var(--border); color: var(--muted-fg); background: var(--muted);
+}
+.role-jgl { color: #86efac; }
+.role-mid { color: #7dd3fc; }
+.role-sup { color: #fcd34d; }
+
+/* --- Badges & couleurs --- */
 .pos { color: var(--pos); }
 .neg { color: var(--neg); }
-.role-badge {
-  display: inline-block; padding: 0 0.3rem; border-radius: 4px;
-  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.03em;
+.tier {
+  display: inline-block; padding: 0.05rem 0.5rem; border-radius: 9999px;
+  font-size: 0.68rem; font-weight: 600; border: 1px solid var(--border);
 }
-.role-jgl { background: #274a2b; color: #8fd6a0; }
-.role-mid { background: #23405a; color: #86c5f2; }
-.role-sup { background: #4a3a20; color: #e0b96b; }
-th a { color: var(--muted); text-decoration: none; }
-th a:hover { color: var(--accent); }
-.table-scroll { overflow-x: auto; }
-.legend { margin-top: 1.2rem; color: var(--muted); font-size: 0.85rem; }
-.legend summary { cursor: pointer; color: var(--accent); }
-.legend li { margin: 0.4rem 0; }
-.tier { padding: 0.1rem 0.5rem; border-radius: 10px; font-size: 0.75rem; }
-.tier-faible { background: #4a3a20; color: #e0b96b; }
-.tier-moyen { background: #23405a; color: #86c5f2; }
-.tier-eleve { background: #1f4a2c; color: #8fd6a0; }
-.meta { color: var(--muted); font-size: 0.85rem; }
-.empty { color: var(--muted); text-align: center; }
-.pagination { display: flex; justify-content: space-between; margin: 1rem 0; }
-.pagination a { color: var(--accent); text-decoration: none; }
+.tier-faible { color: #fbbf24; background: rgba(251, 191, 36, 0.08); }
+.tier-moyen { color: #7dd3fc; background: rgba(125, 211, 252, 0.08); }
+.tier-eleve { color: #4ade80; background: rgba(74, 222, 128, 0.08); }
+.meta { color: var(--muted-fg); font-size: 0.8rem; }
+
+.pagination { display: flex; justify-content: space-between; margin: 1rem 0; font-size: 0.85rem; }
+.pagination a { color: var(--foreground); text-decoration: none; padding: 0.35rem 0.75rem; border: 1px solid var(--border); border-radius: 6px; }
+.pagination a:hover { background: var(--muted); }
+
+/* --- Page détail --- */
 .cards { display: flex; gap: 1rem; flex-wrap: wrap; }
 .card {
-  flex: 1 1 12rem; background: var(--panel); border: 1px solid var(--border);
-  border-radius: 8px; padding: 0.8rem 1rem;
+  flex: 1 1 12rem; background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 0.9rem 1.1rem;
 }
-.card h3 { margin: 0 0 0.3rem; font-size: 0.85rem; color: var(--muted); text-transform: uppercase; }
-.big-number { font-size: 1.6rem; font-weight: 700; margin: 0.1rem 0; }
-.big-number small { font-size: 0.8rem; color: var(--muted); font-weight: 400; }
+.card h3 { margin: 0 0 0.35rem; font-size: 0.72rem; color: var(--muted-fg); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; }
+.big-number { font-size: 1.5rem; font-weight: 700; margin: 0.1rem 0; letter-spacing: -0.02em; }
+.big-number small { font-size: 0.75rem; color: var(--muted-fg); font-weight: 400; }
 .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
-@media (max-width: 800px) { .columns { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .columns { grid-template-columns: 1fr; } }
 .trio-title { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+.trio-cell a { color: var(--foreground); text-decoration: none; display: flex; gap: 0.9rem; }
+.trio-cell a:hover .champ { color: var(--accent); }
+
+/* --- Légende --- */
+.legend {
+  margin-top: 1.25rem; color: var(--muted-fg); font-size: 0.8rem;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 0.7rem 1rem;
+}
+.legend summary { cursor: pointer; color: var(--foreground); font-weight: 500; font-size: 0.85rem; }
+.legend li { margin: 0.4rem 0; }

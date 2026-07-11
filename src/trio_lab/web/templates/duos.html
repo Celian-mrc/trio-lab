@@ -34,39 +34,55 @@
   <button type="submit">Filtrer</button>
 </form>
 
-<p class="meta">{{ total }} duos — page {{ page }} / {{ ((total - 1) // per_page) + 1 if total else 1 }} — cliquer un en-tête de colonne pour trier</p>
+<p class="meta">{{ total }} duos — page {{ page }} / {{ ((total - 1) // per_page) + 1 if total else 1 }} — cliquer un en-tête pour trier — stats = parties de ce duo, quel que soit le 3e membre</p>
 
 {% set filters_qs = "window=" ~ window ~ "&platform=" ~ platform ~ "&roles=" ~ roles ~ "&min_games=" ~ min_games ~ "&min_tier=" ~ min_tier %}
-{% macro th_sort(key, label) %}<th><a href="/duos?{{ filters_qs }}&sort={{ key }}">{{ label }}{{ ' ▼' if sort == key }}</a></th>{% endmacro %}
+{% macro sort_link(key, label) %}<a href="/duos?{{ filters_qs }}&sort={{ key }}" class="{{ 'active' if sort == key }}">{{ label }}{{ ' ▼' if sort == key }}</a>{% endmacro %}
 
-<table>
+<table class="data">
   <thead>
     <tr>
-      <th>Duo</th>
-      {{ th_sort('games', 'Games') }}
-      {{ th_sort('wr', 'WR') }}
-      {{ th_sort('synergy', 'Synergie') }}
-      <th title="Intervalle de confiance de Wilson à 95 % sur le winrate">IC 95 %</th>
+      <th class="col-combo">Duo</th>
+      <th>{{ sort_link('games', 'Games') }}</th>
+      <th title="Intervalle de Wilson à 95 % sous le winrate">{{ sort_link('wr', 'WR') }}</th>
+      <th>{{ sort_link('synergy', 'Synergie') }}</th>
+      <th title="Avantage gold moyen du trio à 5 / 10 / 15 min">Gold {{ sort_link('gold5', '@5') }} {{ sort_link('gold10', '@10') }} {{ sort_link('gold15', '@15') }}</th>
+      <th title="Score de vision cumulé du trio (moyenne)">{{ sort_link('vision', 'Vision') }}</th>
+      <th title="Drakes pris par l’équipe (moyenne)">{{ sort_link('drakes', 'Drakes') }}</th>
+      <th title="Taux d’obtention de l’âme">{{ sort_link('soul', 'Âme') }}</th>
+      <th title="Taux de prise du héraut">{{ sort_link('herald', 'Héraut') }}</th>
+      <th title="Taux de première tour">{{ sort_link('tower1', '1re tour') }}</th>
       <th>Fiabilité</th>
     </tr>
   </thead>
   <tbody>
     {% for r in rows %}
     <tr>
-      <td class="trio-cell">
-        {% for cid, rkey in ((r.champ_a, duo_badges[r.roles][0]), (r.champ_b, duo_badges[r.roles][1])) %}
-        {% set c = champ(cid) %}
-        <span class="champ"><span class="role-badge role-{{ rkey }}">{{ rkey | upper }}</span>{% if c.icon_url %}<img src="{{ c.icon_url }}" alt="" width="24" height="24">{% endif %}{{ c.name }}</span>
-        {% endfor %}
+      <td class="col-combo">
+        <span class="combo">
+          {% for cid, rkey in ((r.champ_a, duo_badges[r.roles][0]), (r.champ_b, duo_badges[r.roles][1])) %}
+          {% set c = champ(cid) %}
+          <span class="champ" title="{{ ROLE_LABELS[rkey] }}"><span class="role-badge role-{{ rkey }}">{{ rkey | upper }}</span>{% if c.icon_url %}<img src="{{ c.icon_url }}" alt="" width="22" height="22">{% endif %}{{ c.name }}</span>
+          {% endfor %}
+        </span>
       </td>
       <td>{{ r.games }}</td>
-      <td>{{ r.wr | pct }}</td>
+      <td>{{ r.wr | pct }}<span class="sub">{{ r.ci_low | pct(0) }}–{{ r.ci_high | pct(0) }}</span></td>
       <td class="{{ 'pos' if r.synergy > 0 else 'neg' if r.synergy < 0 }}">{{ r.synergy | signed_pct }}</td>
-      <td>{{ r.ci_low | pct(0) }} – {{ r.ci_high | pct(0) }}</td>
+      <td class="gold">
+        {% for v in (r.gold_diff_5, r.gold_diff_10, r.gold_diff_15) %}
+        <span class="{{ 'pos' if v and v > 0 else 'neg' if v and v < 0 }}">{{ v | signed_int }}</span>
+        {% endfor %}
+      </td>
+      <td>{{ r.vision_score | num(0) }}</td>
+      <td>{{ r.drakes | num }}</td>
+      <td>{{ r.soul_rate | pct(0) }}</td>
+      <td>{{ r.herald_rate | pct(0) }}</td>
+      <td>{{ r.first_tower_rate | pct(0) }}</td>
       <td><span class="tier tier-{{ r.tier }}">{{ r.tier }}</span></td>
     </tr>
     {% else %}
-    <tr><td colspan="6" class="empty">Aucun duo ne correspond aux filtres.</td></tr>
+    <tr><td colspan="11" class="empty">Aucun duo ne correspond aux filtres.</td></tr>
     {% endfor %}
   </tbody>
 </table>

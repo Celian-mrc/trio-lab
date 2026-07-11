@@ -30,10 +30,30 @@ _CHAMPION_SQL = """
     GROUP BY m.patch, m.platform, p.role, p.champion_id
 """
 
-_DUO_SQL = """
-    INSERT INTO agg_duo (patch, platform, roles, champ_a, champ_b, games, wins)
+# Sommes de stats partagées trio/duo : les stats d'un duo sont les stats
+# d'équipe des parties où il apparaît, quel que soit le 3e membre.
+_STAT_SUMS_SQL = """
+           sum(t.gold_diff_5), count(t.gold_diff_5),
+           sum(t.gold_diff_10), count(t.gold_diff_10),
+           sum(t.gold_diff_15), count(t.gold_diff_15),
+           sum(t.vision_score), count(t.vision_score),
+           sum(t.drakes_taken), count(t.drakes_taken),
+           count(*) FILTER (WHERE t.soul_taken), count(t.soul_taken),
+           count(*) FILTER (WHERE t.herald_taken), count(t.herald_taken),
+           count(*) FILTER (WHERE t.first_tower), count(t.first_tower)
+"""
+_STAT_SUMS_COLUMNS = """
+                          gold5_sum, gold5_n, gold10_sum, gold10_n, gold15_sum, gold15_n,
+                          vision_sum, vision_n, drakes_sum, drakes_n,
+                          soul_sum, soul_n, herald_sum, herald_n, tower1_sum, tower1_n
+"""
+
+_DUO_SQL = f"""
+    INSERT INTO agg_duo (patch, platform, roles, champ_a, champ_b, games, wins,
+                         {_STAT_SUMS_COLUMNS})
     SELECT m.patch, m.platform, d.roles, d.champ_a, d.champ_b,
-           count(*), count(*) FILTER (WHERE t.win)
+           count(*), count(*) FILTER (WHERE t.win),
+           {_STAT_SUMS_SQL}
     FROM match_trio_stats t
     JOIN matches m USING (match_id)
     CROSS JOIN LATERAL (VALUES
@@ -45,21 +65,13 @@ _DUO_SQL = """
     GROUP BY m.patch, m.platform, d.roles, d.champ_a, d.champ_b
 """
 
-_TRIO_SQL = """
+_TRIO_SQL = f"""
     INSERT INTO agg_trio (patch, platform, jgl_champion, mid_champion, sup_champion,
                           games, wins,
-                          gold10_sum, gold10_n, gold25_sum, gold25_n,
-                          vision_sum, vision_n, drakes_sum, drakes_n,
-                          soul_sum, soul_n, herald_sum, herald_n, tower1_sum, tower1_n)
+                          {_STAT_SUMS_COLUMNS})
     SELECT m.patch, m.platform, t.jgl_champion, t.mid_champion, t.sup_champion,
            count(*), count(*) FILTER (WHERE t.win),
-           sum(t.gold_diff_10), count(t.gold_diff_10),
-           sum(t.gold_diff_25), count(t.gold_diff_25),
-           sum(t.vision_score), count(t.vision_score),
-           sum(t.drakes_taken), count(t.drakes_taken),
-           count(*) FILTER (WHERE t.soul_taken), count(t.soul_taken),
-           count(*) FILTER (WHERE t.herald_taken), count(t.herald_taken),
-           count(*) FILTER (WHERE t.first_tower), count(t.first_tower)
+           {_STAT_SUMS_SQL}
     FROM match_trio_stats t
     JOIN matches m USING (match_id)
     WHERE m.patch = %(patch)s

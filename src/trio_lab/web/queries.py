@@ -20,15 +20,20 @@ TRIO_SORTS = {
     "synergy": "synergy DESC",
     "wr": "wr DESC",
     "games": "games DESC",
+    "gold5": "gold_diff_5 DESC NULLS LAST",
     "gold10": "gold_diff_10 DESC NULLS LAST",
-    "gold25": "gold_diff_25 DESC NULLS LAST",
+    "gold15": "gold_diff_15 DESC NULLS LAST",
     "vision": "vision_score DESC NULLS LAST",
     "drakes": "drakes DESC NULLS LAST",
     "soul": "soul_rate DESC NULLS LAST",
     "herald": "herald_rate DESC NULLS LAST",
     "tower1": "first_tower_rate DESC NULLS LAST",
 }
-DUO_SORTS = {key: TRIO_SORTS[key] for key in ("synergy", "wr", "games")}
+DUO_SORTS = dict(TRIO_SORTS)  # score_duo porte les mêmes colonnes depuis 008
+_STAT_COLUMNS_SQL = (
+    "gold_diff_5, gold_diff_10, gold_diff_15, vision_score, drakes,"
+    " soul_rate, herald_rate, first_tower_rate"
+)
 DUO_ROLES = ("jgl_mid", "jgl_sup", "mid_sup")
 _TIER_AT_LEAST = {
     "faible": ("faible", "moyen", "eleve"),
@@ -90,8 +95,7 @@ def trio_tierlist(
             f"""
             SELECT jgl_champion, mid_champion, sup_champion, games, games_eff, wr,
                    synergy_raw, synergy_pred, synergy, ci_low, ci_high, tier,
-                   gold_diff_10, gold_diff_25, vision_score, drakes, soul_rate,
-                   herald_rate, first_tower_rate,
+                   {_STAT_COLUMNS_SQL},
                    count(*) OVER () AS total
             FROM score_trio
             WHERE {" AND ".join(where)}
@@ -124,7 +128,8 @@ def duo_tierlist(
         rows = cur.execute(
             f"""
             SELECT roles, champ_a, champ_b, games, games_eff, wr, synergy,
-                   ci_low, ci_high, tier, count(*) OVER () AS total
+                   ci_low, ci_high, tier, {_STAT_COLUMNS_SQL},
+                   count(*) OVER () AS total
             FROM score_duo
             WHERE window_label = %(window)s AND platform = %(platform)s
               AND roles = %(roles)s AND games >= %(min_games)s AND tier = ANY(%(tiers)s)
