@@ -2,7 +2,10 @@
 
 Deux services sur le même repo GitHub (`Celian-mrc/trio-lab`) + le Postgres
 Railway existant. Le builder Railway (Railpack) détecte Python via
-`.python-version` + `pyproject.toml` et installe le paquet.
+`.python-version` et installe le paquet grâce à `requirements.txt` (qui
+contient juste `.` : le projet + ses dépendances depuis `pyproject.toml` —
+sans ce fichier, Railpack ne lance aucun install et les services crashent en
+`No module named 'trio_lab'`).
 
 ## Checklist (dashboard Railway, ~10 min)
 
