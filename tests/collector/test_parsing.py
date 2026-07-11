@@ -66,6 +66,8 @@ def test_participant_rows_full_teams():
         by_team[r["team_id"]].add(r["role"])
         assert r["win"] is (r["team_id"] == 100)
         assert isinstance(r["champion_id"], int)
+        # CC empirique par champion (builder : cc = 2×pid, immobilizations = pid).
+        assert r["cc_time_s"] == 2 * r["immobilizations"]
     assert by_team[100] == by_team[200] == set(parsing.ROLES)
 
 

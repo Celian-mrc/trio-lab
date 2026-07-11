@@ -78,6 +78,12 @@ async def test_insert_match_writes_participants_once(pg_conn):
     assert (await cur.fetchone())[0] == 10
     cur = await pg_conn.execute("SELECT patch, winning_team FROM matches")
     assert await cur.fetchall() == [("16.13", 100)]
+    # CC empirique par participant (migration 005) — builder : cc = 2×pid.
+    cur = await pg_conn.execute(
+        "SELECT cc_time_s, immobilizations FROM match_participants"
+        " WHERE team_id = 100 AND role = 'JUNGLE'"
+    )
+    assert await cur.fetchone() == (4, 2)
 
 
 async def test_insert_match_writes_trio_stats_and_events(pg_conn):

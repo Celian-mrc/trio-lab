@@ -66,6 +66,10 @@ def participant_rows(detail: dict[str, Any]) -> list[dict[str, Any]]:
             "role": p.get("teamPosition"),
             "champion_id": p.get("championId"),
             "win": p.get("win"),
+            # CC empirique par champion (migration 005) : None toléré sur les
+            # payloads dégradés, la colonne est nullable.
+            "cc_time_s": p.get("timeCCingOthers"),
+            "immobilizations": p.get("challenges", {}).get("enemyChampionImmobilizations"),
         }
         for p in detail["info"].get("participants", [])
     ]

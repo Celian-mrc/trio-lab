@@ -223,8 +223,10 @@ async def insert_match(
         async with conn.cursor() as pcur:
             await pcur.executemany(
                 """
-                INSERT INTO match_participants (match_id, team_id, role, champion_id, win)
-                VALUES (%(match_id)s, %(team_id)s, %(role)s, %(champion_id)s, %(win)s)
+                INSERT INTO match_participants (match_id, team_id, role, champion_id, win,
+                                                cc_time_s, immobilizations)
+                VALUES (%(match_id)s, %(team_id)s, %(role)s, %(champion_id)s, %(win)s,
+                        %(cc_time_s)s, %(immobilizations)s)
                 """,
                 participants,
             )

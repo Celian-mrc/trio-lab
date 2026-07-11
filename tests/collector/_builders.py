@@ -40,7 +40,7 @@ def build_detail(
                     "totalDamageDealtToChampions": pid * 1000,
                     "firstBloodKill": False,
                     "firstBloodAssist": False,
-                    "challenges": {"turretPlatesTaken": 1},
+                    "challenges": {"turretPlatesTaken": 1, "enemyChampionImmobilizations": pid},
                 }
             )
     return {
