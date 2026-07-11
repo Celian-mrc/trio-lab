@@ -22,8 +22,6 @@ from fastapi.templating import Jinja2Templates
 from psycopg_pool import ConnectionPool
 
 from trio_lab import db
-from trio_lab.ccref import champions as ccref_champions
-from trio_lab.ccref import score as ccref_score
 from trio_lab.synergy.windows import make_window
 from trio_lab.web import champions, queries, summary
 
@@ -105,7 +103,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         duration=_fmt_duration,
         since=_fmt_since,
     )
-    state = {"champions": champion_index, "cc_theoretical": None}
+    state = {"champions": champion_index}
 
     def champ_index() -> dict[int, champions.Champion]:
         # Fetch paresseux et mémorisé : l'app démarre même si Data Dragon est
@@ -124,26 +122,6 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
 
     templates.env.globals["champ"] = champ
     templates.env.globals["ROLE_LABELS"] = ROLE_LABELS
-
-    def cc_theoretical() -> dict[int, float]:
-        """`{champion_id: score CC théorique de kit}` (Phase 2b, fichier gelé).
-
-        Complément de la colonne CC empirique (`timeCCingOthers`), immunisé
-        aux artefacts de mesure Riot (ex. Nocturne : ~170 s/game empiriques
-        pour un kit presque sans CC dur — cf. memory phase2b-relecture-workflow,
-        déjà documenté comme écart connu). Calculé une fois, mémorisé.
-        """
-        if state["cc_theoretical"] is None:
-            name_to_id = {c.name: c.id for c in champ_index().values()}
-            mapping: dict[int, float] = {}
-            for name, score_value in ccref_score.champion_scores().items():
-                champ_id = ccref_champions.resolve(name, name_to_id)
-                if champ_id is not None:
-                    mapping[champ_id] = score_value
-            state["cc_theoretical"] = mapping
-        return state["cc_theoretical"]
-
-    templates.env.globals["cc_theoretical"] = cc_theoretical
 
     def resolve_champion(name_or_id: str | None) -> int | None:
         """Filtre champion de la tier list : nom (recherche) ou id. None si vide."""
@@ -284,18 +262,12 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         )
         counters = queries.trio_counters(conn, window, platform, jgl, mid, sup)
         stats = summary.summarize(rows, weights)
-        cc_scores = cc_theoretical()
+        cc_scores = queries.cc_theoretical_scores(conn)
         jgl_cc, mid_cc, sup_cc = cc_scores.get(jgl), cc_scores.get(mid), cc_scores.get(sup)
         members_cc = (jgl_cc, mid_cc, sup_cc)
         # Total seulement si les 3 membres sont résolus (sinon somme partielle
         # trompeuse — affichée comme « — » à la place).
         trio_cc_raw = sum(members_cc) if None not in members_cc else None
-        # Plafond de normalisation = référentiel COMPLET (tous les champions),
-        # jamais le sous-ensemble id-keyed de `cc_scores` (résolu seulement
-        # pour les champions déjà vus) — sinon le plafond varie selon quels
-        # champions ont été résolus, faussant le pourcentage.
-        theo_pct = ccref_score.theoretical_pct(trio_cc_raw) if trio_cc_raw is not None else None
-        emp_pct = ccref_score.empirical_pct(stats["cc_time_s"])
         return {
             "score": score,
             "stats": stats,
@@ -303,14 +275,15 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             "counters_worst": counters[:COUNTERS_SHOWN],
             "counters_best": counters[::-1][:COUNTERS_SHOWN],
             "cc_theoretical": {"jgl": jgl_cc, "mid": mid_cc, "sup": sup_cc, "trio": trio_cc_raw},
+            # Pourcentages 0-100 déjà matérialisés par synergy.compute (mêmes
+            # valeurs que la tier list, jamais recalculés ici : évite toute
+            # dérive et tout accès au fichier gelé côté service web — absent de
+            # l'image Docker (cf. Dockerfile), seul `ccref.sync_theoretical`
+            # (run local, one-shot) en dépend.
             "cc_scores": {
-                "theoretical_pct": theo_pct,
-                "empirical_pct": emp_pct,
-                "blended_pct": (
-                    ccref_score.blended_pct(emp_pct, theo_pct, score["games_eff"])
-                    if theo_pct is not None
-                    else None
-                ),
+                "theoretical_pct": score["cc_theoretical_pct"],
+                "empirical_pct": score["cc_empirical_pct"],
+                "blended_pct": score["cc_blended_pct"],
             },
         }
 

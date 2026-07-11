@@ -12,7 +12,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from trio_lab import db
-from trio_lab.ccref import score as ccref_score
 from trio_lab.web.app import create_app
 from trio_lab.web.champions import Champion
 
@@ -41,7 +40,7 @@ def pg_sync():
         conn.execute(
             "TRUNCATE players, matches, match_fetch_journal,"
             " agg_champion, agg_duo, agg_trio, agg_trio_vs_champion,"
-            " score_duo, score_trio, score_trio_vs_champion CASCADE"
+            " score_duo, score_trio, score_trio_vs_champion, champion_cc_theoretical CASCADE"
         )
         yield conn
 
@@ -54,14 +53,21 @@ def client():
 
 
 def _seed_scores(conn) -> None:
-    """Deux trios scorés sur euw1/16.13 : (1,2,3) synergie +.05, (4,5,6) −.02."""
-    for jgl, mid, sup, games, wr, syn in ((1, 2, 3, 40, 0.60, 0.05), (4, 5, 6, 80, 0.48, -0.02)):
+    """Deux trios scorés sur euw1/16.13 : (1,2,3) synergie +.05 (+ CC matérialisé,
+    valeurs arbitraires cohérentes utilisées telles quelles par la page détail,
+    jamais recalculées), (4,5,6) −.02 (CC non matérialisé, teste le chemin None)."""
+    rows = (
+        (1, 2, 3, 40, 0.60, 0.05, 42.0, 50.0, 43.7),
+        (4, 5, 6, 80, 0.48, -0.02, None, None, None),
+    )
+    for jgl, mid, sup, games, wr, syn, cc_theo, cc_emp, cc_blend in rows:
         conn.execute(
             "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
             " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
-            " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', %s, %s, %s, %s, %s, %s,"
-            " %s, 0.0, %s, 0.3, 0.8, 'faible')",
-            (jgl, mid, sup, games, float(games), wr, syn, syn),
+            " ci_low, ci_high, tier, cc_theoretical_pct, cc_empirical_pct, cc_blended_pct)"
+            " VALUES ('16.13', 'euw1', %s, %s, %s, %s, %s, %s,"
+            " %s, 0.0, %s, 0.3, 0.8, 'faible', %s, %s, %s)",
+            (jgl, mid, sup, games, float(games), wr, syn, syn, cc_theo, cc_emp, cc_blend),
         )
     conn.execute(
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
@@ -123,6 +129,11 @@ def test_api_trios_champion_filter_by_name_and_role(pg_sync, client):
 def test_api_trio_detail_stats_and_counters(pg_sync, client):
     _seed_scores(pg_sync)
     _seed_matches(pg_sync)
+    for champ_id, cc_score in ((1, 3.0), (2, 4.5), (3, 1.5)):
+        pg_sync.execute(
+            "INSERT INTO champion_cc_theoretical (champion_id, score) VALUES (%s, %s)",
+            (champ_id, cc_score),
+        )
     payload = client.get("/api/trios/1/2/3").json()
     assert payload["score"]["wr"] == pytest.approx(0.60)
     stats = payload["stats"]
@@ -138,21 +149,19 @@ def test_api_trio_detail_stats_and_counters(pg_sync, client):
     worst = payload["counters_worst"][0]
     assert (worst["enemy_champion_name"], worst["enemy_role"]) == ("Nocturne", "JUNGLE")
     assert worst["delta"] == pytest.approx(-0.014)
-    # Score CC théorique (Phase 2b, complément de l'empirique) : les 3 noms de
-    # la fixture existent dans le fichier gelé, donc résolus + trio = somme.
+    # Score CC théorique brut par champion : lu depuis `champion_cc_theoretical`
+    # (table matérialisée, jamais le fichier gelé — absent de l'image Docker
+    # du service web, cf. Dockerfile).
     cc = payload["cc_theoretical"]
-    assert cc["jgl"] is not None and cc["mid"] is not None and cc["sup"] is not None
-    assert cc["trio"] == pytest.approx(cc["jgl"] + cc["mid"] + cc["sup"])
+    assert (cc["jgl"], cc["mid"], cc["sup"]) == (3.0, 4.5, 1.5)
+    assert cc["trio"] == pytest.approx(9.0)
 
-    # Scores CC normalisés sur 100 : empirique (100+140)/2 = 120 s, plafond 240 s.
+    # Pourcentages 0-100 : lus tels quels depuis score_trio (mêmes valeurs que
+    # la tier list), jamais recalculés côté page détail — cf. `_seed_scores`.
     cc_scores = payload["cc_scores"]
+    assert cc_scores["theoretical_pct"] == pytest.approx(42.0)
     assert cc_scores["empirical_pct"] == pytest.approx(50.0)
-    expected_theo_pct = ccref_score.theoretical_pct(cc["trio"])
-    assert cc_scores["theoretical_pct"] == pytest.approx(expected_theo_pct)
-    # games_eff=40 (seed), k=200 par défaut : le mélange penche vers le théorique.
-    expected_blend = ccref_score.blended_pct(50.0, expected_theo_pct, games_eff=40.0)
-    assert cc_scores["blended_pct"] == pytest.approx(expected_blend)
-    assert 0.0 <= cc_scores["blended_pct"] <= 100.0
+    assert cc_scores["blended_pct"] == pytest.approx(43.7)
 
 
 def test_html_pages_render(pg_sync, client):

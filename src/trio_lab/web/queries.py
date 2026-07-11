@@ -163,13 +163,22 @@ def trio_score(
         return cur.execute(
             """
             SELECT jgl_champion, mid_champion, sup_champion, games, games_eff, wr,
-                   synergy_raw, synergy_pred, synergy, ci_low, ci_high, tier
+                   synergy_raw, synergy_pred, synergy, ci_low, ci_high, tier,
+                   cc_theoretical_pct, cc_empirical_pct, cc_blended_pct
             FROM score_trio
             WHERE window_label = %s AND platform = %s
               AND jgl_champion = %s AND mid_champion = %s AND sup_champion = %s
             """,
             (window, platform, jgl, mid, sup),
         ).fetchone()
+
+
+def cc_theoretical_scores(conn: psycopg.Connection) -> dict[int, float]:
+    """Score CC théorique par champion, depuis la table matérialisée (010) —
+    jamais le fichier gelé : le service web ne l'embarque pas (voir Dockerfile),
+    contrairement au pipeline `synergy.compute` qui tourne côté collector."""
+    rows = conn.execute("SELECT champion_id, score FROM champion_cc_theoretical").fetchall()
+    return dict(rows)
 
 
 def trio_duos(
