@@ -43,6 +43,7 @@ STAT_PAIRS: dict[str, tuple[str, str]] = {
     "soul_rate": ("soul_sum", "soul_n"),
     "herald_rate": ("herald_sum", "herald_n"),
     "first_tower_rate": ("tower1_sum", "tower1_n"),
+    "cc_time_s": ("cc_sum", "cc_n"),
 }
 _AGG_STAT_COLUMNS = ("games", "wins", *(col for pair in STAT_PAIRS.values() for col in pair))
 _SCORE_STAT_SQL = ", ".join(STAT_PAIRS)

@@ -40,12 +40,14 @@ _STAT_SUMS_SQL = """
            sum(t.drakes_taken), count(t.drakes_taken),
            count(*) FILTER (WHERE t.soul_taken), count(t.soul_taken),
            count(*) FILTER (WHERE t.herald_taken), count(t.herald_taken),
-           count(*) FILTER (WHERE t.first_tower), count(t.first_tower)
+           count(*) FILTER (WHERE t.first_tower), count(t.first_tower),
+           sum(t.cc_time_s), count(t.cc_time_s)
 """
 _STAT_SUMS_COLUMNS = """
                           gold5_sum, gold5_n, gold10_sum, gold10_n, gold15_sum, gold15_n,
                           vision_sum, vision_n, drakes_sum, drakes_n,
-                          soul_sum, soul_n, herald_sum, herald_n, tower1_sum, tower1_n
+                          soul_sum, soul_n, herald_sum, herald_n, tower1_sum, tower1_n,
+                          cc_sum, cc_n
 """
 
 _DUO_SQL = f"""

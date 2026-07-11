@@ -28,11 +28,12 @@ TRIO_SORTS = {
     "soul": "soul_rate DESC NULLS LAST",
     "herald": "herald_rate DESC NULLS LAST",
     "tower1": "first_tower_rate DESC NULLS LAST",
+    "cc": "cc_time_s DESC NULLS LAST",
 }
-DUO_SORTS = dict(TRIO_SORTS)  # score_duo porte les mêmes colonnes depuis 008
+DUO_SORTS = dict(TRIO_SORTS)  # score_duo porte les mêmes colonnes depuis 008/009
 _STAT_COLUMNS_SQL = (
     "gold_diff_5, gold_diff_10, gold_diff_15, vision_score, drakes,"
-    " soul_rate, herald_rate, first_tower_rate"
+    " soul_rate, herald_rate, first_tower_rate, cc_time_s"
 )
 DUO_ROLES = ("jgl_mid", "jgl_sup", "mid_sup")
 _TIER_AT_LEAST = {
