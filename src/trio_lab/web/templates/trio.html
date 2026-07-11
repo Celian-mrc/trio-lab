@@ -63,8 +63,20 @@
       <tr><td>Part des dégâts de l'équipe</td><td>{{ stats.damage_share | pct }}</td></tr>
       <tr><td>Score de vision (cumul trio)</td><td>{{ stats.vision_score | num }}</td></tr>
       <tr><td>CC infligé (s, cumul trio, empirique)</td><td>{{ stats.cc_time_s | num }}</td></tr>
-      <tr title="Score de kit (Phase 2b) : indépendant des games jouées, immunisé aux artefacts de mesure Riot — voir la note en bas de page.">
-        <td>CC théorique (kit, Σ trio)</td><td>{{ cc_theoretical.trio | num(2) }}</td>
+      <tr title="Score de kit (Phase 2b), brut avant normalisation.">
+        <td>CC théorique (kit, Σ trio, brut)</td><td>{{ cc_theoretical.trio | num(2) }}</td>
+      </tr>
+    </table>
+    <h2>CC — empirique vs théorique, sur 100</h2>
+    <table class="narrow kv">
+      <tr title="Plafonné à p99 des trios scorés (240 s) : au-delà, valeurs surtout des artefacts de mesure Riot.">
+        <td>Empirique</td><td>{{ cc_scores.empirical_pct | pct100 }}</td>
+      </tr>
+      <tr title="Repère : 3 × le score max d'un champion (plafond mathématique, jamais atteignable).">
+        <td>Théorique</td><td>{{ cc_scores.theoretical_pct | pct100 }}</td>
+      </tr>
+      <tr title="Lissage bayésien (même mécanique que la synergie) : tiré vers le théorique si peu de games, vers l'empirique sinon.">
+        <td>Mélangé (lissé par le volume)</td><td>{{ cc_scores.blended_pct | pct100 }}</td>
       </tr>
     </table>
     <h2>Duos internes</h2>
@@ -121,5 +133,13 @@
   (durées/zones/fiabilité des sorts) : moins précis sur le terrain, mais
   immunisé à ce type d'artefact. En cas de gros écart entre les deux,
   méfiance sur l'empirique.</p>
+  <p>Les 3 scores sur 100 : <strong>empirique</strong> plafonné à 240 s
+  (~p99 des trios scorés) pour ne pas laisser les valeurs extrêmes écraser
+  l'échelle ; <strong>théorique</strong> normalisé sur 3× le score max d'un
+  champion (repère mathématique, jamais atteignable) ; <strong>mélangé</strong>
+  = lissage bayésien des deux (même mécanique que la synergie) — tiré vers le
+  théorique si le trio est peu joué, vers l'empirique sinon. Limite : ce
+  lissage ne corrige qu'en partie un biais structurel (type Nocturne) à haut
+  volume, ce n'est pas du bruit qui se moyenne avec plus de games.</p>
 </details>
 {% endblock %}

@@ -100,6 +100,47 @@ def test_frozen_reference_loads_and_scores():
     assert scores["Leona"] > scores["Zed"]
 
 
+# --- normalisation 0-100 et mélange bayésien (théorique/empirique) ---
+
+
+def test_theoretical_pct_scales_against_3x_max_champion():
+    scores = {"Leona": 6.0, "Zed": 1.0, "Ahri": 2.0}
+    # plafond = 3 × 6.0 = 18 ; trio (Leona + Ahri + Zed) = 9.0 → 50 %.
+    assert score.theoretical_pct(9.0, scores) == pytest.approx(50.0)
+
+
+def test_theoretical_pct_zero_ceiling_is_safe():
+    assert score.theoretical_pct(0.0, {"X": 0.0}) == 0.0
+
+
+def test_empirical_pct_scales_and_caps_at_100():
+    assert score.empirical_pct(120.0, ceiling=240.0) == pytest.approx(50.0)
+    assert score.empirical_pct(482.0, ceiling=240.0) == 100.0  # outlier plafonné
+    assert score.empirical_pct(None) is None
+
+
+def test_blended_pct_leans_theoretical_at_low_volume():
+    # games_eff=0 : lissage pur vers le théorique, l'empirique est ignoré.
+    assert score.blended_pct(empirical=90.0, theoretical=30.0, games_eff=0.0, k=200) == 30.0
+
+
+def test_blended_pct_leans_empirical_at_high_volume():
+    blended = score.blended_pct(empirical=90.0, theoretical=30.0, games_eff=100_000.0, k=200)
+    assert blended == pytest.approx(90.0, abs=0.5)
+
+
+def test_blended_pct_at_k_is_midpoint():
+    # games_eff == k : moitié-moitié (propriété documentée de `smooth`).
+    blended = score.blended_pct(empirical=80.0, theoretical=20.0, games_eff=200.0, k=200)
+    assert blended == pytest.approx(50.0)
+
+
+def test_blended_pct_falls_back_to_theoretical_without_empirical_data():
+    assert score.blended_pct(empirical=None, theoretical=42.0, games_eff=500.0) == pytest.approx(
+        42.0
+    )
+
+
 # --- corrélations (pur Python) ---
 
 

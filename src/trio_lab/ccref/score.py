@@ -26,6 +26,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from trio_lab.ccref.build import FROZEN_PATH
+from trio_lab.synergy.scores import smooth
 
 logger = logging.getLogger(__name__)
 
@@ -122,3 +123,50 @@ def trio_score(champions: tuple[str, str, str], scores: dict[str, float] | None 
     if scores is None:
         scores = champion_scores()
     return sum(scores.get(name, 0.0) for name in champions)
+
+
+# --- Normalisation 0-100 et mélange avec le CC empirique ---
+#
+# Calibré sur les données du 11/07/2026 (76 325 trios scorés, patch 16.13) :
+# - plafond théorique = 3 × le score max d'un champion (Taliyah, 7.30) — aucun
+#   trio réel ne peut l'atteindre (3 rôles distincts), c'est un repère fixe ;
+# - plafond empirique = ~p99 des trios scorés (240 s) — au-delà, les valeurs
+#   sont surtout des artefacts de mesure Riot (cas Nocturne, cf.
+#   memory phase2b-relecture-workflow) et sont plafonnées à 100 plutôt que de
+#   laisser l'échelle entière se caler sur l'outlier maximal (482 s).
+# À recalibrer si la distribution empirique dérive significativement.
+EMPIRICAL_CEILING_S = 240.0
+BLEND_PRIOR_K = 200.0  # même force de lissage que la synergie (synergy.scores)
+
+
+def theoretical_pct(trio_raw_score: float, scores: dict[str, float] | None = None) -> float:
+    """Score CC théorique d'un trio, normalisé sur 100 (repère : 3 × le max
+    d'un champion — un plafond mathématique, jamais atteignable en pratique)."""
+    if scores is None:
+        scores = champion_scores()
+    ceiling = 3 * max(scores.values())
+    return 100 * trio_raw_score / ceiling if ceiling > 0 else 0.0
+
+
+def empirical_pct(cc_time_s: float | None, ceiling: float = EMPIRICAL_CEILING_S) -> float | None:
+    """CC empirique (Σ `timeCCingOthers` du trio), normalisé sur 100 et
+    plafonné : les valeurs extrêmes n'écrasent pas le reste de l'échelle."""
+    if cc_time_s is None:
+        return None
+    return min(100 * cc_time_s / ceiling, 100.0)
+
+
+def blended_pct(
+    empirical: float | None, theoretical: float, games_eff: float, k: float = BLEND_PRIOR_K
+) -> float:
+    """Lissage bayésien empirique → théorique (même mécanique que la
+    synergie, `synergy.scores.smooth`) : un trio peu joué (games_eff faible)
+    est tiré vers le théorique, stable ; un trio très joué reste proche de
+    l'empirique.
+
+    Limite à connaître : ce lissage réduit mais n'élimine pas le biais d'un
+    kit à artefact structurel (Nocturne) à haut volume — ce n'est pas du
+    bruit qui se moyenne, mais un biais systématique du kit.
+    """
+    raw = empirical if empirical is not None else theoretical
+    return smooth(raw, games_eff, theoretical, k)

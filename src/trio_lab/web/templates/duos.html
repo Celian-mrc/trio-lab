@@ -47,7 +47,8 @@
       <th title="Intervalle de Wilson à 95 % sous le winrate">{{ sort_link('wr', 'WR') }}</th>
       <th>{{ sort_link('synergy', 'Synergie') }}</th>
       <th title="Avantage gold moyen du duo à 5 / 10 / 15 min">
-        <span class="gold-header">Gold
+        <span class="gold-header">
+          <span class="gold-label">Gold</span>
           <span class="gold-values">{{ sort_link('gold5', '@5') }}{{ sort_link('gold10', '@10') }}{{ sort_link('gold15', '@15') }}</span>
         </span>
       </th>
@@ -75,10 +76,13 @@
       <td>{{ r.wr | pct }}<span class="sub">{{ r.ci_low | pct(0) }}–{{ r.ci_high | pct(0) }}</span></td>
       <td class="{{ 'pos' if r.synergy > 0 else 'neg' if r.synergy < 0 }}">{{ r.synergy | signed_pct }}</td>
       <td>
-        <span class="gold-values">
-          {% for v in (r.gold_diff_5, r.gold_diff_10, r.gold_diff_15) %}
-          <span class="{{ 'pos' if v and v > 0 else 'neg' if v and v < 0 }}">{{ v | signed_int }}</span>
-          {% endfor %}
+        <span class="gold-header">
+          <span class="gold-label"></span>
+          <span class="gold-values">
+            {% for v in (r.gold_diff_5, r.gold_diff_10, r.gold_diff_15) %}
+            <span class="{{ 'pos' if v and v > 0 else 'neg' if v and v < 0 }}">{{ v | signed_int }}</span>
+            {% endfor %}
+          </span>
         </span>
       </td>
       <td>{{ r.vision_score | num(0) }}</td>

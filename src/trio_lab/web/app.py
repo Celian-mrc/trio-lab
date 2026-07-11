@@ -39,6 +39,11 @@ def _fmt_pct(value: float | None, digits: int = 1) -> str:
     return "—" if value is None else f"{100 * value:.{digits}f} %"
 
 
+def _fmt_pct100(value: float | None, digits: int = 0) -> str:
+    """Comme `pct`, mais pour une valeur déjà sur l'échelle 0-100 (pas 0-1)."""
+    return "—" if value is None else f"{value:.{digits}f} %"
+
+
 def _fmt_signed_pct(value: float | None, digits: int = 1) -> str:
     return "—" if value is None else f"{100 * value:+.{digits}f} %"
 
@@ -93,6 +98,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
     templates = Jinja2Templates(directory=_HERE / "templates")
     templates.env.filters.update(
         pct=_fmt_pct,
+        pct100=_fmt_pct100,
         signed_pct=_fmt_signed_pct,
         signed_int=_fmt_signed_int,
         num=_fmt_num,
@@ -277,22 +283,34 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             sup,
         )
         counters = queries.trio_counters(conn, window, platform, jgl, mid, sup)
+        stats = summary.summarize(rows, weights)
         cc_scores = cc_theoretical()
         jgl_cc, mid_cc, sup_cc = cc_scores.get(jgl), cc_scores.get(mid), cc_scores.get(sup)
         members_cc = (jgl_cc, mid_cc, sup_cc)
+        # Total seulement si les 3 membres sont résolus (sinon somme partielle
+        # trompeuse — affichée comme « — » à la place).
+        trio_cc_raw = sum(members_cc) if None not in members_cc else None
+        # Plafond de normalisation = référentiel COMPLET (tous les champions),
+        # jamais le sous-ensemble id-keyed de `cc_scores` (résolu seulement
+        # pour les champions déjà vus) — sinon le plafond varie selon quels
+        # champions ont été résolus, faussant le pourcentage.
+        theo_pct = ccref_score.theoretical_pct(trio_cc_raw) if trio_cc_raw is not None else None
+        emp_pct = ccref_score.empirical_pct(stats["cc_time_s"])
         return {
             "score": score,
-            "stats": summary.summarize(rows, weights),
+            "stats": stats,
             "duos": queries.trio_duos(conn, window, platform, jgl, mid, sup),
             "counters_worst": counters[:COUNTERS_SHOWN],
             "counters_best": counters[::-1][:COUNTERS_SHOWN],
-            "cc_theoretical": {
-                "jgl": jgl_cc,
-                "mid": mid_cc,
-                "sup": sup_cc,
-                # Total seulement si les 3 membres sont résolus (sinon somme
-                # partielle trompeuse — affichée comme « — » à la place).
-                "trio": sum(members_cc) if None not in members_cc else None,
+            "cc_theoretical": {"jgl": jgl_cc, "mid": mid_cc, "sup": sup_cc, "trio": trio_cc_raw},
+            "cc_scores": {
+                "theoretical_pct": theo_pct,
+                "empirical_pct": emp_pct,
+                "blended_pct": (
+                    ccref_score.blended_pct(emp_pct, theo_pct, score["games_eff"])
+                    if theo_pct is not None
+                    else None
+                ),
             },
         }
 

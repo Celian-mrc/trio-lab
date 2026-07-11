@@ -86,7 +86,11 @@ th a:hover { color: var(--foreground); }
 th a.active { color: var(--foreground); }
 td { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sub { display: block; color: var(--muted-fg); font-size: 0.68rem; line-height: 1.1; }
+/* Largeur de ".gold-label" identique (en-tête et corps, texte ou vide) pour
+   que la zone des valeurs démarre au même x dans les deux lignes — sinon le
+   préfixe "Gold" décale @5/@10/@15 par rapport aux nombres du dessous. */
 .gold-header { display: flex; align-items: baseline; gap: 0.5rem; }
+.gold-label { display: inline-block; min-width: 1.9rem; }
 .gold-values { display: flex; gap: 0.85rem; }
 .gold-values span, .gold-values a { display: inline-block; min-width: 3.4em; text-align: right; }
 table.narrow { width: auto; min-width: 22rem; }
