@@ -2,7 +2,9 @@
 
 Projet perso : interface exposant les winrates et scores de synergie par **trio
 de champions jungle/mid/support**, avec stats détaillées (gold, objectifs,
-vision, dégâts) et counters. Collector 24/24 sur Railway → Postgres Railway.
+vision, dégâts) et counters. Collector + interface 24/24 sur Railway →
+Postgres **Supabase** (schéma dédié `trio_lab` sur le projet "Loyalties v2",
+migré depuis Railway le 11/07/2026 — cf. memory `railway-deployment`).
 
 Projet frère de `C:\macro-lab` : le client Riot (throttling, back-off) et les
 mappings d'events timeline en sont dérivés — ne pas réinventer, adapter.
@@ -41,8 +43,10 @@ mappings d'events timeline en sont dérivés — ne pas réinventer, adapter.
 - Docstrings en français OK, code et noms de variables en anglais.
 - Commits en français, format court : `phase X: <description>` ou
   `fix: <description>`.
-- Postgres pour le stockage (Railway en prod). SQL versionné en migrations
-  simples (fichiers numérotés), pas d'ORM lourd tant que ce n'est pas justifié.
+- Postgres pour le stockage, hébergé sur **Supabase** (schéma `trio_lab`,
+  projet partagé avec une autre appli — jamais toucher aux autres schémas).
+  SQL versionné en migrations simples (fichiers numérotés), pas d'ORM lourd
+  tant que ce n'est pas justifié.
 
 ## Ce qu'il ne faut PAS faire
 

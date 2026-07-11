@@ -59,7 +59,10 @@ async def test_refresh_computes_expected_deltas(pg_conn):
     assert (games, games_eff) == (20, pytest.approx(20.0))
     assert wr == pytest.approx(0.40)
     assert delta_raw == pytest.approx(-0.15)  # .40 − baseline .55
-    assert delta == pytest.approx(20 * -0.15 / 220)  # rétréci vers 0
+    # rétréci vers 0 ; tolérance relâchée (rel=1e-4) : colonne REAL (simple
+    # précision), le dernier bit varie légèrement selon la version/l'archi
+    # du serveur Postgres — non significatif au-delà de ~6 chiffres.
+    assert delta == pytest.approx(20 * -0.15 / 220, rel=1e-4)
     assert 0.0 <= ci_low < 0.40 < ci_high <= 1.0
     assert tier == "faible"  # 20 games < 50
 
@@ -95,7 +98,8 @@ async def test_refresh_weights_multi_patch_window(pg_conn):
     assert games_eff == pytest.approx(38.0)  # 20×1.0 + 30×0.6
     assert wr == pytest.approx((8 + 18 * 0.6) / 38)  # .494737
     # Baseline pondérée sur la MÊME fenêtre : (55 + 45×0.6) / 160 = .512500.
-    assert delta_raw == pytest.approx((8 + 18 * 0.6) / 38 - (55 + 45 * 0.6) / 160)
+    # Tolérance relâchée (rel=1e-4) : colonne REAL, cf. commentaire plus haut.
+    assert delta_raw == pytest.approx((8 + 18 * 0.6) / 38 - (55 + 45 * 0.6) / 160, rel=1e-4)
     cur = await pg_conn.execute("SELECT DISTINCT window_label FROM score_trio_vs_champion")
     assert await cur.fetchall() == [("16.13+16.12",)]
 
