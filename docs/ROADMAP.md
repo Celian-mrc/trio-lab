@@ -84,10 +84,18 @@ Phase par phase : la phase N+1 ne démarre pas avant que la phase N soit verte
 - [x] Intervalles de confiance (Wilson 95 % sur n effectif) et tiers de
       fiabilité (faible < 50 ≤ moyen < 400 ≤ élevé)
 
-## Phase 4 — Counters
+## Phase 4 — Counters ✅
 
-- [ ] WR du trio face à chaque champion ennemi individuel (par rôle)
-- [ ] Même traitement statistique (seuils, lissage, confiance)
+- [x] WR du trio face à chaque champion ennemi individuel (par rôle)
+      (`agg_trio_vs_champion`, migration 006, jointure trio × participants
+      adverses dans `stats.aggregate` — jamais de trio vs trio)
+- [x] Même traitement statistique (seuils, lissage, confiance)
+      (`synergy/counters.py` → `score_trio_vs_champion` : delta = WR(trio vs
+      ennemi) − WR global du trio sur la même fenêtre, rétréci vers 0 avec le
+      même k ; coupure de rework étendue à l'ennemi ; CLI
+      `python -m trio_lab.synergy --patches X --counters` ; les deltas
+      resteront ~0 tant que le volume par matchup est faible — max 7 games au
+      2026-07-11)
 
 ## Phase 5 — Interface
 

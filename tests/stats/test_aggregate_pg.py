@@ -35,8 +35,14 @@ async def test_refresh_counts_games_and_wins(pg_conn):
     await _ingest(pg_conn, "EUW1_A", winning_team=100)
     await _ingest(pg_conn, "EUW1_B", winning_team=200)
     counts = aggregate.refresh("16.13", dsn=TEST_DSN)
-    # 10 champions uniques (un par rôle/équipe), 3 duos × 2 équipes, 1 trio × 2 équipes.
-    assert counts == {"agg_champion": 10, "agg_duo": 6, "agg_trio": 2}
+    # 10 champions uniques (un par rôle/équipe), 3 duos × 2 équipes, 1 trio × 2 équipes,
+    # 5 ennemis × 2 trios pour les counters.
+    assert counts == {
+        "agg_champion": 10,
+        "agg_duo": 6,
+        "agg_trio": 2,
+        "agg_trio_vs_champion": 10,
+    }
 
     cur = await pg_conn.execute(
         "SELECT platform, games, wins FROM agg_trio"
@@ -51,6 +57,14 @@ async def test_refresh_counts_games_and_wins(pg_conn):
 
     cur = await pg_conn.execute(
         "SELECT games, wins FROM agg_champion WHERE role = 'JUNGLE' AND champion_id = 2"
+    )
+    assert await cur.fetchall() == [(2, 1)]
+
+    # Counters : le trio 100 (2/3/5) affronte le jungler adverse 12 dans les 2 matchs
+    # et en gagne 1 ; les wins sont bien celles DU TRIO, pas de l'ennemi.
+    cur = await pg_conn.execute(
+        "SELECT games, wins FROM agg_trio_vs_champion"
+        " WHERE jgl_champion = 2 AND enemy_role = 'JUNGLE' AND enemy_champion = 12"
     )
     assert await cur.fetchall() == [(2, 1)]
 

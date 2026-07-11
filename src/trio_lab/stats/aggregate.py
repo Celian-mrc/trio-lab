@@ -1,4 +1,5 @@
-"""Rafraîchissement des tables agrégées (agg_champion, agg_duo, agg_trio).
+"""Rafraîchissement des tables agrégées (agg_champion, agg_duo, agg_trio,
+agg_trio_vs_champion).
 
 Idempotent par patch : DELETE puis INSERT…SELECT dans une seule transaction —
 une lecture concurrente voit l'ancien ou le nouveau jeu complet, jamais un
@@ -55,7 +56,26 @@ _TRIO_SQL = """
     GROUP BY m.patch, m.platform, t.jgl_champion, t.mid_champion, t.sup_champion
 """
 
-_TABLES_SQL = {"agg_champion": _CHAMPION_SQL, "agg_duo": _DUO_SQL, "agg_trio": _TRIO_SQL}
+_TRIO_VS_CHAMPION_SQL = """
+    INSERT INTO agg_trio_vs_champion (patch, platform, jgl_champion, mid_champion,
+                                      sup_champion, enemy_role, enemy_champion, games, wins)
+    SELECT m.patch, m.platform, t.jgl_champion, t.mid_champion, t.sup_champion,
+           p.role, p.champion_id,
+           count(*), count(*) FILTER (WHERE t.win)
+    FROM match_trio_stats t
+    JOIN matches m USING (match_id)
+    JOIN match_participants p ON p.match_id = t.match_id AND p.team_id <> t.team_id
+    WHERE m.patch = %(patch)s
+    GROUP BY m.patch, m.platform, t.jgl_champion, t.mid_champion, t.sup_champion,
+             p.role, p.champion_id
+"""
+
+_TABLES_SQL = {
+    "agg_champion": _CHAMPION_SQL,
+    "agg_duo": _DUO_SQL,
+    "agg_trio": _TRIO_SQL,
+    "agg_trio_vs_champion": _TRIO_VS_CHAMPION_SQL,
+}
 
 
 def refresh(patch: str, *, dsn: str | None = None) -> dict[str, int]:
