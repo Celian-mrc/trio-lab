@@ -126,6 +126,6 @@ Phase par phase : la phase N+1 ne démarre pas avant que la phase N soit verte
 - [x] Monitoring simple : volume collecté/jour, erreurs, 429
       (`GET /api/status` : matchs/jour 7 j par plateforme, total, dernier
       match, compteurs journal ; 429 visibles dans les logs Railway)
-- [ ] Interface hébergée sur Railway (accès perso) — code prêt
-      (`python -m trio_lab.web`, $PORT géré) ; **déploiement dashboard à
-      faire par Célian, checklist dans `docs/DEPLOY.md`**
+- [x] Interface hébergée sur Railway (accès perso) — déployée le 2026-07-11
+      avec le service collector (build Dockerfile commun, checklist et pièges
+      dans `docs/DEPLOY.md` ; ~100 K matchs/jour constatés au démarrage)
