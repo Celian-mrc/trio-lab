@@ -27,6 +27,8 @@ DRAFT_PATH = config.PROJECT_ROOT / "data" / "external" / "cc_reference.draft.csv
 # Arbitrages de relecture humaine, appliqués APRÈS toutes les passes automatiques
 # (ils priment) : les décisions de Célian survivent ainsi aux régénérations.
 OVERRIDES_PATH = config.PROJECT_ROOT / "data" / "external" / "cc_reference.overrides.csv"
+# Fichier GELÉ après relecture humaine complète : consommé par `ccref.score`.
+FROZEN_PATH = config.PROJECT_ROOT / "data" / "external" / "cc_reference.csv"
 
 CSV_COLUMNS = [
     "champion",
@@ -313,6 +315,40 @@ def _fill_from_fandom(
         row["note_relecture"] = " ; ".join(dict.fromkeys(notes))
         filled += 1
     logger.info("2e passe Fandom : %d lignes complétées sur %d candidates", filled, len(candidates))
+
+
+_FROZEN_HEADER = """\
+# cc_reference.csv — Référence des CC par sort, GELÉE le {date} après relecture
+# humaine complète (Célian : durées, %slow, zone, fiabilité, conditionnel).
+# FICHIER IMMUABLE : ne jamais éditer à la main. Toute correction passe par
+# data/external/cc_reference.overrides.csv, puis `python -m trio_lab.ccref --freeze`.
+# Re-versionnage à chaque rework de champion : relancer l'import, relire le
+# diff du brouillon, re-geler.
+#
+# Source : League of Legends Wiki — « {page} » et pages de sorts, via l'API
+# MediaWiki (https://wiki.leagueoflegends.com/en-us/api.php), complétée par
+# l'ancien wiki (leagueoflegends.fandom.com) et les arbitrages de relecture.
+# Contenu dérivé sous licence CC BY-SA 4.0 ; attribution : League of Legends
+# Wiki (https://wiki.leagueoflegends.com), communauté des contributeurs.
+# League of Legends et Riot Games sont des marques de Riot Games, Inc.
+#
+# Colonnes : zone ∈ {{mono, multi}}, fiabilite ∈ {{point_click, skillshot}}
+# (point_click = non esquivable par déplacement), disponibilite ∈ {{base,
+# ultimate}}, repositionnement ∈ {{0, 1}}, conditionnel ∈ {{0, 1}}.
+# Les poids et coefficients du score vivent dans trio_lab/ccref/score.py.
+"""
+
+
+def write_frozen(rows: list[dict[str, object]], path: Path = FROZEN_PATH) -> Path:
+    """Gèle la référence relue : mêmes lignes que le brouillon, en-tête définitif."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as fh:
+        fh.write(_FROZEN_HEADER.format(date=dt.date.today().isoformat(), page=SOURCES_PAGE))
+        writer = csv.DictWriter(fh, fieldnames=CSV_COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)
+    logger.info("référence gelée : %d lignes dans %s", len(rows), path)
+    return path
 
 
 def write_draft(rows: list[dict[str, object]], path: Path = DRAFT_PATH) -> Path:

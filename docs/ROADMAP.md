@@ -45,21 +45,28 @@ Phase par phase : la phase N+1 ne démarre pas avant que la phase N soit verte
 - [x] Tests sur timelines réelles archivées (2 matchs 16.13, valeurs attendues
       calculées indépendamment des extracteurs ; 79 tests au total)
 
-## Phase 2b — Score CC théorique (parallélisable avec la Phase 3)
+## Phase 2b — Score CC théorique (parallélisable avec la Phase 3) ✅
 
 - [x] Script one-shot d'import via l'API MediaWiki du wiki LoL → brouillon
       `data/external/cc_reference.draft.csv` (503 sorts, 165 champions ;
       page « Types of Crowd Control/Sources » + templates de données des
       sorts, durées depuis la prose + fallback leveling, 253 lignes annotées
       `note_relecture`)
-- [ ] Relecture humaine du brouillon, puis gel en
-      `data/external/cc_reference.csv` (champion, sort, type_cc, durée, %slow,
-      zone, fiabilité, disponibilité, repositionnement + attribution CC BY-SA)
-- [ ] Calcul du score par sort/champion/trio (poids en fichier de config,
-      airborne = 1.0 avec coef_repositionnement 1.15)
-- [ ] Validation : corrélation score théorique ↔ `timeCCingOthers` empirique
-- [ ] Tests + procédure de re-versionnage à chaque rework (relance du script,
-      relecture du diff)
+- [x] Relecture humaine du brouillon (3 passes de Célian : valeurs, zones,
+      fiabilité/conditionnel), puis gel en `data/external/cc_reference.csv`
+      le 2026-07-11 (480 lignes + attribution CC BY-SA ; colonnes étendues :
+      conditionnel 0/1, fiabilité = « non esquivable par déplacement »)
+- [x] Calcul du score par sort/champion/trio (`ccref/score.py` : poids et
+      coefs en config, airborne 1.0 × repositionnement 1.15, conditionnel 0.7,
+      CC durs simultanés d'un même sort non cumulés — règle du max)
+- [x] Validation : corrélation score théorique ↔ `timeCCingOthers` empirique
+      (162 champions ≥ 30 games : Spearman 0.744, Pearson 0.503 — les écarts
+      viennent des CC répétables type on-hit, non modélisés : piste de
+      recalibrage fréquence/cooldown notée)
+- [x] Tests + procédure de re-versionnage à chaque rework : relancer
+      `python -m trio_lab.ccref`, relire le diff du brouillon (les arbitrages
+      de `cc_reference.overrides.csv` sont réappliqués automatiquement),
+      puis `--freeze`
 
 ## Phase 3 — Scores de synergie
 
