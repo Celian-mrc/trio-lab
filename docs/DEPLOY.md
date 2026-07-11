@@ -1,11 +1,12 @@
 # Déploiement Railway 24/24 (Phase 6)
 
 Deux services sur le même repo GitHub (`Celian-mrc/trio-lab`) + le Postgres
-Railway existant. Le builder Railway (Railpack) détecte Python via
-`.python-version` et installe le paquet grâce à `requirements.txt` (qui
-contient juste `.` : le projet + ses dépendances depuis `pyproject.toml` —
-sans ce fichier, Railpack ne lance aucun install et les services crashent en
-`No module named 'trio_lab'`).
+Railway existant. Le build passe par le **Dockerfile** à la racine (détecté
+automatiquement par Railway) : une seule image `pip install .` pour les deux
+services, seule la start command diffère. Ne pas revenir au builder auto
+(Railpack) : il installe les dépendances avant de copier les sources, ce qui
+casse l'install d'un paquet local (`No module named 'trio_lab'` au runtime ou
+`Readme file does not exist` au build — vécu le 11/07/2026).
 
 ## Checklist (dashboard Railway, ~10 min)
 

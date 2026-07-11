@@ -1,5 +1,0 @@
-# Fichier lu par le builder Railway (Railpack) : sans lui, aucun `pip install`
-# n'est lancé et les services crashent (No module named 'trio_lab').
-# `.` = installer ce projet, dépendances résolues depuis pyproject.toml —
-# source unique de vérité, rien n'est dupliqué ici.
-.

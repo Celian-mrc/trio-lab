@@ -1,0 +1,6 @@
+# Contexte de build minimal : le code et les migrations, rien d'autre.
+*
+!pyproject.toml
+!README.md
+!src
+!migrations
