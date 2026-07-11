@@ -18,6 +18,7 @@ from collections import defaultdict
 import psycopg
 
 from trio_lab import db
+from trio_lab.ccref import score as ccref_score
 from trio_lab.synergy import scores
 from trio_lab.synergy.windows import PatchWindow
 
@@ -46,8 +47,14 @@ STAT_PAIRS: dict[str, tuple[str, str]] = {
     "cc_time_s": ("cc_sum", "cc_n"),
 }
 _AGG_STAT_COLUMNS = ("games", "wins", *(col for pair in STAT_PAIRS.values() for col in pair))
-_SCORE_STAT_SQL = ", ".join(STAT_PAIRS)
-_SCORE_STAT_PLACEHOLDERS = ", ".join(f"%({name})s" for name in STAT_PAIRS)
+
+# CC normalisé 0-100 (théorique/empirique/mélangé) : pas une simple moyenne
+# pondérée d'agrégats comme STAT_PAIRS, calculé à part par `_cc_pct_fields`.
+_CC_PCT_COLUMNS = ("cc_theoretical_pct", "cc_empirical_pct", "cc_blended_pct")
+
+_SCORE_COLUMNS = (*STAT_PAIRS, *_CC_PCT_COLUMNS)
+_SCORE_STAT_SQL = ", ".join(_SCORE_COLUMNS)
+_SCORE_STAT_PLACEHOLDERS = ", ".join(f"%({name})s" for name in _SCORE_COLUMNS)
 
 
 def _weighted_stats(rows: list[dict], weights: dict[str, float]) -> dict[str, float | None]:
@@ -69,6 +76,33 @@ def _weighted_stats(rows: list[dict], weights: dict[str, float]) -> dict[str, fl
 def _per_patch(agg_rows: list[dict]) -> _PerPatch:
     """Projette des lignes dict d'agrégat vers les tuples de `weighted_wr`."""
     return [(r["patch"], r["games"], r["wins"]) for r in agg_rows]
+
+
+def _cc_pct_fields(
+    member_champions: tuple[int, ...],
+    cc_theo_scores: dict[int, float],
+    empirical_cc_time_s: float | None,
+    games_eff: float,
+    k: float,
+) -> dict[str, float | None]:
+    """Scores CC normalisés 0-100 (théorique/empirique/mélangé) d'une combinaison.
+
+    `cc_theo_scores` vide (table `champion_cc_theoretical` pas encore
+    synchronisée, `python -m trio_lab.ccref.sync_theoretical`) : les 3 champs
+    restent `None` plutôt que de faire échouer tout le refresh.
+    """
+    if not cc_theo_scores:
+        return {"cc_theoretical_pct": None, "cc_empirical_pct": None, "cc_blended_pct": None}
+    raw_theo = sum(cc_theo_scores.get(c, 0.0) for c in member_champions)
+    theo_pct = ccref_score.theoretical_pct(
+        raw_theo, member_count=len(member_champions), scores=cc_theo_scores
+    )
+    emp_pct = ccref_score.empirical_pct(empirical_cc_time_s)
+    return {
+        "cc_theoretical_pct": theo_pct,
+        "cc_empirical_pct": emp_pct,
+        "cc_blended_pct": ccref_score.blended_pct(emp_pct, theo_pct, games_eff, k),
+    }
 
 
 def _add_combined_stat_rows(mapping: dict[tuple, list[dict]]) -> None:
@@ -123,7 +157,11 @@ def _load(conn: psycopg.Connection, window: PatchWindow):
     scores.add_combined_platform(indiv)
     _add_combined_stat_rows(duos)
     _add_combined_stat_rows(trios)
-    return indiv, duos, trios
+
+    cc_theo_scores = dict(
+        conn.execute("SELECT champion_id, score FROM champion_cc_theoretical").fetchall()
+    )
+    return indiv, duos, trios, cc_theo_scores
 
 
 def refresh(
@@ -135,7 +173,7 @@ def refresh(
 ) -> dict[str, int]:
     """Recalcule les scores d'une fenêtre. Retourne le nombre de lignes par table."""
     with psycopg.connect(db.require_dsn(dsn)) as conn:
-        indiv, duos, trios = _load(conn, window)
+        indiv, duos, trios, cc_theo_scores = _load(conn, window)
 
         def member_wr(platform: str, role: str, champ: int, weights) -> scores.WeightedWR | None:
             rows = indiv.get((platform, role, champ))
@@ -160,6 +198,7 @@ def refresh(
             # reproduirait son extrême — à volume réel le rétrécissement devient
             # négligeable. La table score_duo publie, elle, la synergie brute.
             duo_synergies[(platform, roles, a, b)] = scores.smooth(syn, combo.games_eff, 0.0, k)
+            stats = _weighted_stats(agg_rows, weights)
             duo_rows.append(
                 {
                     "window_label": window.label,
@@ -174,7 +213,10 @@ def refresh(
                     "ci_low": ci_low,
                     "ci_high": ci_high,
                     "tier": scores.reliability_tier(combo.games_eff, thresholds),
-                    **_weighted_stats(agg_rows, weights),
+                    **stats,
+                    **_cc_pct_fields(
+                        (a, b), cc_theo_scores, stats["cc_time_s"], combo.games_eff, k
+                    ),
                 }
             )
 
@@ -203,6 +245,7 @@ def refresh(
             )
             smoothed = scores.smooth(raw, combo.games_eff, pred, k)
             ci_low, ci_high = scores.wilson_interval(combo.wr, combo.games_eff)
+            stats = _weighted_stats(agg_rows, weights)
             trio_rows.append(
                 {
                     "window_label": window.label,
@@ -219,7 +262,10 @@ def refresh(
                     "ci_low": ci_low,
                     "ci_high": ci_high,
                     "tier": scores.reliability_tier(combo.games_eff, thresholds),
-                    **_weighted_stats(agg_rows, weights),
+                    **stats,
+                    **_cc_pct_fields(
+                        (jgl, mid, sup), cc_theo_scores, stats["cc_time_s"], combo.games_eff, k
+                    ),
                 }
             )
 

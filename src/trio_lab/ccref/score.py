@@ -139,13 +139,16 @@ EMPIRICAL_CEILING_S = 240.0
 BLEND_PRIOR_K = 200.0  # même force de lissage que la synergie (synergy.scores)
 
 
-def theoretical_pct(trio_raw_score: float, scores: dict[str, float] | None = None) -> float:
-    """Score CC théorique d'un trio, normalisé sur 100 (repère : 3 × le max
-    d'un champion — un plafond mathématique, jamais atteignable en pratique)."""
+def theoretical_pct(
+    raw_score: float, member_count: int = 3, scores: dict[str, float] | None = None
+) -> float:
+    """Score CC théorique d'une combinaison, normalisé sur 100 (repère :
+    `member_count` × le max d'un champion — un plafond mathématique, jamais
+    atteignable en pratique, aucun champion n'occupant plusieurs rôles)."""
     if scores is None:
         scores = champion_scores()
-    ceiling = 3 * max(scores.values())
-    return 100 * trio_raw_score / ceiling if ceiling > 0 else 0.0
+    ceiling = member_count * max(scores.values())
+    return 100 * raw_score / ceiling if ceiling > 0 else 0.0
 
 
 def empirical_pct(cc_time_s: float | None, ceiling: float = EMPIRICAL_CEILING_S) -> float | None:

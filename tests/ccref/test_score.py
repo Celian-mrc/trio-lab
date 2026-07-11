@@ -106,11 +106,17 @@ def test_frozen_reference_loads_and_scores():
 def test_theoretical_pct_scales_against_3x_max_champion():
     scores = {"Leona": 6.0, "Zed": 1.0, "Ahri": 2.0}
     # plafond = 3 × 6.0 = 18 ; trio (Leona + Ahri + Zed) = 9.0 → 50 %.
-    assert score.theoretical_pct(9.0, scores) == pytest.approx(50.0)
+    assert score.theoretical_pct(9.0, scores=scores) == pytest.approx(50.0)
+
+
+def test_theoretical_pct_uses_member_count_for_duos():
+    scores = {"Leona": 6.0, "Zed": 1.0, "Ahri": 2.0}
+    # plafond duo = 2 × 6.0 = 12 ; duo (Leona + Ahri) = 8.0 → 66.67 %.
+    assert score.theoretical_pct(8.0, member_count=2, scores=scores) == pytest.approx(200 / 3)
 
 
 def test_theoretical_pct_zero_ceiling_is_safe():
-    assert score.theoretical_pct(0.0, {"X": 0.0}) == 0.0
+    assert score.theoretical_pct(0.0, scores={"X": 0.0}) == 0.0
 
 
 def test_empirical_pct_scales_and_caps_at_100():

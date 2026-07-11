@@ -57,7 +57,8 @@
       <th title="Taux d’obtention de l’âme">{{ sort_link('soul', 'Âme') }}</th>
       <th title="Taux de prise du héraut">{{ sort_link('herald', 'Héraut') }}</th>
       <th title="Taux de première tour">{{ sort_link('tower1', '1re tour') }}</th>
-      <th title="CC infligé empirique, cumul équipe (Σ timeCCingOthers) — peut être gonflé pour certains champions (ex. Nocturne) par un artefact de mesure Riot ; voir le score CC théorique sur la page détail pour recouper.">{{ sort_link('cc', 'CC') }}</th>
+      <th title="CC infligé empirique, cumul équipe (Σ timeCCingOthers) — peut être gonflé pour certains champions (ex. Nocturne) par un artefact de mesure Riot.">{{ sort_link('cc', 'CC') }}</th>
+      <th title="CC mélangé sur 100 : lissage bayésien empirique/théorique (même mécanique que la synergie) — atténue les artefacts type Nocturne, surtout à faible volume.">{{ sort_link('cc_blend', 'CC lissé') }}</th>
       <th>Fiabilité</th>
     </tr>
   </thead>
@@ -91,10 +92,11 @@
       <td>{{ r.herald_rate | pct(0) }}</td>
       <td>{{ r.first_tower_rate | pct(0) }}</td>
       <td>{{ r.cc_time_s | num(0) }}</td>
+      <td>{{ r.cc_blended_pct | pct100 }}</td>
       <td><span class="tier tier-{{ r.tier }}">{{ r.tier }}</span></td>
     </tr>
     {% else %}
-    <tr><td colspan="12" class="empty">Aucun duo ne correspond aux filtres.</td></tr>
+    <tr><td colspan="13" class="empty">Aucun duo ne correspond aux filtres.</td></tr>
     {% endfor %}
   </tbody>
 </table>
