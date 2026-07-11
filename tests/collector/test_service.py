@@ -60,26 +60,35 @@ class _Recorder:
         )
         monkeypatch.setattr(
             service.maintenance,
-            "purge_old_patches",
-            lambda *, keep, dsn=None: self.calls.append(("purge", keep)),
+            "purge_stale_objective_events",
+            lambda dsn=None: self.calls.append(("purge_events",)),
+        )
+        monkeypatch.setattr(
+            service.maintenance,
+            "run_daily",
+            lambda dsn=None: self.calls.append(("purge_daily",)),
         )
         monkeypatch.setattr(service.time, "sleep", lambda s: self.calls.append(("sleep", s)))
 
 
 def test_cycle_chains_batch_refresh_and_daily_purge(monkeypatch):
     rec = _Recorder(monkeypatch, patch_values=("16.13", "16.14"))
-    cycles = service.run_service(platforms=["euw1"], batch_target=10, keep_patches=3, max_cycles=2)
+    cycles = service.run_service(platforms=["euw1"], batch_target=10, max_cycles=2)
     assert cycles == 2
     # Le patch est re-résolu à CHAQUE cycle (rollover sans intervention) ;
-    # la purge ne tourne qu'une fois (intervalle quotidien pas encore écoulé).
+    # les events sont purgés à CHAQUE cycle ; la purge quotidienne (patchs
+    # bruts + participants + agrégats) ne tourne qu'une fois (intervalle pas
+    # encore écoulé au 2e cycle).
     assert rec.calls == [
         ("patch", "16.13"),
         ("collect", "16.13", 10),
         ("refresh", "16.13"),
-        ("purge", 3),
+        ("purge_events",),
+        ("purge_daily",),
         ("patch", "16.14"),
         ("collect", "16.14", 10),
         ("refresh", "16.14"),
+        ("purge_events",),
     ]
 
 
@@ -90,6 +99,48 @@ def test_failing_cycle_pauses_then_retries(monkeypatch):
     # Cycle 1 : échec → pause ; cycle 2 : complet. Le service ne meurt pas.
     assert ("sleep", service.CYCLE_ERROR_PAUSE_S) in rec.calls
     assert ("refresh", "16.14") in rec.calls
+
+
+# --- refresh_scores : enchaîne agrégats → scores/counters → purge des scores ---
+
+
+def test_refresh_scores_chains_and_prunes(monkeypatch):
+    calls: list[tuple] = []
+    fake_window = object()
+    monkeypatch.setattr(
+        service.aggregate, "refresh", lambda patch, dsn=None: calls.append(("agg", patch))
+    )
+    monkeypatch.setattr(service, "scoring_window", lambda dsn=None: fake_window)
+    monkeypatch.setattr(
+        service.compute, "refresh", lambda window, dsn=None: calls.append(("compute", window))
+    )
+    monkeypatch.setattr(
+        service.counters, "refresh", lambda window, dsn=None: calls.append(("counters", window))
+    )
+    monkeypatch.setattr(
+        service.maintenance, "purge_stale_scores", lambda dsn=None: calls.append(("prune_scores",))
+    )
+    service.refresh_scores("16.13")
+    assert calls == [
+        ("agg", "16.13"),
+        ("compute", fake_window),
+        ("counters", fake_window),
+        ("prune_scores",),
+    ]
+
+
+def test_refresh_scores_skips_compute_when_window_empty(monkeypatch):
+    calls: list[tuple] = []
+    monkeypatch.setattr(
+        service.aggregate, "refresh", lambda patch, dsn=None: calls.append(("agg", patch))
+    )
+    monkeypatch.setattr(service, "scoring_window", lambda dsn=None: None)
+    monkeypatch.setattr(
+        service.maintenance, "purge_stale_scores", lambda dsn=None: calls.append(("prune_scores",))
+    )
+    service.refresh_scores("16.13")
+    # Base vide : ni compute/counters ni purge des scores (rien à purger).
+    assert calls == [("agg", "16.13")]
 
 
 # --- scoring_window : fenêtre bornée aux 3 patchs les plus récents ---

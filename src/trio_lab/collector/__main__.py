@@ -2,14 +2,15 @@
 
     python -m trio_lab.collector --patch 16.13 [--platforms na1,euw1,kr]
                                  [--target N] [--max-pages 5] [--max-attempts 3]
-    python -m trio_lab.collector --service [--target 5000] [--keep 3]
+    python -m trio_lab.collector --service [--target 5000]
 
 `--service` (Railway 24/24) : cycles sans fin — patch courant auto (Data
 Dragon), batch de `--target` matchs/plateforme, refresh agrégats + scores +
-counters, purge de rétention quotidienne (`--keep` patchs conservés).
-En mode batch, sans `--target`, boucle sans fin sur le patch donné. Le dossier
-de données (archives timeline) vient du `.env` (DATA_DIR, ARCHIVE_TIMELINES).
-Les migrations doivent avoir été appliquées (`python -m trio_lab.db`).
+counters, purge différenciée par table (voir `trio_lab.maintenance` pour la
+profondeur de rétention de chacune). En mode batch, sans `--target`, boucle
+sans fin sur le patch donné. Le dossier de données (archives timeline) vient
+du `.env` (DATA_DIR, ARCHIVE_TIMELINES). Les migrations doivent avoir été
+appliquées (`python -m trio_lab.db`).
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ import argparse
 import asyncio
 import logging
 
-from trio_lab import config, db, maintenance
+from trio_lab import config, db
 from trio_lab.collector import collect, ladder, service, storage
 
 
@@ -29,12 +30,6 @@ def main() -> None:
         "--service",
         action="store_true",
         help="mode service 24/24 : patch auto + refresh scores + rétention",
-    )
-    parser.add_argument(
-        "--keep",
-        type=int,
-        default=maintenance.DEFAULT_KEEP,
-        help="(--service) patchs conservés par la purge de rétention",
     )
     parser.add_argument(
         "--platforms",
@@ -71,7 +66,6 @@ def main() -> None:
         service.run_service(
             platforms=platforms,
             batch_target=args.target or service.DEFAULT_BATCH_TARGET,
-            keep_patches=args.keep,
         )
         return
     if not args.patch:
