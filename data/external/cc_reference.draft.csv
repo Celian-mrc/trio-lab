@@ -17,22 +17,22 @@
 # Les coefficients (poids par type, coef_zone, coef_conditionnel…) vivent dans la
 # config, pas ici.
 champion,sort,type_cc,duree_s,pct_slow,zone,fiabilite,disponibilite,repositionnement,conditionnel,note_relecture
-Aatrox,Q,airborne,0.25,,multi,skillshot,base,0,0,
-Aatrox,W,airborne,0.5,,mono,skillshot,base,1,0,défaut appliqué : knockback/pull 0.5 s — à vérifier
+Aatrox,Q,airborne,0.25,,multi,skillshot,base,0,1,relecture : conditionnel (connaissance jeu) : sweet spot requis — à vérifier
+Aatrox,W,airborne,0.5,,mono,skillshot,base,1,1,relecture : conditionnel (connaissance jeu) : la cible doit être encore dans la zone au claquement — à vérifier
 Aatrox,W,slow,1.5,30.0,mono,skillshot,base,0,0,"%slow depuis leveling « Slow », moyenne retenue"
 Ahri,E,charm,1.5,,mono,skillshot,base,0,0,"durée depuis leveling « Disable Duration », moyenne retenue"
 Ahri,E,slow,1.5,65.0,mono,skillshot,base,0,0,"durée depuis leveling « Disable Duration », moyenne retenue"
 Akali,Q,slow,0.5,50.0,multi,skillshot,base,0,0,
-Alistar,E,stun,1.0,,mono,point_click,base,0,0,relecture : relecture zone/fiabilité : zone mono
+Alistar,E,stun,1.0,,mono,point_click,base,0,1,relecture : relecture zone/fiabilité : zone mono ; conditionnel (connaissance jeu) : stacks de piétinement + attaque — à vérifier
 Alistar,Q,airborne,1.0,,multi,point_click,base,0,0,
 Alistar,Q,stun,1.0,,multi,point_click,base,0,0,
 Alistar,W,airborne,0.5,,mono,point_click,base,1,0,
 Alistar,W,stun,0.75,,mono,point_click,base,0,0,
-Ambessa,E,slow,1.0,99.0,multi,point_click,base,0,0,
+Ambessa,E,slow,1.0,99.0,multi,skillshot,base,0,0,relecture : relecture fiabilité : skillshot
 Ambessa,R,stun,0.4,,mono,skillshot,ultimate,0,0,
 Ambessa,R,suppression,0.75,,mono,skillshot,ultimate,0,0,
 Amumu,Q,stun,1.0,,mono,skillshot,base,0,0,
-Amumu,R,stun,1.5,,multi,point_click,ultimate,0,0,
+Amumu,R,stun,1.5,,multi,skillshot,ultimate,0,0,relecture : relecture fiabilité : skillshot
 Anivia,Q,slow,3.0,30.0,multi,skillshot,base,0,0,relecture : slow 3 s (fandom)
 Anivia,Q,stun,1.3,,multi,skillshot,base,0,0,"durée depuis leveling « Stun Duration », moyenne retenue"
 Anivia,R,slow,1.0,50.0,multi,skillshot,ultimate,0,0,
@@ -40,7 +40,7 @@ Anivia,W,airborne,0.25,,multi,skillshot,base,1,0,relecture : relecture zone/fiab
 Annie,P,stun,1.5,,multi,skillshot,base,0,0,"durée variable ({{pp|1.25;1.5;1.75|1;6;11}}), moyenne retenue"
 Aphelios,A,slow,2.5,30.0,mono,skillshot,base,0,0,
 Aphelios,Q,root,1.0,,multi,point_click,base,0,0,
-Ashe,P,slow,2.0,25.0,mono,skillshot,base,0,0,relecture : slow 2 s (fandom)
+Ashe,P,slow,2.0,25.0,mono,point_click,base,0,0,relecture : slow 2 s (fandom) ; relecture fiabilité : point_click
 Ashe,R,stun,2.25,,mono,skillshot,ultimate,0,0,relecture : 1 à 3.5 s selon la distance — moyenne retenue
 Ashe,W,slow,2.0,25.0,multi,skillshot,base,0,0,relecture (ajout) : applique le slow du passif Frost Shot (ligne manquante côté wiki)
 Aurelion Sol,E,slow,2.0,,multi,skillshot,base,0,0,relecture : zone + attirance progressive vers le centre ; % slow inconnu — à compléter
@@ -60,10 +60,10 @@ Bel'Veth,W,slow,1.75,50.0,multi,skillshot,base,0,0,"durée depuis leveling « Sl
 Blitzcrank,E,airborne,1.0,,mono,point_click,base,0,0,
 Blitzcrank,Q,airborne,0.5,,mono,skillshot,base,1,0,défaut appliqué : knockback/pull 0.5 s — à vérifier
 Blitzcrank,Q,stun,0.65,,mono,skillshot,base,0,0,
-Blitzcrank,R,silence,0.5,,multi,point_click,ultimate,0,0,
+Blitzcrank,R,silence,0.5,,multi,skillshot,ultimate,0,0,relecture : relecture fiabilité : skillshot
 Brand,Q,stun,1.75,,mono,skillshot,base,0,0,
 Brand,R,slow,0.25,45.0,multi,point_click,ultimate,0,0,"%slow depuis leveling « Slow », moyenne retenue"
-Braum,P,stun,1.5,,mono,skillshot,base,0,0,"durée variable ({{pp|changedisplay=true|1.25 to 1.75 for 3|1 to 13|type=his level|label1=level}}), moyenne retenue"
+Braum,P,stun,1.5,,mono,point_click,base,0,1,relecture : relecture fiabilité : point_click ; conditionnel (connaissance jeu) : 4 marques d'attaques requises — à vérifier
 Braum,Q,slow,2.0,70.0,mono,skillshot,base,0,0,
 Braum,R,airborne,0.6,,multi,skillshot,ultimate,0,0,
 Braum,R,slow,2.0,50.0,multi,skillshot,ultimate,0,0,relecture : zone de slow
@@ -90,8 +90,8 @@ Cho'Gath,W,silence,1.8,,multi,skillshot,base,0,0,"durée depuis leveling « Sile
 Darius,E,airborne,1.0,,multi,skillshot,base,1,0,
 Darius,E,slow,1.0,,multi,skillshot,base,0,0,relecture : slow 1 s ; relecture zone/fiabilité : zone multi
 Darius,W,slow,1.0,90.0,mono,point_click,base,0,0,
-Diana,R,airborne,2.0,,multi,point_click,ultimate,1,0,
-Diana,R,slow,2.0,50.0,multi,point_click,ultimate,0,0,"%slow depuis leveling « Slow », moyenne retenue"
+Diana,R,airborne,2.0,,multi,skillshot,ultimate,1,0,relecture : relecture fiabilité : skillshot
+Diana,R,slow,2.0,50.0,multi,skillshot,ultimate,0,0,relecture : relecture fiabilité : skillshot
 Dr. Mundo,Q,slow,2.0,40.0,mono,skillshot,base,0,0,
 Draven,E,airborne,2.0,,multi,skillshot,base,1,0,
 Draven,E,slow,2.0,30.0,multi,skillshot,base,0,0,"%slow depuis leveling « Slow », moyenne retenue"
@@ -113,8 +113,8 @@ Fizz,E,slow,2.0,50.0,multi,skillshot,base,0,0,"%slow depuis leveling « Slow »,
 Fizz,R,airborne,0.5,,multi,skillshot,ultimate,1,0,relecture : knockback (1 s knock-up si le leurre est intercepté)
 Fizz,R,slow,2.0,60.0,multi,skillshot,ultimate,0,0,relecture : 40/60/80 % selon la taille du requin — moyenne
 Galio,E,airborne,0.75,,multi,skillshot,base,0,0,relecture : relecture zone/fiabilité : zone multi
-Galio,R,airborne,0.75,,multi,point_click,ultimate,1,0,
-Galio,W,taunt,1.0,,multi,point_click,base,0,0,relecture : relecture zone/fiabilité : zone multi
+Galio,R,airborne,0.75,,multi,skillshot,ultimate,1,0,relecture : relecture fiabilité : skillshot
+Galio,W,taunt,1.0,,multi,skillshot,base,0,0,relecture : relecture zone/fiabilité : zone multi ; relecture fiabilité : skillshot
 Gangplank,E,slow,2.0,60.0,multi,skillshot,base,0,0,"%slow depuis leveling « Slow », moyenne retenue"
 Gangplank,R,slow,0.5,30.0,multi,skillshot,ultimate,0,0,
 Garen,Q,silence,1.5,,mono,point_click,base,0,0,
@@ -126,8 +126,8 @@ Gnar,R,airborne,1.5,,multi,skillshot,ultimate,1,0,"durée depuis leveling « Dis
 Gnar,R,slow,1.5,45.0,multi,skillshot,ultimate,0,1,"durée depuis leveling « Disable Duration », moyenne retenue ; conditionnel (collision/charge) — heuristique, à vérifier"
 Gnar,R,stun,1.5,,multi,skillshot,ultimate,0,1,"durée depuis leveling « Disable Duration », moyenne retenue ; conditionnel (collision/charge) — heuristique, à vérifier"
 Gnar,W,stun,1.25,,multi,skillshot,base,0,0,
-Gragas,E,airborne,1.0,,multi,skillshot,base,1,1,"conditionnel (collision/charge) — heuristique, à vérifier"
-Gragas,E,stun,1.0,,multi,skillshot,base,0,1,"conditionnel (collision/charge) — heuristique, à vérifier"
+Gragas,E,airborne,1.0,,multi,skillshot,base,1,0,"relecture : conditionnel (connaissance jeu) : la collision est le hit lui-même, pas une condition — à vérifier"
+Gragas,E,stun,1.0,,multi,skillshot,base,0,0,"relecture : conditionnel (connaissance jeu) : la collision est le hit lui-même, pas une condition — à vérifier"
 Gragas,Q,slow,2.0,50.0,multi,skillshot,base,0,0,"%slow depuis leveling « Minimum Slow », moyenne retenue"
 Gragas,R,airborne,0.5,,multi,skillshot,ultimate,1,0,défaut appliqué : knockback/pull 0.5 s — à vérifier
 Graves,W,slow,0.5,50.0,multi,skillshot,base,0,0,
@@ -150,16 +150,16 @@ Hwei,W,root,1.6,,mono,skillshot,base,0,1,"durée depuis leveling « Root Duratio
 Illaoi,E,slow,1.5,80.0,mono,skillshot,base,0,0,
 Irelia,E,stun,0.75,,multi,skillshot,base,0,0,
 Irelia,R,slow,1.5,90.0,multi,skillshot,ultimate,0,0,
-Ivern,E,slow,2.0,50.0,multi,point_click,base,0,0,"%slow depuis leveling « Slow », moyenne retenue"
+Ivern,E,slow,2.0,50.0,multi,skillshot,base,0,0,relecture : relecture fiabilité : skillshot
 Ivern,Q,root,1.8,,mono,skillshot,base,0,0,"durée depuis leveling « Root Duration », moyenne retenue"
-Ivern,R,airborne,1.0,,multi,skillshot,ultimate,0,0,relecture : airborne 1 s (fandom) ; relecture zone/fiabilité : zone multi
+Ivern,R,airborne,1.0,,multi,point_click,ultimate,0,0,relecture : airborne 1 s (fandom) ; relecture zone/fiabilité : zone multi ; relecture fiabilité : point_click
 Janna,Q,airborne,0.875,,multi,skillshot,base,0,0,"durée variable ({{pp|type=seconds charged|0.5 to 1.25|0 to 1.5 by 0.1}}), moyenne retenue"
-Janna,R,airborne,0.5,,multi,point_click,ultimate,1,0,
+Janna,R,airborne,0.5,,multi,skillshot,ultimate,1,0,relecture : relecture fiabilité : skillshot
 Janna,W,slow,2.0,28.0,mono,point_click,base,0,0,relecture : 20-36 % — moyenne
-Jarvan IV,Q,airborne,0.75,,multi,skillshot,base,0,0,
+Jarvan IV,Q,airborne,0.75,,multi,skillshot,base,0,1,relecture : conditionnel (connaissance jeu) : combo drapeau E→Q requis — à vérifier
 Jarvan IV,R,airborne,0.15,,multi,point_click,ultimate,1,0,
-Jarvan IV,W,slow,2.0,25.0,multi,point_click,base,0,0,"%slow depuis leveling « Slow », moyenne retenue"
-Jax,E,stun,1.0,,multi,point_click,base,0,0,
+Jarvan IV,W,slow,2.0,25.0,multi,skillshot,base,0,0,relecture : relecture fiabilité : skillshot
+Jax,E,stun,1.0,,multi,skillshot,base,0,0,relecture : relecture fiabilité : skillshot
 Jayce,E,airborne,0.4,,mono,point_click,base,1,0,
 Jayce,E,root,0.25,,mono,point_click,base,0,0,relecture : root 0.25 s
 Jayce,Q,slow,2.0,47.5,multi,point_click,base,0,0,"%slow depuis leveling « Slow », moyenne retenue"
@@ -188,31 +188,31 @@ Kayle,Q,slow,2.0,35.0,mono,skillshot,base,0,0,"%slow depuis leveling « Slow »,
 Kayn,W,airborne,1.0,,multi,skillshot,base,0,0,forme Rhaast
 Kayn,W,slow,1.5,90.0,multi,skillshot,base,0,0,
 Kayn,W,slow,1.5,90.0,multi,skillshot,base,0,0,forme Rhaast
-Kennen,P,stun,1.25,,multi,skillshot,base,0,0,
-Kha'Zix,P,slow,2.0,25.0,mono,skillshot,base,0,0,
+Kennen,P,stun,1.25,,multi,skillshot,base,0,1,relecture : conditionnel (connaissance jeu) : 3 marques d'énergie requises — à vérifier
+Kha'Zix,P,slow,2.0,25.0,mono,point_click,base,0,1,relecture : relecture fiabilité : point_click ; relecture conditionnel : 1 (cible isolée requise)
 Kha'Zix,W,slow,2.0,40.0,multi,skillshot,base,0,0,
 Kindred,E,slow,1.0,30.0,mono,point_click,base,0,0,
 Kindred,W,slow,2.0,50.0,mono,skillshot,base,0,0,
-Kled,Q,airborne,0.5,,mono,skillshot,base,1,0,relecture : durée 2.5 s invraisemblable pour un pull — défaut 0.5 s ; relecture zone/fiabilité : zone mono
+Kled,Q,airborne,0.5,,mono,skillshot,base,1,1,relecture : durée 2.5 s invraisemblable pour un pull — défaut 0.5 s ; relecture zone/fiabilité : zone mono ; conditionnel (connaissance jeu) : tether à maintenir jusqu'au bout — à vérifier
 Kled,Q,slow,1.5,40.0,multi,skillshot,base,0,0,relecture : slow 1.5 s
 Kled,R,airborne,0.5,,mono,skillshot,ultimate,1,0,défaut appliqué : knockback/pull 0.5 s — à vérifier
 Kog'Maw,E,slow,2.0,50.0,multi,skillshot,base,0,0,relecture : zone de slow
 LeBlanc,E,root,1.5,,mono,skillshot,base,0,1,relecture : conditionnel
 Lee Sin,E,slow,4.0,55.0,multi,skillshot,base,0,0,relecture : decay sur 4 s
-Lee Sin,R,airborne,0.8,,mono,point_click,ultimate,1,1,"conditionnel (collision/charge) — heuristique, à vérifier"
+Lee Sin,R,airborne,0.8,,mono,point_click,ultimate,1,0,relecture : relecture conditionnel : 0 (inconditionnel (point & click))
 Lee Sin,R,root,0.25,,mono,point_click,ultimate,0,0,relecture : root 0.25 s (cibles secondaires)
 Leona,E,root,0.5,,mono,skillshot,base,0,0,relecture : relecture zone/fiabilité : zone mono
 Leona,Q,stun,1.0,,mono,point_click,base,0,0,
 Leona,R,slow,1.75,80.0,multi,skillshot,ultimate,0,0,
 Leona,R,stun,1.75,,multi,skillshot,ultimate,0,0,relecture : stun 1.75 s
 Lillia,E,slow,3.0,40.0,multi,skillshot,base,0,0,
-Lillia,R,sleep,1.5,,multi,point_click,ultimate,0,0,relecture : relecture zone/fiabilité : zone multi
-Lillia,R,slow,2.0,10.0,multi,point_click,ultimate,0,0,relecture : relecture zone/fiabilité : zone multi
-Lissandra,P,slow,4.0,25.0,multi,skillshot,base,0,0,
+Lillia,R,sleep,1.5,,multi,point_click,ultimate,0,1,relecture : relecture zone/fiabilité : zone multi ; relecture conditionnel : 1 (cibles marquées par le passif)
+Lillia,R,slow,2.0,10.0,multi,point_click,ultimate,0,1,relecture : relecture zone/fiabilité : zone multi ; relecture conditionnel : 1 (cibles marquées par le passif)
+Lissandra,P,slow,4.0,25.0,multi,skillshot,base,0,1,relecture : relecture conditionnel : 1 (proc périodique du passif)
 Lissandra,Q,slow,1.5,28.0,multi,skillshot,base,0,0,"%slow depuis leveling « Slow », moyenne retenue"
 Lissandra,R,slow,0.5,60.0,multi,point_click,ultimate,0,0,relecture : relecture zone/fiabilité : zone multi
 Lissandra,R,stun,1.5,,mono,point_click,ultimate,0,0,
-Lissandra,W,root,1.45,,multi,point_click,base,0,0,"durée depuis leveling « Root Duration », moyenne retenue"
+Lissandra,W,root,1.45,,multi,skillshot,base,0,0,relecture : relecture fiabilité : skillshot
 Locke,Q,slow,1.0,25.0,multi,skillshot,base,0,0,
 Locke,R,slow,2.0,99.0,multi,skillshot,ultimate,0,0,
 Lulu,Q,slow,2.0,80.0,multi,skillshot,base,0,0,
@@ -248,7 +248,7 @@ Nami,Q,airborne,1.5,,multi,skillshot,base,0,0,relecture : airborne + stun simult
 Nami,R,airborne,0.75,,multi,skillshot,ultimate,0,0,défaut appliqué : knock-up 0.75 s — à vérifier
 Nami,R,slow,3.0,70.0,multi,skillshot,ultimate,0,0,"durée variable ({{pp|type=distance traveled|2 to 4 by 0.2|0 to 2750|formula = ''Capped at 2750 range.''}}), moyenne retenue"
 Nasus,W,slow,5.0,35.0,mono,point_click,base,0,0,relecture : slow 5 s croissant
-Nautilus,E,slow,1.5,40.0,multi,point_click,base,0,0,"%slow depuis leveling « Slow », moyenne retenue"
+Nautilus,E,slow,1.5,40.0,multi,skillshot,base,0,0,relecture : relecture fiabilité : skillshot
 Nautilus,P,root,1.125,,mono,point_click,base,0,0,relecture : relecture zone/fiabilité : fiabilité point_click
 Nautilus,Q,airborne,0.9,,mono,skillshot,base,1,1,"conditionnel (collision/charge) — heuristique, à vérifier"
 Nautilus,Q,stun,1.0,,mono,skillshot,base,0,0,
@@ -256,10 +256,10 @@ Nautilus,R,airborne,1.0,,multi,point_click,ultimate,0,0,
 Nautilus,R,stun,1.5,,multi,point_click,ultimate,0,0,"durée depuis leveling « Stun Duration », moyenne retenue"
 Neeko,E,root,1.1,,multi,skillshot,base,0,0,relecture : 1.8 à 3 s si le projectile traverse une unité (base 1.1 s conservée)
 Neeko,E,root,2.4,,multi,skillshot,base,0,1,relecture (ajout) : root renforcé si le projectile traverse une unité (1.8-3 s — moyenne)
-Neeko,R,airborne,0.6,,multi,point_click,ultimate,0,0,
-Neeko,R,stun,0.75,,multi,point_click,ultimate,0,0,
-Nilah,R,airborne,0.5,,multi,point_click,ultimate,1,0,relecture : airborne bref (250 unités) — le slow 3 s est une ligne séparée
-Nilah,R,slow,3.0,10.0,multi,point_click,ultimate,0,0,
+Neeko,R,airborne,0.6,,multi,skillshot,ultimate,0,0,relecture : relecture fiabilité : skillshot
+Neeko,R,stun,0.75,,multi,skillshot,ultimate,0,0,relecture : relecture fiabilité : skillshot
+Nilah,R,airborne,0.5,,multi,skillshot,ultimate,1,0,relecture : airborne bref (250 unités) — le slow 3 s est une ligne séparée ; relecture fiabilité : skillshot
+Nilah,R,slow,3.0,10.0,multi,skillshot,ultimate,0,0,relecture : relecture fiabilité : skillshot
 Nocturne,E,fear,1.75,,mono,point_click,base,0,1,relecture : fear conditionnel 1.25-2.25 s — moyenne retenue
 Nocturne,E,slow,1.75,90.0,mono,point_click,base,0,1,relecture : mêmes durées que le fear ; 90 %
 Nunu,E,root,1.0,,multi,skillshot,base,0,0,"durée variable ({{pp|0.5 + (1.5-0.5)/17*(x-1) for 20}}), moyenne retenue ; durée extraite 6.75 s invraisemblable (> 4.0 s), écartée — à vérifier ; durée variable ({{pp|0.5 to 1.5}}), moyenne retenue ; complété via wiki Fandom (contenu possiblement daté)"
@@ -268,9 +268,9 @@ Nunu,R,slow,1.5,72.5,multi,point_click,ultimate,0,0,"durée variable ({{pp|type=
 Nunu,W,airborne,0.625,,multi,skillshot,base,0,0,"durée variable ({{pp|type=charge time|0.5;0.5 to 0.75 for 5|0 to 5|formula=Increases linearly after 1 second into the duration.}}), moyenne retenue"
 Nunu,W,stun,0.25,,multi,skillshot,base,0,0,"durée variable ({{pp|type=charge time|0;0;0;0 to 0.5 for 9|0;1;2 to 5|formula=Increases per game tick after 2.33 seconds.}}), moyenne retenue ; complété via wiki Fandom (contenu possiblement daté)"
 Olaf,Q,slow,2.0,40.0,mono,skillshot,base,0,0,"durée variable ({{pp|type=distance traveled|1 to 3 for 9|400 to 1000|formula=1+(0.25 per 75 units traveled)}}), moyenne retenue ; %slow depuis leveling « Slow », moyenne retenue"
-Orianna,R,airborne,0.5,,multi,point_click,ultimate,1,0,défaut appliqué : knockback/pull 0.5 s — à vérifier
-Orianna,R,stun,0.75,,multi,point_click,ultimate,0,0,
-Orianna,W,slow,2.0,30.0,multi,point_click,base,0,0,"%slow depuis leveling « Movement Speed Modifier », moyenne retenue"
+Orianna,R,airborne,0.5,,multi,skillshot,ultimate,1,0,relecture : relecture fiabilité : skillshot
+Orianna,R,stun,0.75,,multi,skillshot,ultimate,0,0,relecture : relecture fiabilité : skillshot
+Orianna,W,slow,2.0,30.0,multi,skillshot,base,0,0,relecture : relecture fiabilité : skillshot
 Ornn,E,airborne,1.25,,multi,skillshot,base,0,1,relecture : conditionnel : collision avec un mur
 Ornn,E,stun,1.25,,multi,skillshot,base,0,1,"conditionnel (collision/charge) — heuristique, à vérifier"
 Ornn,P,airborne,0.5,,multi,skillshot,base,1,1,relecture : conditionnel : cible brittle
@@ -285,9 +285,9 @@ Poppy,E,airborne,0.5,,mono,point_click,base,1,1,"conditionnel (collision/charge)
 Poppy,E,stun,1.8,,mono,point_click,base,0,1,"durée depuis leveling « Stun Duration », moyenne retenue ; conditionnel (collision/charge) — heuristique, à vérifier"
 Poppy,Q,slow,2.0,30.0,multi,skillshot,base,0,0,relecture : zone de slow
 Poppy,R,airborne,0.5,,multi,skillshot,ultimate,1,0,
-Poppy,W,airborne,0.5,,multi,point_click,base,0,0,
-Poppy,W,ground,2.0,,multi,point_click,base,0,0,
-Poppy,W,slow,2.0,25.0,multi,point_click,base,0,0,
+Poppy,W,airborne,0.5,,multi,skillshot,base,0,0,relecture : relecture fiabilité : skillshot
+Poppy,W,ground,2.0,,multi,skillshot,base,0,0,relecture : relecture fiabilité : skillshot
+Poppy,W,slow,2.0,25.0,multi,skillshot,base,0,0,relecture : relecture fiabilité : skillshot
 Pyke,E,stun,1.25,,multi,skillshot,base,0,0,relecture : base 1.25 s (+0.1 s par 10 léthalité) — scaling à traiter plus tard
 Pyke,Q,airborne,1.0,,mono,skillshot,base,1,0,
 Pyke,Q,slow,1.0,90.0,mono,skillshot,base,0,0,
@@ -297,18 +297,18 @@ Qiyana,R,airborne,0.5,,multi,skillshot,ultimate,1,0,défaut appliqué : knockbac
 Qiyana,R,stun,0.75,,multi,skillshot,ultimate,0,1,relecture : conditionnel (mur requis)
 Quinn,E,airborne,0.5,,mono,point_click,base,1,0,
 Quinn,E,slow,1.5,50.0,mono,point_click,base,0,0,
-Rakan,R,charm,1.25,,multi,point_click,ultimate,0,1,relecture : relecture zone/fiabilité : zone multi
-Rakan,R,slow,1.25,75.0,multi,point_click,ultimate,0,1,relecture : relecture zone/fiabilité : zone multi
+Rakan,R,charm,1.25,,multi,skillshot,ultimate,0,1,relecture : relecture zone/fiabilité : zone multi ; relecture fiabilité : skillshot
+Rakan,R,slow,1.25,75.0,multi,skillshot,ultimate,0,1,relecture : relecture zone/fiabilité : zone multi ; relecture fiabilité : skillshot
 Rakan,W,airborne,1.0,,multi,skillshot,base,0,0,
 Rammus,E,taunt,1.6,,mono,point_click,base,0,0,"durée depuis leveling « Taunt Duration », moyenne retenue"
-Rammus,Q,airborne,0.5,,multi,point_click,base,1,1,"conditionnel (collision/charge) — heuristique, à vérifier ; défaut appliqué : knockback/pull 0.5 s — à vérifier"
-Rammus,Q,slow,1.0,60.0,multi,point_click,base,0,0,"%slow depuis leveling « Slow », moyenne retenue"
-Rammus,Q,stun,1.0,,multi,point_click,base,0,0,
+Rammus,Q,airborne,0.5,,multi,skillshot,base,1,1,relecture : relecture fiabilité : skillshot
+Rammus,Q,slow,1.0,60.0,multi,skillshot,base,0,0,relecture : relecture fiabilité : skillshot
+Rammus,Q,stun,1.0,,multi,skillshot,base,0,0,relecture : relecture fiabilité : skillshot
 Rammus,R,airborne,0.75,,multi,skillshot,ultimate,0,1,"conditionnel (collision/charge) — heuristique, à vérifier"
 Rammus,R,slow,1.5,40.0,multi,skillshot,ultimate,0,0,"%slow depuis leveling « Slow », moyenne retenue"
 Rek'Sai,W,airborne,1.0,,multi,point_click,base,0,0,
 Rell,Q,stun,0.65,,multi,skillshot,base,0,0,
-Rell,R,airborne,0.5,,multi,point_click,ultimate,1,0,relecture : + attirance progressive vers Rell pendant 2 s
+Rell,R,airborne,0.5,,multi,skillshot,ultimate,1,0,relecture : + attirance progressive vers Rell pendant 2 s ; relecture fiabilité : skillshot
 Rell,W,airborne,0.4,,multi,skillshot,base,0,0,
 Rell,W,airborne,0.4,,mono,point_click,base,1,0,
 Rell,W,stun,0.8,,multi,skillshot,base,0,0,
@@ -320,15 +320,15 @@ Renata Glasc,Q,stun,0.5,,mono,skillshot,base,0,1,relecture : stun conditionnel
 Renekton,W,stun,0.75,,mono,point_click,base,0,0,
 Rengar,E,root,1.75,,mono,skillshot,base,0,1,relecture : root 1.75 s ; conditionnel (stacks de passif requis)
 Rengar,E,slow,1.75,60.0,mono,skillshot,base,0,0,"%slow depuis leveling « Slow », moyenne retenue"
-Riven,Q,airborne,0.5,,multi,point_click,base,1,0,
-Riven,W,stun,0.75,,multi,point_click,base,0,0,
+Riven,Q,airborne,0.5,,multi,skillshot,base,1,0,relecture : relecture fiabilité : skillshot
+Riven,W,stun,0.75,,multi,skillshot,base,0,0,relecture : relecture fiabilité : skillshot
 Rumble,E,slow,2.0,3.0,mono,skillshot,base,0,0,"%slow depuis leveling « Slow », moyenne retenue"
 Rumble,R,slow,2.0,35.0,multi,skillshot,ultimate,0,0,relecture : zone de slow
 Ryze,W,root,1.5,,mono,point_click,base,0,1,relecture : root conditionnel (cible marquée Flux) 1.5 s
 Ryze,W,slow,1.5,50.0,mono,point_click,base,0,0,
 Samira,P,airborne,0.5,,mono,point_click,base,0,1,relecture : conditionnel (prolonge un airborne existant) ; relecture zone/fiabilité : fiabilité point_click
 Sejuani,E,airborne,0.5,,multi,point_click,base,1,0,relecture : déplacement très court — conservé
-Sejuani,E,stun,1.0,,multi,point_click,base,0,0,
+Sejuani,E,stun,1.0,,multi,point_click,base,0,1,relecture : relecture conditionnel : 1 (stacks de givre requis)
 Sejuani,Q,airborne,0.5,,multi,skillshot,base,0,1,relecture : relecture zone/fiabilité : zone multi
 Sejuani,R,slow,1.0,30.0,multi,skillshot,ultimate,0,0,
 Sejuani,R,stun,1.0,,mono,skillshot,ultimate,0,0,relecture : relecture zone/fiabilité : zone mono
@@ -353,7 +353,7 @@ Shaco,W,fear,1.0,,multi,skillshot,base,0,0,relecture : fear ~1 s vs champions (2
 Shaco,W,root,0.9,,multi,skillshot,base,0,0,"durée depuis leveling « Root Duration », moyenne retenue"
 Shaco,W,slow,1.25,73.0,multi,skillshot,base,0,0,relecture : vitesse fixée à 100 (~73 % vs ~375) pendant fear + 0.25 s — à valider
 Shen,E,taunt,1.0,,multi,skillshot,base,0,0,relecture : 0.5 à 1.5 s — moyenne retenue ; relecture zone/fiabilité : zone multi
-Shen,Q,slow,2.0,35.0,multi,point_click,base,0,0,relecture : slow 2 s
+Shen,Q,slow,2.0,35.0,multi,skillshot,base,0,0,relecture : slow 2 s ; relecture fiabilité : skillshot
 Shyvana,E,slow,0.85,30.0,multi,skillshot,base,0,1,relecture : 0.5/0.75/1/1/1 s — moyenne retenue
 Shyvana,R,fear,0.75,,multi,skillshot,ultimate,0,0,
 Singed,E,airborne,1.25,,mono,point_click,base,1,0,relecture : 0.75 à 1.75 s — moyenne retenue
@@ -361,17 +361,17 @@ Singed,E,root,1.5,,mono,point_click,base,0,1,relecture : conditionnel (atterrir 
 Singed,W,ground,2.0,,multi,skillshot,base,0,1,relecture : zone — politique 2 s (validée)
 Singed,W,slow,2.0,60.0,multi,skillshot,base,0,0,relecture : zone de slow
 Sion,E,slow,2.5,50.0,mono,skillshot,base,0,0,"%slow depuis leveling « Slow », moyenne retenue"
-Sion,Q,airborne,0.75,,multi,skillshot,base,0,0,défaut appliqué : knock-up 0.75 s — à vérifier
+Sion,Q,airborne,0.75,,multi,skillshot,base,0,1,relecture : conditionnel (connaissance jeu) : charge minimale requise — à vérifier
 Sion,Q,slow,0.25,50.0,multi,skillshot,base,0,0,
-Sion,Q,stun,1.75,,multi,skillshot,base,0,0,relecture : 1.25 à 2.25 s selon la charge — moyenne retenue
+Sion,Q,stun,1.75,,multi,skillshot,base,0,1,relecture : 1.25 à 2.25 s selon la charge — moyenne retenue ; conditionnel (connaissance jeu) : charge minimale requise — à vérifier
 Sion,R,airborne,0.5,,multi,skillshot,ultimate,1,0,
 Sion,R,slow,3.0,45.0,multi,skillshot,ultimate,0,0,"%slow depuis leveling « Slow », moyenne retenue"
 Sion,R,stun,0.5,,multi,skillshot,ultimate,0,1,"conditionnel (collision/charge) — heuristique, à vérifier"
 Skarner,E,stun,1.1,,multi,skillshot,base,0,1,relecture : relecture zone/fiabilité : zone multi
 Skarner,E,suppression,1.25,,multi,skillshot,base,0,0,relecture : relecture zone/fiabilité : zone multi
-Skarner,Q,slow,1.0,40.0,multi,point_click,base,0,0,relecture : relecture zone/fiabilité : zone multi
+Skarner,Q,slow,1.0,40.0,multi,skillshot,base,0,0,relecture : relecture zone/fiabilité : zone multi ; relecture fiabilité : skillshot
 Skarner,R,suppression,1.5,,multi,skillshot,ultimate,0,0,
-Skarner,W,slow,1.0,20.0,multi,point_click,base,0,0,
+Skarner,W,slow,1.0,20.0,multi,skillshot,base,0,0,relecture : relecture fiabilité : skillshot
 Smolder,R,slow,2.0,40.0,multi,skillshot,ultimate,0,0,relecture : slow 40 % pendant 2 s ; relecture zone/fiabilité : zone multi
 Smolder,W,slow,1.5,35.0,multi,skillshot,base,0,0,
 Sona,P,slow,2.0,50.0,mono,skillshot,base,0,0,
@@ -379,22 +379,22 @@ Sona,R,stun,1.5,,multi,skillshot,ultimate,0,0,
 Soraka,E,root,1.5,,multi,skillshot,base,0,0,"durée depuis leveling « Root Duration », moyenne retenue"
 Soraka,E,silence,2.0,,multi,skillshot,base,0,0,relecture : zone de silence
 Soraka,Q,slow,1.5,30.0,multi,skillshot,base,0,0,
-Swain,E,airborne,0.5,,multi,skillshot,base,1,1,relecture : airborne uniquement à la réactivation
+Swain,E,airborne,0.5,,multi,skillshot,base,1,0,relecture : airborne uniquement à la réactivation ; relecture conditionnel : 0 (inconditionnel (décision relecture))
 Swain,E,airborne,0.5,,multi,skillshot,base,1,0,défaut appliqué : knockback/pull 0.5 s — à vérifier
 Swain,E,root,1.5,,multi,skillshot,base,0,0,
-Swain,R,slow,1.5,50.0,multi,point_click,ultimate,0,0,
+Swain,R,slow,1.5,50.0,multi,skillshot,ultimate,0,0,relecture : relecture fiabilité : skillshot
 Swain,W,slow,1.5,50.0,multi,skillshot,base,0,0,
 Sylas,E,airborne,0.5,,mono,skillshot,base,0,0,
 Sylas,E,stun,0.5,,mono,skillshot,base,0,0,
 Sylas,Q,slow,1.5,25.0,multi,skillshot,base,0,0,"%slow depuis leveling « Slow », moyenne retenue"
 Syndra,E,airborne,1.25,,multi,skillshot,base,1,0,
 Syndra,E,slow,1.25,70.0,multi,skillshot,base,0,0,
-Syndra,E,stun,1.25,,multi,skillshot,base,0,0,
+Syndra,E,stun,1.25,,multi,skillshot,base,0,1,relecture : conditionnel (connaissance jeu) : une sphère à projeter est requise — à vérifier
 Syndra,W,slow,1.5,25.0,multi,skillshot,base,0,0,
 Tahm Kench,Q,slow,2.0,50.0,mono,skillshot,base,0,0,
-Tahm Kench,Q,stun,1.5,,mono,skillshot,base,0,0,
-Tahm Kench,R,airborne,0.5,,mono,skillshot,ultimate,1,0,défaut appliqué : knockback/pull 0.5 s — à vérifier
-Tahm Kench,R,suppression,1.25,,mono,point_click,ultimate,0,0,défaut appliqué : suppression liée à un déplacement 1.25 s — à vérifier
+Tahm Kench,Q,stun,1.5,,mono,skillshot,base,0,1,relecture : conditionnel (connaissance jeu) : 3 stacks d'An Acquired Taste requis — à vérifier
+Tahm Kench,R,airborne,0.5,,mono,skillshot,ultimate,1,1,relecture : relecture conditionnel : 1
+Tahm Kench,R,suppression,1.25,,mono,point_click,ultimate,0,1,relecture : relecture conditionnel : 1
 Tahm Kench,W,airborne,1.0,,multi,skillshot,base,0,0,
 Tahm Kench,W,stun,1.0,,multi,skillshot,base,0,0,
 Taliyah,E,slow,2.0,20.0,multi,skillshot,base,0,0,relecture : zone de slow
@@ -409,7 +409,7 @@ Teemo,R,slow,4.0,40.0,multi,skillshot,ultimate,0,0,"%slow depuis leveling « Slo
 Thresh,E,airborne,1.0,,multi,skillshot,base,1,0,
 Thresh,E,slow,1.0,30.0,multi,skillshot,base,0,0,"%slow depuis leveling « Slow », moyenne retenue"
 Thresh,Q,slow,1.0,20.0,mono,skillshot,base,0,0,
-Thresh,R,slow,2.0,99.0,multi,point_click,ultimate,0,0,relecture : relecture zone/fiabilité : zone multi
+Thresh,R,slow,2.0,99.0,multi,skillshot,ultimate,0,0,relecture : relecture zone/fiabilité : zone multi ; relecture fiabilité : skillshot
 Tristana,R,airborne,0.5,,mono,point_click,ultimate,1,0,défaut appliqué : knockback/pull 0.5 s — à vérifier
 Tristana,R,stun,0.55,,mono,point_click,ultimate,0,0,"durée depuis leveling « Stun Duration », moyenne retenue"
 Tristana,W,slow,2.0,40.0,multi,skillshot,base,0,0,
@@ -421,11 +421,11 @@ Twisted Fate,W,slow,2.5,40.0,mono,point_click,base,0,0,"%slow depuis leveling «
 Twisted Fate,W,stun,1.5,,mono,point_click,base,0,0,"durée depuis leveling « Stun Duration », moyenne retenue"
 Twitch,W,slow,2.0,40.0,multi,skillshot,base,0,0,relecture : zone de slow
 Udyr,E,stun,0.75,,mono,point_click,base,0,0,
-Udyr,R,slow,2.0,22.5,multi,point_click,ultimate,0,0,relecture : zone de slow
+Udyr,R,slow,2.0,22.5,multi,skillshot,ultimate,0,0,relecture : zone de slow ; relecture fiabilité : skillshot
 Urgot,E,airborne,1.0,,mono,skillshot,base,1,0,
 Urgot,E,stun,1.0,,mono,skillshot,base,0,0,
 Urgot,Q,slow,1.25,55.0,multi,skillshot,base,0,0,"%slow depuis leveling « Slow », moyenne retenue"
-Urgot,R,fear,1.5,,multi,skillshot,ultimate,0,0,
+Urgot,R,fear,1.5,,multi,skillshot,ultimate,0,1,relecture : conditionnel (connaissance jeu) : déclenché à l'exécution de la cible — à vérifier
 Urgot,R,slow,4.0,75.0,multi,skillshot,ultimate,0,0,relecture : à l'impact : 0-75 % selon les PV manquants pendant 4 s
 Urgot,R,suppression,1.25,,multi,skillshot,ultimate,0,0,défaut appliqué : suppression liée à un déplacement 1.25 s — à vérifier
 Varus,E,slow,2.0,40.0,multi,skillshot,base,0,0,relecture : zone de slow
@@ -438,7 +438,7 @@ Vel'Koz,E,stun,0.75,,multi,skillshot,base,0,0,
 Vel'Koz,Q,slow,1.8,70.0,multi,skillshot,base,0,0,"durée depuis leveling « Slow Duration », moyenne retenue"
 Vel'Koz,R,slow,1.0,20.0,multi,skillshot,ultimate,0,0,
 Vex,E,slow,2.0,40.0,multi,skillshot,base,0,0,"%slow depuis leveling « Slow », moyenne retenue"
-Vex,P,fear,1.125,,multi,skillshot,base,0,0,"durée variable ({{pp|0.75 to 1.5 for 4|1;6;9;13}}), moyenne retenue"
+Vex,P,fear,1.125,,multi,skillshot,base,0,1,relecture : conditionnel (connaissance jeu) : proc du passif sur dash ennemi — à vérifier
 Vex,P,slow,1.125,79.5,multi,skillshot,base,0,0,relecture : slow 1.125 s
 Vi,Q,airborne,0.75,,multi,skillshot,base,1,0,
 Vi,R,airborne,1.3,,mono,point_click,ultimate,1,0,
@@ -447,27 +447,27 @@ Viego,R,airborne,0.5,,multi,skillshot,ultimate,1,0,défaut appliqué : knockback
 Viego,R,slow,0.25,99.0,multi,skillshot,ultimate,0,0,
 Viego,W,stun,0.75,,mono,skillshot,base,0,1,"durée variable ({{pp|type=channel time|0.25 to 1.25 for 5|0 to 1|formula=0.25 + (0.25 per 0.25 seconds channeled).|changedisplay = true}}), moyenne retenue ; conditionnel (collision/charge) — heuristique, à vérifier"
 Viktor,W,slow,1.0,20.0,multi,skillshot,base,0,0,
-Viktor,W,stun,1.5,,multi,skillshot,base,0,0,
-Vladimir,E,slow,0.5,20.0,multi,point_click,base,0,0,
-Vladimir,W,slow,2.0,40.0,multi,point_click,base,0,0,relecture : zone de slow autour de lui
+Viktor,W,stun,1.5,,multi,skillshot,base,0,1,relecture : relecture conditionnel : 1 (rester dans la zone)
+Vladimir,E,slow,0.5,20.0,multi,skillshot,base,0,0,relecture : relecture fiabilité : skillshot
+Vladimir,W,slow,2.0,40.0,multi,skillshot,base,0,0,relecture : zone de slow autour de lui ; relecture fiabilité : skillshot
 Volibear,E,slow,2.0,40.0,multi,skillshot,base,0,0,
 Volibear,Q,stun,1.0,,mono,point_click,base,0,0,
 Volibear,R,slow,1.0,50.0,multi,skillshot,ultimate,0,0,
-Warwick,E,fear,1.0,,multi,point_click,base,0,0,
-Warwick,E,slow,1.0,90.0,multi,point_click,base,0,0,relecture : slow 1 s
+Warwick,E,fear,1.0,,multi,skillshot,base,0,0,relecture : relecture fiabilité : skillshot
+Warwick,E,slow,1.0,90.0,multi,skillshot,base,0,0,relecture : slow 1 s ; relecture fiabilité : skillshot
 Warwick,R,suppression,1.25,,mono,skillshot,ultimate,0,0,défaut appliqué : suppression liée à un déplacement 1.25 s — à vérifier
-Wukong,R,airborne,0.6,,multi,point_click,ultimate,0,0,
-Xayah,E,root,1.25,,multi,point_click,base,0,0,
+Wukong,R,airborne,0.6,,multi,skillshot,ultimate,0,0,relecture : relecture fiabilité : skillshot
+Xayah,E,root,1.25,,multi,skillshot,base,0,0,relecture : relecture fiabilité : skillshot
 Xerath,E,stun,1.5,,mono,skillshot,base,0,0,relecture : 0.75 à 2.25 s selon la distance — moyenne retenue
 Xerath,W,slow,2.5,25.0,multi,skillshot,base,0,0,
 Xin Zhao,E,slow,0.5,30.0,multi,point_click,base,0,0,
 Xin Zhao,Q,airborne,0.75,,mono,point_click,base,0,0,
-Xin Zhao,R,airborne,0.75,,multi,point_click,ultimate,1,0,
-Xin Zhao,R,stun,0.75,,multi,point_click,ultimate,0,0,relecture : stun 0.75 s
+Xin Zhao,R,airborne,0.75,,multi,skillshot,ultimate,1,0,relecture : relecture fiabilité : skillshot
+Xin Zhao,R,stun,0.75,,multi,skillshot,ultimate,0,0,relecture : stun 0.75 s ; relecture fiabilité : skillshot
 Xin Zhao,W,slow,1.5,50.0,multi,skillshot,base,0,0,complété via wiki Fandom (contenu possiblement daté)
 Yasuo,Q,airborne,0.9,,multi,skillshot,base,0,0,
-Yasuo,R,airborne,1.0,,mono,point_click,ultimate,0,0,
-Yone,Q,airborne,0.75,,multi,skillshot,base,0,0,
+Yasuo,R,airborne,1.0,,mono,point_click,ultimate,0,1,relecture : relecture conditionnel : 1 (cible déjà airborne requise)
+Yone,Q,airborne,0.75,,multi,skillshot,base,0,1,relecture : relecture conditionnel : 1 (3e coup (2 stacks) requis)
 Yone,R,airborne,1.0,,multi,skillshot,ultimate,1,0,
 Yone,R,stun,1.0,,multi,skillshot,ultimate,0,0,
 Yorick,E,slow,1.5,30.0,multi,skillshot,base,0,0,
@@ -485,14 +485,14 @@ Zac,Q,airborne,0.25,,multi,skillshot,base,1,0,
 Zac,Q,root,0.5,,multi,skillshot,base,0,0,relecture : root 0.5 s avant le déplacement
 Zac,Q,slow,0.5,40.0,multi,skillshot,base,0,0,
 Zac,Q,stun,0.25,,multi,skillshot,base,0,0,
-Zac,R,airborne,1.0,,multi,point_click,ultimate,1,0,
-Zac,R,slow,1.0,20.0,multi,point_click,ultimate,0,0,relecture : slow 1 s
-Zed,E,slow,1.5,50.0,multi,point_click,base,0,0,
+Zac,R,airborne,1.0,,multi,skillshot,ultimate,1,0,relecture : relecture fiabilité : skillshot
+Zac,R,slow,1.0,20.0,multi,skillshot,ultimate,0,0,relecture : slow 1 s ; relecture fiabilité : skillshot
+Zed,E,slow,1.5,50.0,multi,skillshot,base,0,0,relecture : relecture fiabilité : skillshot
 Zeri,W,slow,2.0,40.0,multi,skillshot,base,0,0,"%slow depuis leveling « Slow », moyenne retenue"
 Ziggs,E,slow,1.5,30.0,multi,skillshot,base,0,0,relecture : relecture zone/fiabilité : zone multi
 Ziggs,W,airborne,0.5,,multi,skillshot,base,1,0,
 Zilean,E,slow,2.5,74.667,mono,point_click,base,0,0,relecture : slow 2.5 s
-Zilean,Q,stun,1.3,,multi,skillshot,base,0,0,"durée depuis leveling « Stun Duration », moyenne retenue"
+Zilean,Q,stun,1.3,,multi,skillshot,base,0,1,relecture : conditionnel (connaissance jeu) : deux bombes superposées requises — à vérifier
 Zoe,E,sleep,1.4,,mono,skillshot,base,0,0,
 Zoe,E,slow,2.25,20.0,mono,skillshot,base,0,0,"%slow depuis leveling « Maximum Slow », moyenne retenue"
 Zyra,E,root,1.5,,multi,skillshot,base,0,0,relecture : 1 à 2 s selon le rang — moyenne retenue

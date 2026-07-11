@@ -36,7 +36,7 @@ Rell,E,stun,exclude,,,,,,pas de stun (fandom)
 Ivern,R,stun,exclude,,,,,,pas un stun : airborne (ligne airborne conservée)
 Thresh,Q,airborne,exclude,,,,,,tirs pendant le stun de 1.5 s : CC simultané déjà couvert
 Anivia,Q,slow,set,3.0,,,,,slow 3 s (fandom)
-Ashe,P,slow,set,2.0,,,,,slow 2 s (fandom)
+Ashe,P,slow,set,2.0,,,,point_click,slow 2 s (fandom) ; relecture fiabilité : point_click
 Ashe,R,stun,set,2.25,,,,,1 à 3.5 s selon la distance — moyenne retenue
 Briar,R,slow,set,1.5,,,,,slow 1.5 s
 Cassiopeia,R,stun,set,2.0,,1,,,stun 2 s si l'ennemi fait face
@@ -44,13 +44,13 @@ Darius,E,slow,set,1.0,,,multi,,slow 1 s ; relecture zone/fiabilité : zone multi
 Fiddlesticks,Q,slow,set,1.6,,,,,slow 1.6 s
 Fiora,W,stun,set,2.0,,1,mono,,stun conditionnel 2 s (parade) ; relecture zone/fiabilité : zone mono
 Hecarim,R,slow,set,1.125,,,,,slow 1.125 s
-Ivern,R,airborne,set,1.0,,,multi,,airborne 1 s (fandom) ; relecture zone/fiabilité : zone multi
+Ivern,R,airborne,set,1.0,,,multi,point_click,airborne 1 s (fandom) ; relecture zone/fiabilité : zone multi ; relecture fiabilité : point_click
 Jayce,E,root,set,0.25,,,,,root 0.25 s
 K'Sante,W,stun,set,1.125,,,multi,,0.5 à 1.75 s selon la charge — moyenne retenue ; relecture zone/fiabilité : zone multi
 K'Sante,R,airborne,set,0.25,,,,,airborne 0.25 s
 K'Sante,R,root,set,0.5,,,,,root 0.5 s
 K'Sante,R,stun,set,0.5,,,,,stun 0.5 s (si la ligne existe côté wiki)
-Kled,Q,airborne,set,0.5,,,mono,,durée 2.5 s invraisemblable pour un pull — défaut 0.5 s ; relecture zone/fiabilité : zone mono
+Kled,Q,airborne,set,0.5,,1,mono,,durée 2.5 s invraisemblable pour un pull — défaut 0.5 s ; relecture zone/fiabilité : zone mono ; conditionnel (connaissance jeu) : tether à maintenir jusqu'au bout — à vérifier
 Kled,Q,slow,set,1.5,,,,,slow 1.5 s
 Lee Sin,R,root,set,0.25,,,,,root 0.25 s (cibles secondaires)
 Leona,R,stun,set,1.75,,,,,stun 1.75 s
@@ -60,7 +60,7 @@ Mordekaiser,R,slow,set,0.5,,,,,slow 0.5 s
 Morgana,R,slow,set,3.0,,,multi,point_click,slow 3 s ; relecture zone/fiabilité : zone multi ; fiabilité point_click
 Nasus,W,slow,set,5.0,,,,,slow 5 s croissant
 Neeko,E,root,set,1.1,,,,,1.8 à 3 s si le projectile traverse une unité (base 1.1 s conservée)
-Nilah,R,airborne,set,0.5,,,,,airborne bref (250 unités) — le slow 3 s est une ligne séparée
+Nilah,R,airborne,set,0.5,,,,skillshot,airborne bref (250 unités) — le slow 3 s est une ligne séparée ; relecture fiabilité : skillshot
 Nocturne,E,fear,set,1.75,,1,,,fear conditionnel 1.25-2.25 s — moyenne retenue
 Nocturne,E,slow,set,1.75,90.0,1,,,mêmes durées que le fear ; 90 %
 Ornn,E,airborne,set,,,1,,,conditionnel : collision avec un mur
@@ -69,7 +69,7 @@ Ornn,Q,airborne,set,0.25,,,,,le pilier dure 4 s mais le hop est très court
 Ornn,W,slow,exclude,,,,,,le W ne slow pas : il applique l'état brittle
 Pyke,E,stun,set,1.25,,,,,base 1.25 s (+0.1 s par 10 léthalité) — scaling à traiter plus tard
 Renata Glasc,Q,stun,set,0.5,,1,,,stun conditionnel
-Rell,R,airborne,set,0.5,,,,,+ attirance progressive vers Rell pendant 2 s
+Rell,R,airborne,set,0.5,,,,skillshot,+ attirance progressive vers Rell pendant 2 s ; relecture fiabilité : skillshot
 Rengar,E,root,set,1.75,,1,,,root 1.75 s ; conditionnel (stacks de passif requis)
 Ryze,W,root,set,1.5,,1,,,root conditionnel (cible marquée Flux) 1.5 s
 Sett,E,stun,set,1.0,,1,,,stun conditionnel
@@ -78,24 +78,24 @@ Shaco,W,fear,set,1.0,,,,,fear ~1 s vs champions (2.2 s vs non-champions)
 Shaco,W,slow,set,1.25,73.0,,,,vitesse fixée à 100 (~73 % vs ~375) pendant fear + 0.25 s — à valider
 Shaco,R,slow,set,,73.0,,,,vitesse fixée à 100 (~73 %) — à valider
 Shen,E,taunt,set,1.0,,,multi,,0.5 à 1.5 s — moyenne retenue ; relecture zone/fiabilité : zone multi
-Shen,Q,slow,set,2.0,,,,,slow 2 s
+Shen,Q,slow,set,2.0,,,,skillshot,slow 2 s ; relecture fiabilité : skillshot
 Shyvana,E,slow,set,0.85,,,,,0.5/0.75/1/1/1 s — moyenne retenue
 Singed,E,airborne,set,1.25,,,,,0.75 à 1.75 s — moyenne retenue
 Singed,W,ground,set,2.0,,1,,,zone — politique 2 s (validée)
-Sion,Q,stun,set,1.75,,,,,1.25 à 2.25 s selon la charge — moyenne retenue
+Sion,Q,stun,set,1.75,,1,,,1.25 à 2.25 s selon la charge — moyenne retenue ; conditionnel (connaissance jeu) : charge minimale requise — à vérifier
 Smolder,R,slow,set,2.0,40.0,,multi,,slow 40 % pendant 2 s ; relecture zone/fiabilité : zone multi
-Swain,E,airborne,set,,,1,,,airborne uniquement à la réactivation
+Swain,E,airborne,set,,,0,,,airborne uniquement à la réactivation ; relecture conditionnel : 0 (inconditionnel (décision relecture))
 Taliyah,E,stun,set,0.75,,1,,,stun conditionnel 0.75 s (dash à travers les mines)
 Taliyah,R,airborne,set,0.5,,,multi,,le mur dure mais le hop est de 0.5 s ; relecture zone/fiabilité : zone multi
 Tryndamere,W,slow,set,4.0,,1,multi,,slow conditionnel 4 s (cible dos tourné) ; relecture zone/fiabilité : zone multi
 Urgot,R,slow,set,4.0,75.0,,,,à l'impact : 0-75 % selon les PV manquants pendant 4 s
 Urgot,R,slow,exclude,,,,,,doublon — l'effet « exécution » (75 % 1.5 s autour d'Urgot) noté sur l'autre ligne
 Vex,P,slow,set,1.125,,,,,slow 1.125 s
-Warwick,E,slow,set,1.0,,,,,slow 1 s
+Warwick,E,slow,set,1.0,,,,skillshot,slow 1 s ; relecture fiabilité : skillshot
 Xerath,E,stun,set,1.5,,,,,0.75 à 2.25 s selon la distance — moyenne retenue
-Xin Zhao,R,stun,set,0.75,,,,,stun 0.75 s
+Xin Zhao,R,stun,set,0.75,,,,skillshot,stun 0.75 s ; relecture fiabilité : skillshot
 Zac,Q,root,set,0.5,,,,,root 0.5 s avant le déplacement
-Zac,R,slow,set,1.0,,,,,slow 1 s
+Zac,R,slow,set,1.0,,,,skillshot,slow 1 s ; relecture fiabilité : skillshot
 Zilean,E,slow,set,2.5,,,,,slow 2.5 s
 Zyra,E,root,set,1.5,,,,,1 à 2 s selon le rang — moyenne retenue
 Aurelion Sol,E,slow,set,2.0,,,,,zone + attirance progressive vers le centre ; % slow inconnu — à compléter
@@ -111,38 +111,38 @@ Singed,W,slow,set,2.0,,,,,zone de slow
 Soraka,E,silence,set,2.0,,,,,zone de silence
 Taliyah,E,slow,set,2.0,,,,,zone de slow
 Twitch,W,slow,set,2.0,,,,,zone de slow
-Udyr,R,slow,set,2.0,,,,,zone de slow
+Udyr,R,slow,set,2.0,,,,skillshot,zone de slow ; relecture fiabilité : skillshot
 Varus,E,slow,set,2.0,,,,,zone de slow
-Vladimir,W,slow,set,2.0,,,,,zone de slow autour de lui
+Vladimir,W,slow,set,2.0,,,,skillshot,zone de slow autour de lui ; relecture fiabilité : skillshot
 Bard,R,stun,set,2.5,,,,,stase type Zhonya 2.5 s — poids plein conservé (setup de combos en sortie de stase — décision Célian 2026-07-11)
 Mordekaiser,E,airborne,set,0.5,,,,,attirance de 250 unités — durée par défaut de pull
 Yuumi,R,slow,set,,,,,,non vérifiable sur le fandom — valeurs extraites conservées
-Alistar,E,stun,set,,,,mono,,relecture zone/fiabilité : zone mono
+Alistar,E,stun,set,,,1,mono,,relecture zone/fiabilité : zone mono ; conditionnel (connaissance jeu) : stacks de piétinement + attaque — à vérifier
 Anivia,W,airborne,set,,,,multi,,relecture zone/fiabilité : zone multi
 Azir,R,airborne,set,,,,multi,,relecture zone/fiabilité : zone multi
 Bard,Q,stun,set,,,,multi,,relecture zone/fiabilité : zone multi
 Fiora,W,slow,set,,,,mono,,relecture zone/fiabilité : zone mono
 Galio,E,airborne,set,,,,multi,,relecture zone/fiabilité : zone multi
-Galio,W,taunt,set,,,,multi,,relecture zone/fiabilité : zone multi
+Galio,W,taunt,set,,,,multi,skillshot,relecture zone/fiabilité : zone multi ; relecture fiabilité : skillshot
 Jhin,W,root,set,,,,mono,,relecture zone/fiabilité : zone mono
 K'Sante,W,airborne,set,,,,multi,,relecture zone/fiabilité : zone multi
 Leona,E,root,set,,,,mono,,relecture zone/fiabilité : zone mono
-Lillia,R,sleep,set,,,,multi,,relecture zone/fiabilité : zone multi
-Lillia,R,slow,set,,,,multi,,relecture zone/fiabilité : zone multi
+Lillia,R,sleep,set,,,1,multi,,relecture zone/fiabilité : zone multi ; relecture conditionnel : 1 (cibles marquées par le passif)
+Lillia,R,slow,set,,,1,multi,,relecture zone/fiabilité : zone multi ; relecture conditionnel : 1 (cibles marquées par le passif)
 Lissandra,R,slow,set,,,,multi,,relecture zone/fiabilité : zone multi
 Morgana,R,stun,set,,,1,multi,point_click,conditionnel (rester à portée) ; relecture zone/fiabilité : zone multi ; fiabilité point_click
 Nautilus,P,root,set,,,,,point_click,relecture zone/fiabilité : fiabilité point_click
 Ornn,R,airborne,set,,,,multi,,relecture zone/fiabilité : zone multi
-Rakan,R,charm,set,,,,multi,,relecture zone/fiabilité : zone multi
-Rakan,R,slow,set,,,,multi,,relecture zone/fiabilité : zone multi
+Rakan,R,charm,set,,,,multi,skillshot,relecture zone/fiabilité : zone multi ; relecture fiabilité : skillshot
+Rakan,R,slow,set,,,,multi,skillshot,relecture zone/fiabilité : zone multi ; relecture fiabilité : skillshot
 Samira,P,airborne,set,,,1,,point_click,conditionnel (prolonge un airborne existant) ; relecture zone/fiabilité : fiabilité point_click
 Sejuani,Q,airborne,set,,,,multi,,relecture zone/fiabilité : zone multi
 Sejuani,R,stun,set,,,,mono,,relecture zone/fiabilité : zone mono
 Sett,R,suppression,set,,,,mono,,relecture zone/fiabilité : zone mono
 Skarner,E,stun,set,,,,multi,,relecture zone/fiabilité : zone multi
 Skarner,E,suppression,set,,,,multi,,relecture zone/fiabilité : zone multi
-Skarner,Q,slow,set,,,,multi,,relecture zone/fiabilité : zone multi
-Thresh,R,slow,set,,,,multi,,relecture zone/fiabilité : zone multi
+Skarner,Q,slow,set,,,,multi,skillshot,relecture zone/fiabilité : zone multi ; relecture fiabilité : skillshot
+Thresh,R,slow,set,,,,multi,skillshot,relecture zone/fiabilité : zone multi ; relecture fiabilité : skillshot
 Varus,R,root,set,,,,multi,,relecture zone/fiabilité : zone multi
 Ziggs,E,slow,set,,,,multi,,relecture zone/fiabilité : zone multi
 Camille,R,airborne,set,0.5,,,,,la zone dure 3.25 s mais l'airborne est bien plus court
@@ -164,3 +164,60 @@ Skarner,Q,slow,exclude,,,,,,doublon — à supprimer (relecture)
 Ashe,W,slow,add,2,25,0,multi,skillshot,applique le slow du passif Frost Shot (ligne manquante côté wiki)
 Fiddlesticks,R,fear,add,1.75,,0,multi,skillshot,l'ulti applique le fear du Q (1.25-2.25 s — moyenne) ; ligne manquante côté wiki
 Neeko,E,root,add,2.4,,1,multi,skillshot,root renforcé si le projectile traverse une unité (1.8-3 s — moyenne)
+Ambessa,E,slow,set,,,,,skillshot,relecture fiabilité : skillshot
+Amumu,R,stun,set,,,,,skillshot,relecture fiabilité : skillshot
+Blitzcrank,R,silence,set,,,,,skillshot,relecture fiabilité : skillshot
+Diana,R,airborne,set,,,,,skillshot,relecture fiabilité : skillshot
+Diana,R,slow,set,,,,,skillshot,relecture fiabilité : skillshot
+Galio,R,airborne,set,,,,,skillshot,relecture fiabilité : skillshot
+Ivern,E,slow,set,,,,,skillshot,relecture fiabilité : skillshot
+Janna,R,airborne,set,,,,,skillshot,relecture fiabilité : skillshot
+Jarvan IV,W,slow,set,,,,,skillshot,relecture fiabilité : skillshot
+Jax,E,stun,set,,,,,skillshot,relecture fiabilité : skillshot
+Lissandra,W,root,set,,,,,skillshot,relecture fiabilité : skillshot
+Nautilus,E,slow,set,,,,,skillshot,relecture fiabilité : skillshot
+Neeko,R,airborne,set,,,,,skillshot,relecture fiabilité : skillshot
+Neeko,R,stun,set,,,,,skillshot,relecture fiabilité : skillshot
+Nilah,R,slow,set,,,,,skillshot,relecture fiabilité : skillshot
+Orianna,R,airborne,set,,,,,skillshot,relecture fiabilité : skillshot
+Orianna,R,stun,set,,,,,skillshot,relecture fiabilité : skillshot
+Orianna,W,slow,set,,,,,skillshot,relecture fiabilité : skillshot
+Poppy,W,airborne,set,,,,,skillshot,relecture fiabilité : skillshot
+Poppy,W,ground,set,,,,,skillshot,relecture fiabilité : skillshot
+Poppy,W,slow,set,,,,,skillshot,relecture fiabilité : skillshot
+Rammus,Q,airborne,set,,,,,skillshot,relecture fiabilité : skillshot
+Rammus,Q,slow,set,,,,,skillshot,relecture fiabilité : skillshot
+Rammus,Q,stun,set,,,,,skillshot,relecture fiabilité : skillshot
+Riven,Q,airborne,set,,,,,skillshot,relecture fiabilité : skillshot
+Riven,W,stun,set,,,,,skillshot,relecture fiabilité : skillshot
+Skarner,W,slow,set,,,,,skillshot,relecture fiabilité : skillshot
+Swain,R,slow,set,,,,,skillshot,relecture fiabilité : skillshot
+Vladimir,E,slow,set,,,,,skillshot,relecture fiabilité : skillshot
+Warwick,E,fear,set,,,,,skillshot,relecture fiabilité : skillshot
+Wukong,R,airborne,set,,,,,skillshot,relecture fiabilité : skillshot
+Xayah,E,root,set,,,,,skillshot,relecture fiabilité : skillshot
+Xin Zhao,R,airborne,set,,,,,skillshot,relecture fiabilité : skillshot
+Zac,R,airborne,set,,,,,skillshot,relecture fiabilité : skillshot
+Zed,E,slow,set,,,,,skillshot,relecture fiabilité : skillshot
+Braum,P,stun,set,,,1,,point_click,relecture fiabilité : point_click ; conditionnel (connaissance jeu) : 4 marques d'attaques requises — à vérifier
+Kha'Zix,P,slow,set,,,1,,point_click,relecture fiabilité : point_click ; relecture conditionnel : 1 (cible isolée requise)
+Lee Sin,R,airborne,set,,,0,,,relecture conditionnel : 0 (inconditionnel (point & click))
+Lissandra,P,slow,set,,,1,,,relecture conditionnel : 1 (proc périodique du passif)
+Sejuani,E,stun,set,,,1,,,relecture conditionnel : 1 (stacks de givre requis)
+Tahm Kench,R,airborne,set,,,1,,,relecture conditionnel : 1
+Tahm Kench,R,suppression,set,,,1,,,relecture conditionnel : 1
+Viktor,W,stun,set,,,1,,,relecture conditionnel : 1 (rester dans la zone)
+Yasuo,R,airborne,set,,,1,,,relecture conditionnel : 1 (cible déjà airborne requise)
+Yone,Q,airborne,set,,,1,,,relecture conditionnel : 1 (3e coup (2 stacks) requis)
+Aatrox,Q,airborne,set,,,1,,,conditionnel (connaissance jeu) : sweet spot requis — à vérifier
+Aatrox,W,airborne,set,,,1,,,conditionnel (connaissance jeu) : la cible doit être encore dans la zone au claquement — à vérifier
+Gragas,E,stun,set,,,0,,,"conditionnel (connaissance jeu) : la collision est le hit lui-même, pas une condition — à vérifier"
+Gragas,E,airborne,set,,,0,,,"conditionnel (connaissance jeu) : la collision est le hit lui-même, pas une condition — à vérifier"
+Jarvan IV,Q,airborne,set,,,1,,,conditionnel (connaissance jeu) : combo drapeau E→Q requis — à vérifier
+Kennen,P,stun,set,,,1,,,conditionnel (connaissance jeu) : 3 marques d'énergie requises — à vérifier
+Sion,Q,airborne,set,,,1,,,conditionnel (connaissance jeu) : charge minimale requise — à vérifier
+Syndra,E,stun,set,,,1,,,conditionnel (connaissance jeu) : une sphère à projeter est requise — à vérifier
+Tahm Kench,Q,stun,set,,,1,,,conditionnel (connaissance jeu) : 3 stacks d'An Acquired Taste requis — à vérifier
+Urgot,R,fear,set,,,1,,,conditionnel (connaissance jeu) : déclenché à l'exécution de la cible — à vérifier
+Vex,P,fear,set,,,1,,,conditionnel (connaissance jeu) : proc du passif sur dash ennemi — à vérifier
+Zilean,Q,stun,set,,,1,,,conditionnel (connaissance jeu) : deux bombes superposées requises — à vérifier
