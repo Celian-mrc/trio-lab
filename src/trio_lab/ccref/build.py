@@ -191,14 +191,33 @@ def apply_overrides(
     rows: list[dict[str, object]], overrides: list[dict[str, str]]
 ) -> list[dict[str, object]]:
     """Applique les arbitrages humains : `set` écrase les champs fournis,
-    `exclude` retire la ligne. Les overrides s'appliquent dans l'ordre du
-    fichier ; chaque override consomme la première ligne correspondante non
-    encore traitée (gère les doublons de clé). Un override sans correspondance
-    est signalé (ligne disparue du wiki, typo…).
+    `exclude` retire la ligne, `add` crée une ligne absente du wiki (ex. le
+    W d'Ashe qui applique le slow du passif). Les overrides s'appliquent dans
+    l'ordre du fichier ; chaque override consomme la première ligne
+    correspondante non encore traitée (gère les doublons de clé). Un override
+    sans correspondance est signalé (ligne disparue du wiki, typo…).
     """
     consumed: set[int] = set()
     excluded: set[int] = set()
+    added: list[dict[str, object]] = []
     for override in overrides:
+        if override["action"] == "add":
+            added.append(
+                {
+                    "champion": override["champion"],
+                    "sort": override["sort"],
+                    "type_cc": override["type_cc"],
+                    "duree_s": float(override["duree_s"]) if override["duree_s"].strip() else "",
+                    "pct_slow": float(override["pct_slow"]) if override["pct_slow"].strip() else "",
+                    "zone": override["zone"].strip() or "mono",
+                    "fiabilite": override["fiabilite"].strip() or "skillshot",
+                    "disponibilite": parse.availability_of(override["sort"]),
+                    "repositionnement": 0,
+                    "conditionnel": int(override["conditionnel"] or 0),
+                    "note_relecture": f"relecture (ajout) : {override['note']}",
+                }
+            )
+            continue
         key = (override["champion"], override["sort"], override["type_cc"])
         index = next(
             (
@@ -225,11 +244,12 @@ def apply_overrides(
             if override.get(field, "").strip():
                 row[field] = override[field].strip()
         row["note_relecture"] = f"relecture : {override['note']}"
-    kept = [row for i, row in enumerate(rows) if i not in excluded]
+    kept = [row for i, row in enumerate(rows) if i not in excluded] + added
     logger.info(
-        "overrides appliqués : %d set, %d exclusions (%d lignes restantes)",
+        "overrides appliqués : %d set, %d exclusions, %d ajouts (%d lignes)",
         len(consumed) - len(excluded),
         len(excluded),
+        len(added),
         len(kept),
     )
     return kept

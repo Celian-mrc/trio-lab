@@ -5,11 +5,11 @@
 # En cas de lignes dupliquées (même champion/sort/type), les overrides s'appliquent
 # dans l'ordre du fichier, une ligne consommée par override.
 # Barèmes convertis en moyenne (règle du 2026-07-10). Zones : durée = 2 s
-# (politique « min(durée de zone, 2 s) », à confirmer).
+# (politique « min(durée de zone, 2 s) », validée le 2026-07-12).
 # --- CC appliqués au lanceur ou à un allié : pas des CC ennemis ---
 # --- Lignes erronées (le sort n'applique pas ce CC) ---
 # --- Valeurs corrigées / complétées ---
-# --- Zones (politique : durée = min(durée de zone, 2 s), à confirmer) ---
+# --- Zones (politique : durée = min(durée de zone, 2 s), validée le 2026-07-12) ---
 # --- Cas à trancher (gardés avec note) ---
 champion,sort,type_cc,action,duree_s,pct_slow,conditionnel,zone,fiabilite,note
 Blitzcrank,W,slow,exclude,,,,,,se slow lui-même
@@ -40,24 +40,24 @@ Ashe,P,slow,set,2.0,,,,,slow 2 s (fandom)
 Ashe,R,stun,set,2.25,,,,,1 à 3.5 s selon la distance — moyenne retenue
 Briar,R,slow,set,1.5,,,,,slow 1.5 s
 Cassiopeia,R,stun,set,2.0,,1,,,stun 2 s si l'ennemi fait face
-Darius,E,slow,set,1.0,,,,,slow 1 s
+Darius,E,slow,set,1.0,,,multi,,slow 1 s ; relecture zone/fiabilité : zone multi
 Fiddlesticks,Q,slow,set,1.6,,,,,slow 1.6 s
-Fiora,W,stun,set,2.0,,1,,,stun conditionnel 2 s (parade)
+Fiora,W,stun,set,2.0,,1,mono,,stun conditionnel 2 s (parade) ; relecture zone/fiabilité : zone mono
 Hecarim,R,slow,set,1.125,,,,,slow 1.125 s
-Ivern,R,airborne,set,1.0,,,,,airborne 1 s (fandom)
+Ivern,R,airborne,set,1.0,,,multi,,airborne 1 s (fandom) ; relecture zone/fiabilité : zone multi
 Jayce,E,root,set,0.25,,,,,root 0.25 s
-K'Sante,W,stun,set,1.125,,,,,0.5 à 1.75 s selon la charge — moyenne retenue
+K'Sante,W,stun,set,1.125,,,multi,,0.5 à 1.75 s selon la charge — moyenne retenue ; relecture zone/fiabilité : zone multi
 K'Sante,R,airborne,set,0.25,,,,,airborne 0.25 s
 K'Sante,R,root,set,0.5,,,,,root 0.5 s
 K'Sante,R,stun,set,0.5,,,,,stun 0.5 s (si la ligne existe côté wiki)
-Kled,Q,airborne,set,0.5,,,,,durée 2.5 s invraisemblable pour un pull — défaut 0.5 s
+Kled,Q,airborne,set,0.5,,,mono,,durée 2.5 s invraisemblable pour un pull — défaut 0.5 s ; relecture zone/fiabilité : zone mono
 Kled,Q,slow,set,1.5,,,,,slow 1.5 s
 Lee Sin,R,root,set,0.25,,,,,root 0.25 s (cibles secondaires)
 Leona,R,stun,set,1.75,,,,,stun 1.75 s
 Lulu,W,slow,set,,83.0,,,,vitesse fixée à 60 ≈ 83 % vs ~355 de médiane — à valider
 Maokai,R,root,set,1.5,,,,,0.75 à 2.25 s selon la distance — moyenne retenue
 Mordekaiser,R,slow,set,0.5,,,,,slow 0.5 s
-Morgana,R,slow,set,3.0,,,,,slow 3 s
+Morgana,R,slow,set,3.0,,,multi,point_click,slow 3 s ; relecture zone/fiabilité : zone multi ; fiabilité point_click
 Nasus,W,slow,set,5.0,,,,,slow 5 s croissant
 Neeko,E,root,set,1.1,,,,,1.8 à 3 s si le projectile traverse une unité (base 1.1 s conservée)
 Nilah,R,airborne,set,0.5,,,,,airborne bref (250 unités) — le slow 3 s est une ligne séparée
@@ -70,24 +70,24 @@ Ornn,W,slow,exclude,,,,,,le W ne slow pas : il applique l'état brittle
 Pyke,E,stun,set,1.25,,,,,base 1.25 s (+0.1 s par 10 léthalité) — scaling à traiter plus tard
 Renata Glasc,Q,stun,set,0.5,,1,,,stun conditionnel
 Rell,R,airborne,set,0.5,,,,,+ attirance progressive vers Rell pendant 2 s
-Rengar,E,root,set,1.75,,,,,root 1.75 s
+Rengar,E,root,set,1.75,,1,,,root 1.75 s ; conditionnel (stacks de passif requis)
 Ryze,W,root,set,1.5,,1,,,root conditionnel (cible marquée Flux) 1.5 s
 Sett,E,stun,set,1.0,,1,,,stun conditionnel
 Seraphine,E,root,set,1.3,,1,,,root si la cible est déjà slow (stun si déjà root)
 Shaco,W,fear,set,1.0,,,,,fear ~1 s vs champions (2.2 s vs non-champions)
 Shaco,W,slow,set,1.25,73.0,,,,vitesse fixée à 100 (~73 % vs ~375) pendant fear + 0.25 s — à valider
 Shaco,R,slow,set,,73.0,,,,vitesse fixée à 100 (~73 %) — à valider
-Shen,E,taunt,set,1.0,,,,,0.5 à 1.5 s — moyenne retenue
+Shen,E,taunt,set,1.0,,,multi,,0.5 à 1.5 s — moyenne retenue ; relecture zone/fiabilité : zone multi
 Shen,Q,slow,set,2.0,,,,,slow 2 s
 Shyvana,E,slow,set,0.85,,,,,0.5/0.75/1/1/1 s — moyenne retenue
 Singed,E,airborne,set,1.25,,,,,0.75 à 1.75 s — moyenne retenue
-Singed,W,ground,set,2.0,,1,,,zone — politique 2 s à valider
+Singed,W,ground,set,2.0,,1,,,zone — politique 2 s (validée)
 Sion,Q,stun,set,1.75,,,,,1.25 à 2.25 s selon la charge — moyenne retenue
-Smolder,R,slow,set,2.0,40.0,,,,slow 40 % pendant 2 s
+Smolder,R,slow,set,2.0,40.0,,multi,,slow 40 % pendant 2 s ; relecture zone/fiabilité : zone multi
 Swain,E,airborne,set,,,1,,,airborne uniquement à la réactivation
 Taliyah,E,stun,set,0.75,,1,,,stun conditionnel 0.75 s (dash à travers les mines)
-Taliyah,R,airborne,set,0.5,,,,,le mur dure mais le hop est de 0.5 s
-Tryndamere,W,slow,set,4.0,,1,,,slow conditionnel 4 s (cible dos tourné)
+Taliyah,R,airborne,set,0.5,,,multi,,le mur dure mais le hop est de 0.5 s ; relecture zone/fiabilité : zone multi
+Tryndamere,W,slow,set,4.0,,1,multi,,slow conditionnel 4 s (cible dos tourné) ; relecture zone/fiabilité : zone multi
 Urgot,R,slow,set,4.0,75.0,,,,à l'impact : 0-75 % selon les PV manquants pendant 4 s
 Urgot,R,slow,exclude,,,,,,doublon — l'effet « exécution » (75 % 1.5 s autour d'Urgot) noté sur l'autre ligne
 Vex,P,slow,set,1.125,,,,,slow 1.125 s
@@ -98,7 +98,7 @@ Zac,Q,root,set,0.5,,,,,root 0.5 s avant le déplacement
 Zac,R,slow,set,1.0,,,,,slow 1 s
 Zilean,E,slow,set,2.5,,,,,slow 2.5 s
 Zyra,E,root,set,1.5,,,,,1 à 2 s selon le rang — moyenne retenue
-Aurelion Sol,E,slow,set,2.0,,,,,zone + attirance progressive vers le centre
+Aurelion Sol,E,slow,set,2.0,,,,,zone + attirance progressive vers le centre ; % slow inconnu — à compléter
 Braum,R,slow,set,2.0,,,,,zone de slow
 Cassiopeia,W,ground,set,2.0,,,,,zone de CC
 Cassiopeia,W,slow,set,2.0,,,,,zone de CC
@@ -114,6 +114,53 @@ Twitch,W,slow,set,2.0,,,,,zone de slow
 Udyr,R,slow,set,2.0,,,,,zone de slow
 Varus,E,slow,set,2.0,,,,,zone de slow
 Vladimir,W,slow,set,2.0,,,,,zone de slow autour de lui
-Bard,R,stun,set,2.5,,,,,stase type Zhonya 2.5 s — poids plein conservé (setup de combos en sortie de stase, décision Célian 2026-07-11)
+Bard,R,stun,set,2.5,,,,,stase type Zhonya 2.5 s — poids plein conservé (setup de combos en sortie de stase — décision Célian 2026-07-11)
 Mordekaiser,E,airborne,set,0.5,,,,,attirance de 250 unités — durée par défaut de pull
 Yuumi,R,slow,set,,,,,,non vérifiable sur le fandom — valeurs extraites conservées
+Alistar,E,stun,set,,,,mono,,relecture zone/fiabilité : zone mono
+Anivia,W,airborne,set,,,,multi,,relecture zone/fiabilité : zone multi
+Azir,R,airborne,set,,,,multi,,relecture zone/fiabilité : zone multi
+Bard,Q,stun,set,,,,multi,,relecture zone/fiabilité : zone multi
+Fiora,W,slow,set,,,,mono,,relecture zone/fiabilité : zone mono
+Galio,E,airborne,set,,,,multi,,relecture zone/fiabilité : zone multi
+Galio,W,taunt,set,,,,multi,,relecture zone/fiabilité : zone multi
+Jhin,W,root,set,,,,mono,,relecture zone/fiabilité : zone mono
+K'Sante,W,airborne,set,,,,multi,,relecture zone/fiabilité : zone multi
+Leona,E,root,set,,,,mono,,relecture zone/fiabilité : zone mono
+Lillia,R,sleep,set,,,,multi,,relecture zone/fiabilité : zone multi
+Lillia,R,slow,set,,,,multi,,relecture zone/fiabilité : zone multi
+Lissandra,R,slow,set,,,,multi,,relecture zone/fiabilité : zone multi
+Morgana,R,stun,set,,,1,multi,point_click,conditionnel (rester à portée) ; relecture zone/fiabilité : zone multi ; fiabilité point_click
+Nautilus,P,root,set,,,,,point_click,relecture zone/fiabilité : fiabilité point_click
+Ornn,R,airborne,set,,,,multi,,relecture zone/fiabilité : zone multi
+Rakan,R,charm,set,,,,multi,,relecture zone/fiabilité : zone multi
+Rakan,R,slow,set,,,,multi,,relecture zone/fiabilité : zone multi
+Samira,P,airborne,set,,,1,,point_click,conditionnel (prolonge un airborne existant) ; relecture zone/fiabilité : fiabilité point_click
+Sejuani,Q,airborne,set,,,,multi,,relecture zone/fiabilité : zone multi
+Sejuani,R,stun,set,,,,mono,,relecture zone/fiabilité : zone mono
+Sett,R,suppression,set,,,,mono,,relecture zone/fiabilité : zone mono
+Skarner,E,stun,set,,,,multi,,relecture zone/fiabilité : zone multi
+Skarner,E,suppression,set,,,,multi,,relecture zone/fiabilité : zone multi
+Skarner,Q,slow,set,,,,multi,,relecture zone/fiabilité : zone multi
+Thresh,R,slow,set,,,,multi,,relecture zone/fiabilité : zone multi
+Varus,R,root,set,,,,multi,,relecture zone/fiabilité : zone multi
+Ziggs,E,slow,set,,,,multi,,relecture zone/fiabilité : zone multi
+Camille,R,airborne,set,0.5,,,,,la zone dure 3.25 s mais l'airborne est bien plus court
+Ekko,W,stun,set,,,1,,,conditionnel
+Evelynn,W,charm,set,,,1,,,conditionnel
+Fizz,R,airborne,set,0.5,,,,,knockback (1 s knock-up si le leurre est intercepté)
+Fizz,R,slow,set,,60,,,,40/60/80 % selon la taille du requin — moyenne
+Hwei,R,slow,set,0.25,10,,,,"par stack, cumulable ×12"
+Janna,W,slow,set,,28,,,,20-36 % — moyenne
+LeBlanc,E,root,set,,,1,,,conditionnel
+Lee Sin,E,slow,set,,,,,,decay sur 4 s
+Nami,Q,airborne,set,1.5,,,,,airborne + stun simultanés 1.5 s (règle du max au score)
+Qiyana,R,stun,set,,,1,,,conditionnel (mur requis)
+Sejuani,E,airborne,set,,,,,,déplacement très court — conservé
+Singed,E,root,set,,,1,,,conditionnel (atterrir dans le W)
+Vayne,E,airborne,set,,,0,,,l'airborne est inconditionnel
+Vayne,E,stun,set,,,1,,,conditionnel (collision mur)
+Skarner,Q,slow,exclude,,,,,,doublon — à supprimer (relecture)
+Ashe,W,slow,add,2,25,0,multi,skillshot,applique le slow du passif Frost Shot (ligne manquante côté wiki)
+Fiddlesticks,R,fear,add,1.75,,0,multi,skillshot,l'ulti applique le fear du Q (1.25-2.25 s — moyenne) ; ligne manquante côté wiki
+Neeko,E,root,add,2.4,,1,multi,skillshot,root renforcé si le projectile traverse une unité (1.8-3 s — moyenne)

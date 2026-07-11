@@ -116,6 +116,31 @@ def test_apply_overrides_set_exclude_and_duplicates():
     assert sett["duree_s"] == 1.0  # champ vide dans l'override : non touché
 
 
+def test_apply_overrides_add_creates_missing_row():
+    """Ligne absente du wiki (W d'Ashe qui applique le passif) : action add."""
+    overrides = [
+        {
+            "champion": "Ashe",
+            "sort": "W",
+            "type_cc": "slow",
+            "action": "add",
+            "duree_s": "2",
+            "pct_slow": "25",
+            "conditionnel": "0",
+            "zone": "multi",
+            "fiabilite": "skillshot",
+            "note": "applique le passif",
+        },
+    ]
+    kept = build.apply_overrides([], overrides)
+    assert len(kept) == 1
+    row = kept[0]
+    assert (row["champion"], row["sort"], row["type_cc"]) == ("Ashe", "W", "slow")
+    assert (row["duree_s"], row["pct_slow"]) == (2.0, 25.0)
+    assert row["disponibilite"] == "base"  # dérivé du slot (R → ultimate)
+    assert row["note_relecture"].startswith("relecture (ajout)")
+
+
 def test_apply_defaults_annotates_and_fills():
     rows = [
         {
