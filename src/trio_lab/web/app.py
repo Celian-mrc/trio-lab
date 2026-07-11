@@ -125,18 +125,25 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
 
     # --- Pages HTML ---
 
+    # Un <select> vide envoie `role=` : accepter la chaîne vide (sinon 422 que
+    # hx-boost avale silencieusement — bouton « Filtrer » qui ne fait rien).
+    _ROLE_PATTERN = "^(jgl|mid|sup)?$"
+    _TRIO_SORT_PATTERN = f"^({'|'.join(queries.TRIO_SORTS)})$"
+    _DUO_SORT_PATTERN = f"^({'|'.join(queries.DUO_SORTS)})$"
+
     @app.get("/", response_class=HTMLResponse)
     def tierlist_page(
         request: Request,
         window: str | None = None,
         platform: str | None = None,
         champion: str | None = None,
-        role: str | None = Query(None, pattern="^(jgl|mid|sup)$"),
+        role: str | None = Query(None, pattern=_ROLE_PATTERN),
         min_games: int = Query(0, ge=0),
         min_tier: str = Query("faible", pattern="^(faible|moyen|eleve)$"),
-        sort: str = Query("synergy", pattern="^(synergy|wr|games)$"),
+        sort: str = Query("synergy", pattern=_TRIO_SORT_PATTERN),
         page: int = Query(1, ge=1),
     ):
+        role = role or None
         with request.app.state.pool.connection() as conn:
             window, platform, context = resolve_context(conn, window, platform)
             champion_id = resolve_champion(champion)
@@ -174,7 +181,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         roles: str = Query("jgl_mid", pattern="^(jgl_mid|jgl_sup|mid_sup)$"),
         min_games: int = Query(0, ge=0),
         min_tier: str = Query("faible", pattern="^(faible|moyen|eleve)$"),
-        sort: str = Query("synergy", pattern="^(synergy|wr|games)$"),
+        sort: str = Query("synergy", pattern=_DUO_SORT_PATTERN),
         page: int = Query(1, ge=1),
     ):
         with request.app.state.pool.connection() as conn:
@@ -208,7 +215,14 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             raise HTTPException(404, "trio non scoré sur cette fenêtre/plateforme")
         patch_window = make_window(window.split("+"))
         weights = patch_window.weights_for((jgl, mid, sup))
-        rows = queries.trio_match_rows(conn, list(patch_window.patches), platform, jgl, mid, sup)
+        rows = queries.trio_match_rows(
+            conn,
+            list(patch_window.patches),
+            None if platform == "all" else platform,  # 'all' = toutes régions
+            jgl,
+            mid,
+            sup,
+        )
         counters = queries.trio_counters(conn, window, platform, jgl, mid, sup)
         return {
             "score": score,
@@ -277,10 +291,10 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         window: str | None = None,
         platform: str | None = None,
         champion: str | None = None,
-        role: str | None = Query(None, pattern="^(jgl|mid|sup)$"),
+        role: str | None = Query(None, pattern=_ROLE_PATTERN),
         min_games: int = Query(0, ge=0),
         min_tier: str = Query("faible", pattern="^(faible|moyen|eleve)$"),
-        sort: str = Query("synergy", pattern="^(synergy|wr|games)$"),
+        sort: str = Query("synergy", pattern=_TRIO_SORT_PATTERN),
         page: int = Query(1, ge=1),
     ):
         with request.app.state.pool.connection() as conn:
@@ -290,7 +304,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 window,
                 platform,
                 champion_id=resolve_champion(champion),
-                role=role,
+                role=role or None,
                 min_games=min_games,
                 min_tier=min_tier,
                 sort=sort,
@@ -325,7 +339,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         roles: str = Query("jgl_mid", pattern="^(jgl_mid|jgl_sup|mid_sup)$"),
         min_games: int = Query(0, ge=0),
         min_tier: str = Query("faible", pattern="^(faible|moyen|eleve)$"),
-        sort: str = Query("synergy", pattern="^(synergy|wr|games)$"),
+        sort: str = Query("synergy", pattern=_DUO_SORT_PATTERN),
         page: int = Query(1, ge=1),
     ):
         with request.app.state.pool.connection() as conn:

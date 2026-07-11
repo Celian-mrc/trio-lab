@@ -99,6 +99,33 @@ def trio_prediction(duo_synergies: Iterable[float]) -> float:
     return sum(synergies) / len(synergies)
 
 
+ALL_PLATFORMS = "all"
+
+
+def add_combined_platform(
+    mapping: dict[tuple, list[tuple[str, int, int]]], label: str = ALL_PLATFORMS
+) -> None:
+    """Ajoute à `mapping` des entrées « toutes plateformes » (sommes par patch).
+
+    Les clés sont `(platform, *reste)` et les lignes `(patch, games, wins)` :
+    additives entre plateformes, donc la vue combinée est exacte — c'est une
+    matérialisation de lecture, la plateforme reste une colonne de données.
+    Mutation en place ; les entrées déjà étiquetées `label` sont ignorées
+    (idempotent).
+    """
+    combined: dict[tuple, dict[str, list[int]]] = {}
+    for (platform, *rest), rows in mapping.items():
+        if platform == label:
+            continue
+        acc = combined.setdefault((label, *rest), {})
+        for patch, games, wins in rows:
+            cell = acc.setdefault(patch, [0, 0])
+            cell[0] += games
+            cell[1] += wins
+    for key, per_patch in combined.items():
+        mapping[key] = [(patch, g, w) for patch, (g, w) in per_patch.items()]
+
+
 def smooth(raw: float, games_eff: float, prediction: float, k: float = DEFAULT_PRIOR_K) -> float:
     """Lissage bayésien du score trio vers sa prédiction duo.
 

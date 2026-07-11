@@ -32,6 +32,52 @@ DUO_ROLES: dict[str, tuple[str, str]] = {
 
 _PerPatch = list[tuple[str, int, int]]  # (patch, games, wins)
 
+# Stat de score_trio → paire (somme, dénominateur) d'agg_trio. Chaque stat a
+# son propre n : gold_diff_25 est NULL si la partie finit avant 25 min.
+STAT_PAIRS: dict[str, tuple[str, str]] = {
+    "gold_diff_10": ("gold10_sum", "gold10_n"),
+    "gold_diff_25": ("gold25_sum", "gold25_n"),
+    "vision_score": ("vision_sum", "vision_n"),
+    "drakes": ("drakes_sum", "drakes_n"),
+    "soul_rate": ("soul_sum", "soul_n"),
+    "herald_rate": ("herald_sum", "herald_n"),
+    "first_tower_rate": ("tower1_sum", "tower1_n"),
+}
+_TRIO_AGG_COLUMNS = ("games", "wins", *(col for pair in STAT_PAIRS.values() for col in pair))
+
+
+def _weighted_stats(rows: list[dict], weights: dict[str, float]) -> dict[str, float | None]:
+    """Moyennes de stats pondérées fenêtre : Σw·somme / Σw·n, None sans donnée."""
+    out: dict[str, float | None] = {}
+    for name, (sum_key, n_key) in STAT_PAIRS.items():
+        num = 0.0
+        den = 0.0
+        for row in rows:
+            weight = weights.get(row["patch"], 0.0)
+            if weight <= 0.0 or row.get(sum_key) is None or not row.get(n_key):
+                continue
+            num += weight * row[sum_key]
+            den += weight * row[n_key]
+        out[name] = num / den if den > 0.0 else None
+    return out
+
+
+def _add_combined_trio_rows(trios: dict[tuple, list[dict]]) -> None:
+    """Équivalent de `scores.add_combined_platform` pour les lignes dict d'agg_trio."""
+    combined: dict[tuple, dict[str, dict]] = {}
+    for (platform, *rest), rows in trios.items():
+        if platform == scores.ALL_PLATFORMS:
+            continue
+        acc = combined.setdefault((scores.ALL_PLATFORMS, *rest), {})
+        for row in rows:
+            cell = acc.setdefault(row["patch"], {"patch": row["patch"]})
+            for column in _TRIO_AGG_COLUMNS:
+                value = row.get(column)
+                if value is not None:
+                    cell[column] = cell.get(column, 0) + value
+    for key, per_patch in combined.items():
+        trios[key] = list(per_patch.values())
+
 
 def _load(conn: psycopg.Connection, window: PatchWindow):
     """Charge les agrégats de la fenêtre, indexés par combinaison."""
@@ -52,13 +98,23 @@ def _load(conn: psycopg.Connection, window: PatchWindow):
     ):
         duos[(platform, roles, a, b)].append((patch, games, wins))
 
-    trios: dict[tuple, _PerPatch] = defaultdict(list)
-    for platform, jgl, mid, sup, patch, games, wins in conn.execute(
-        "SELECT platform, jgl_champion, mid_champion, sup_champion, patch, games, wins"
-        " FROM agg_trio WHERE patch = ANY(%s)",
-        (patches,),
-    ):
-        trios[(platform, jgl, mid, sup)].append((patch, games, wins))
+    trios: dict[tuple, list[dict]] = defaultdict(list)
+    stat_columns = ", ".join(_TRIO_AGG_COLUMNS)
+    with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
+        for row in cur.execute(
+            f"SELECT platform, jgl_champion, mid_champion, sup_champion, patch, {stat_columns}"
+            " FROM agg_trio WHERE patch = ANY(%s)",
+            (patches,),
+        ):
+            trios[
+                (row["platform"], row["jgl_champion"], row["mid_champion"], row["sup_champion"])
+            ].append(row)
+
+    # Vue « toutes régions » : sommes par patch entre plateformes, matérialisée
+    # sous platform='all' comme n'importe quelle autre valeur de colonne.
+    scores.add_combined_platform(indiv)
+    scores.add_combined_platform(duos)
+    _add_combined_trio_rows(trios)
     return indiv, duos, trios
 
 
@@ -114,8 +170,9 @@ def refresh(
             )
 
         trio_rows: list[dict] = []
-        for (platform, jgl, mid, sup), per_patch in trios.items():
+        for (platform, jgl, mid, sup), agg_rows in trios.items():
             weights = window.weights_for((jgl, mid, sup))
+            per_patch = [(r["patch"], r["games"], r["wins"]) for r in agg_rows]
             combo = scores.weighted_wr(per_patch, weights)
             if combo is None:
                 continue
@@ -154,6 +211,7 @@ def refresh(
                     "ci_low": ci_low,
                     "ci_high": ci_high,
                     "tier": scores.reliability_tier(combo.games_eff, thresholds),
+                    **_weighted_stats(agg_rows, weights),
                 }
             )
 
@@ -177,10 +235,14 @@ def refresh(
                         """
                         INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,
                                                 sup_champion, games, games_eff, wr, synergy_raw,
-                                                synergy_pred, synergy, ci_low, ci_high, tier)
+                                                synergy_pred, synergy, ci_low, ci_high, tier,
+                                                gold_diff_10, gold_diff_25, vision_score, drakes,
+                                                soul_rate, herald_rate, first_tower_rate)
                         VALUES (%(window_label)s, %(platform)s, %(jgl_champion)s, %(mid_champion)s,
                                 %(sup_champion)s, %(games)s, %(games_eff)s, %(wr)s, %(synergy_raw)s,
-                                %(synergy_pred)s, %(synergy)s, %(ci_low)s, %(ci_high)s, %(tier)s)
+                                %(synergy_pred)s, %(synergy)s, %(ci_low)s, %(ci_high)s, %(tier)s,
+                                %(gold_diff_10)s, %(gold_diff_25)s, %(vision_score)s, %(drakes)s,
+                                %(soul_rate)s, %(herald_rate)s, %(first_tower_rate)s)
                         """,
                         trio_rows,
                     )

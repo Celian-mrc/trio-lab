@@ -160,6 +160,18 @@ def test_no_scores_yields_503(pg_sync, client):
     assert client.get("/api/trios").status_code == 503
 
 
+def test_empty_role_param_is_accepted(pg_sync, client):
+    """Régression : `role=` vide (select « tous ») renvoyait 422, que hx-boost
+    avalait — le bouton Filtrer semblait mort. Idem pour les nouveaux tris."""
+    _seed_scores(pg_sync)
+    response = client.get("/", params={"role": "", "min_tier": "moyen", "min_games": 3})
+    assert response.status_code == 200
+    assert "Aucun trio" in response.text  # tout le seed est tier 'faible'
+    assert client.get("/", params={"sort": "gold10"}).status_code == 200
+    payload = client.get("/api/trios", params={"role": "", "min_tier": "eleve"}).json()
+    assert payload["rows"] == []
+
+
 def test_api_status_reports_collection(pg_sync, client):
     _seed_scores(pg_sync)
     _seed_matches(pg_sync)

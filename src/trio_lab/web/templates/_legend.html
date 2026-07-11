@@ -1,0 +1,25 @@
+<details class="legend">
+  <summary>Comment lire ces chiffres ?</summary>
+  <ul>
+    <li><strong>Synergie</strong> : WR de la combinaison − moyenne des WR
+      individuels de ses membres, sur la même fenêtre de patchs. Les trios peu
+      joués sont lissés vers la prédiction issue de leurs 3 duos (lissage
+      bayésien, k = 200 games-équivalents) : un score extrême sur 2 games ne
+      domine pas le classement.</li>
+    <li><strong>IC 95 %</strong> : intervalle de confiance de Wilson à 95 %
+      sur le winrate — la fourchette dans laquelle le « vrai » WR se trouve
+      avec 95 % de confiance. Plus il y a de games, plus elle est étroite ;
+      sur 10 games, un WR de 70 % ne veut presque rien dire (IC ≈ 39-90 %).</li>
+    <li><strong>Fiabilité</strong> : volume de games effectifs (pondérés par
+      les poids de la fenêtre multi-patchs 1.0/0.6/0.35) —
+      <span class="tier tier-faible">faible</span> &lt; 50 ≤
+      <span class="tier tier-moyen">moyen</span> &lt; 400 ≤
+      <span class="tier tier-eleve">eleve</span>.</li>
+    <li><strong>Stats (gold, vision, objectifs)</strong> : moyennes pondérées
+      sur la fenêtre ; « — » quand la donnée n'existe pas (ex. gold @25 si
+      toutes les parties finissent avant 25 min).</li>
+    <li><strong>Région « toutes régions »</strong> : agrégat exact des
+      plateformes collectées (euw1/na1/kr), recalculé — pas une moyenne des
+      scores régionaux.</li>
+  </ul>
+</details>

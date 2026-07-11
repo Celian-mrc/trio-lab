@@ -47,6 +47,10 @@ def _load(conn: psycopg.Connection, window: PatchWindow):
         (patches,),
     ):
         matchups[(platform, jgl, mid, sup, role, enemy)].append((patch, games, wins))
+
+    # Vue « toutes régions », cohérente avec score_trio (platform='all').
+    scores.add_combined_platform(trios)
+    scores.add_combined_platform(matchups)
     return trios, matchups
 
 

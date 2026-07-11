@@ -93,3 +93,26 @@ def test_smooth_k_zero_returns_raw():
 def test_smooth_negative_k_raises():
     with pytest.raises(ValueError):
         scores.smooth(0.2, 10.0, 0.02, k=-1.0)
+
+
+# --- add_combined_platform (vue « toutes régions ») ---
+
+
+def test_add_combined_platform_sums_per_patch():
+    mapping = {
+        ("euw1", "jgl_mid", 1, 2): [("16.13", 40, 24), ("16.12", 10, 4)],
+        ("kr", "jgl_mid", 1, 2): [("16.13", 60, 30)],
+        ("kr", "jgl_mid", 9, 9): [("16.13", 5, 5)],
+    }
+    scores.add_combined_platform(mapping)
+    assert sorted(mapping[("all", "jgl_mid", 1, 2)]) == [("16.12", 10, 4), ("16.13", 100, 54)]
+    assert mapping[("all", "jgl_mid", 9, 9)] == [("16.13", 5, 5)]
+    # Les entrées régionales sont intactes.
+    assert mapping[("euw1", "jgl_mid", 1, 2)] == [("16.13", 40, 24), ("16.12", 10, 4)]
+
+
+def test_add_combined_platform_is_idempotent():
+    mapping = {("euw1", 1): [("16.13", 10, 5)]}
+    scores.add_combined_platform(mapping)
+    scores.add_combined_platform(mapping)  # les entrées 'all' sont ignorées en source
+    assert mapping[("all", 1)] == [("16.13", 10, 5)]

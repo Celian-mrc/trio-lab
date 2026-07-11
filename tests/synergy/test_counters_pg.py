@@ -47,11 +47,13 @@ async def _seed(conn, patch: str = "16.13", platform: str = "euw1") -> None:
 async def test_refresh_computes_expected_deltas(pg_conn):
     await _seed(pg_conn)
     counts = counters.refresh(windows.make_window(["16.13"]), dsn=TEST_DSN, k=200.0)
-    assert counts == {"score_trio_vs_champion": 2}
+    # ×2 : chaque matchup est aussi matérialisé en vue 'all' (une seule
+    # plateforme semée → mêmes valeurs sous platform='all').
+    assert counts == {"score_trio_vs_champion": 4}
 
     cur = await pg_conn.execute(
         "SELECT games, games_eff, wr, delta_raw, delta, ci_low, ci_high, tier"
-        " FROM score_trio_vs_champion WHERE enemy_champion = 64"
+        " FROM score_trio_vs_champion WHERE enemy_champion = 64 AND platform = 'euw1'"
     )
     games, games_eff, wr, delta_raw, delta, ci_low, ci_high, tier = await cur.fetchone()
     assert (games, games_eff) == (20, pytest.approx(20.0))
@@ -62,7 +64,8 @@ async def test_refresh_computes_expected_deltas(pg_conn):
     assert tier == "faible"  # 20 games < 50
 
     cur = await pg_conn.execute(
-        "SELECT delta_raw, delta FROM score_trio_vs_champion WHERE enemy_champion = 91"
+        "SELECT delta_raw, delta FROM score_trio_vs_champion"
+        " WHERE enemy_champion = 91 AND platform = 'euw1'"
     )
     delta_raw, delta = await cur.fetchone()
     assert delta_raw == pytest.approx(0.15)
@@ -85,7 +88,7 @@ async def test_refresh_weights_multi_patch_window(pg_conn):
 
     cur = await pg_conn.execute(
         "SELECT games, games_eff, wr, delta_raw FROM score_trio_vs_champion"
-        " WHERE enemy_champion = 64"
+        " WHERE enemy_champion = 64 AND platform = 'euw1'"
     )
     games, games_eff, wr, delta_raw = await cur.fetchone()
     assert games == 50
@@ -104,7 +107,7 @@ async def test_refresh_is_idempotent_per_window(pg_conn):
     second = counters.refresh(window, dsn=TEST_DSN)
     assert first == second
     cur = await pg_conn.execute("SELECT count(*) FROM score_trio_vs_champion")
-    assert (await cur.fetchone())[0] == 2
+    assert (await cur.fetchone())[0] == 4  # 2 matchups × (euw1 + 'all')
 
 
 async def test_enemy_rework_cuts_the_matchup(pg_conn, monkeypatch):
@@ -112,7 +115,7 @@ async def test_enemy_rework_cuts_the_matchup(pg_conn, monkeypatch):
     await _seed(pg_conn, patch="16.12")
     monkeypatch.setattr(windows, "REWORKS", {64: "16.13"})  # l'ennemi 64 retravaillé
     counts = counters.refresh(windows.make_window(["16.13", "16.12"]), dsn=TEST_DSN)
-    # Le matchup vs 64 tombe (poids nuls) ; vs 91 survit.
-    assert counts == {"score_trio_vs_champion": 1}
-    cur = await pg_conn.execute("SELECT enemy_champion FROM score_trio_vs_champion")
+    # Le matchup vs 64 tombe (poids nuls) ; vs 91 survit (euw1 + 'all').
+    assert counts == {"score_trio_vs_champion": 2}
+    cur = await pg_conn.execute("SELECT DISTINCT enemy_champion FROM score_trio_vs_champion")
     assert await cur.fetchall() == [(91,)]

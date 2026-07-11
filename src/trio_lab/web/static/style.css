@@ -45,6 +45,19 @@ table.kv td:last-child { text-align: right; font-variant-numeric: tabular-nums; 
 .champ.big small { color: var(--muted); font-size: 0.75rem; }
 .pos { color: var(--pos); }
 .neg { color: var(--neg); }
+.role-badge {
+  display: inline-block; padding: 0 0.3rem; border-radius: 4px;
+  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.03em;
+}
+.role-jgl { background: #274a2b; color: #8fd6a0; }
+.role-mid { background: #23405a; color: #86c5f2; }
+.role-sup { background: #4a3a20; color: #e0b96b; }
+th a { color: var(--muted); text-decoration: none; }
+th a:hover { color: var(--accent); }
+.table-scroll { overflow-x: auto; }
+.legend { margin-top: 1.2rem; color: var(--muted); font-size: 0.85rem; }
+.legend summary { cursor: pointer; color: var(--accent); }
+.legend li { margin: 0.4rem 0; }
 .tier { padding: 0.1rem 0.5rem; border-radius: 10px; font-size: 0.75rem; }
 .tier-faible { background: #4a3a20; color: #e0b96b; }
 .tier-moyen { background: #23405a; color: #86c5f2; }

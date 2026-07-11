@@ -50,6 +50,14 @@ async def test_refresh_counts_games_and_wins(pg_conn):
     )
     assert await cur.fetchall() == [("euw1", 2, 1)]
 
+    # Sommes de stats (007) : le builder donne un score de vision déterministe
+    # (participants 2/3/5 → 2+3+5 = 10 par match, 2 matchs).
+    cur = await pg_conn.execute(
+        "SELECT vision_sum, vision_n FROM agg_trio"
+        " WHERE jgl_champion = 2 AND mid_champion = 3 AND sup_champion = 5"
+    )
+    assert await cur.fetchall() == [(20, 2)]
+
     cur = await pg_conn.execute(
         "SELECT games, wins FROM agg_duo WHERE roles = 'jgl_mid' AND champ_a = 12 AND champ_b = 13"
     )

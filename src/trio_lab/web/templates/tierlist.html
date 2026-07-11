@@ -11,7 +11,7 @@
   </label>
   <label>Région
     <select name="platform">
-      {% for p in platforms %}<option value="{{ p }}" {{ 'selected' if p == platform }}>{{ p }}</option>{% endfor %}
+      {% for p in platforms %}<option value="{{ p }}" {{ 'selected' if p == platform }}>{{ 'toutes régions' if p == 'all' else p }}</option>{% endfor %}
     </select>
   </label>
   <label>Champion
@@ -28,7 +28,7 @@
       {% endfor %}
     </select>
   </label>
-  <label>Games min. <input type="number" name="min_games" value="{{ min_games }}" min="0" step="10"></label>
+  <label>Games min. <input type="number" name="min_games" value="{{ min_games }}" min="0" step="1"></label>
   <label>Fiabilité min.
     <select name="min_tier">
       {% for t in ('faible', 'moyen', 'eleve') %}
@@ -36,26 +36,31 @@
       {% endfor %}
     </select>
   </label>
-  <label>Tri
-    <select name="sort">
-      <option value="synergy" {{ 'selected' if sort == 'synergy' }}>synergie</option>
-      <option value="wr" {{ 'selected' if sort == 'wr' }}>winrate</option>
-      <option value="games" {{ 'selected' if sort == 'games' }}>games</option>
-    </select>
-  </label>
+  <input type="hidden" name="sort" value="{{ sort }}">
   <button type="submit">Filtrer</button>
 </form>
 
-<p class="meta">{{ total }} trios — page {{ page }} / {{ ((total - 1) // per_page) + 1 if total else 1 }}</p>
+<p class="meta">{{ total }} trios — page {{ page }} / {{ ((total - 1) // per_page) + 1 if total else 1 }} — cliquer un en-tête de colonne pour trier</p>
 
+{% set filters_qs = "window=" ~ window ~ "&platform=" ~ platform ~ "&champion=" ~ (champion | urlencode) ~ "&role=" ~ role ~ "&min_games=" ~ min_games ~ "&min_tier=" ~ min_tier %}
+{% macro th_sort(key, label, title='') %}<th {% if title %}title="{{ title }}"{% endif %}><a href="/?{{ filters_qs }}&sort={{ key }}">{{ label }}{{ ' ▼' if sort == key }}</a></th>{% endmacro %}
+
+<div class="table-scroll">
 <table>
   <thead>
     <tr>
-      <th>Trio (jgl / mid / sup)</th>
-      <th>Games</th>
-      <th>WR</th>
-      <th>Synergie</th>
-      <th>IC 95 %</th>
+      <th>Trio</th>
+      {{ th_sort('games', 'Games') }}
+      {{ th_sort('wr', 'WR') }}
+      {{ th_sort('synergy', 'Synergie') }}
+      <th title="Intervalle de confiance de Wilson à 95 % sur le winrate">IC 95 %</th>
+      {{ th_sort('gold10', 'Gold @10', 'Avantage gold moyen du trio à 10 min') }}
+      {{ th_sort('gold25', 'Gold @25', 'Avantage gold moyen du trio à 25 min') }}
+      {{ th_sort('vision', 'Vision', 'Score de vision cumulé du trio (moyenne)') }}
+      {{ th_sort('drakes', 'Drakes', 'Drakes pris par l’équipe (moyenne)') }}
+      {{ th_sort('soul', 'Âme', 'Taux d’obtention de l’âme') }}
+      {{ th_sort('herald', 'Héraut', 'Taux de prise du héraut') }}
+      {{ th_sort('tower1', '1re tour', 'Taux de première tour') }}
       <th>Fiabilité</th>
     </tr>
   </thead>
@@ -64,9 +69,9 @@
     <tr>
       <td class="trio-cell">
         <a href="/trio/{{ r.jgl_champion }}/{{ r.mid_champion }}/{{ r.sup_champion }}?window={{ window }}&platform={{ platform }}">
-          {% for cid in (r.jgl_champion, r.mid_champion, r.sup_champion) %}
+          {% for cid, rkey in ((r.jgl_champion, 'jgl'), (r.mid_champion, 'mid'), (r.sup_champion, 'sup')) %}
           {% set c = champ(cid) %}
-          <span class="champ">{% if c.icon_url %}<img src="{{ c.icon_url }}" alt="" width="24" height="24">{% endif %}{{ c.name }}</span>
+          <span class="champ"><span class="role-badge role-{{ rkey }}">{{ rkey | upper }}</span>{% if c.icon_url %}<img src="{{ c.icon_url }}" alt="" width="24" height="24">{% endif %}{{ c.name }}</span>
           {% endfor %}
         </a>
       </td>
@@ -74,17 +79,26 @@
       <td>{{ r.wr | pct }}</td>
       <td class="{{ 'pos' if r.synergy > 0 else 'neg' if r.synergy < 0 }}">{{ r.synergy | signed_pct }}</td>
       <td>{{ r.ci_low | pct(0) }} – {{ r.ci_high | pct(0) }}</td>
+      <td class="{{ 'pos' if r.gold_diff_10 and r.gold_diff_10 > 0 else 'neg' if r.gold_diff_10 and r.gold_diff_10 < 0 }}">{{ r.gold_diff_10 | signed_int }}</td>
+      <td class="{{ 'pos' if r.gold_diff_25 and r.gold_diff_25 > 0 else 'neg' if r.gold_diff_25 and r.gold_diff_25 < 0 }}">{{ r.gold_diff_25 | signed_int }}</td>
+      <td>{{ r.vision_score | num(0) }}</td>
+      <td>{{ r.drakes | num }}</td>
+      <td>{{ r.soul_rate | pct(0) }}</td>
+      <td>{{ r.herald_rate | pct(0) }}</td>
+      <td>{{ r.first_tower_rate | pct(0) }}</td>
       <td><span class="tier tier-{{ r.tier }}">{{ r.tier }}</span></td>
     </tr>
     {% else %}
-    <tr><td colspan="6" class="empty">Aucun trio ne correspond aux filtres.</td></tr>
+    <tr><td colspan="13" class="empty">Aucun trio ne correspond aux filtres.</td></tr>
     {% endfor %}
   </tbody>
 </table>
+</div>
 
-{% set base_qs = "window=" ~ window ~ "&platform=" ~ platform ~ "&champion=" ~ champion ~ "&role=" ~ role ~ "&min_games=" ~ min_games ~ "&min_tier=" ~ min_tier ~ "&sort=" ~ sort %}
 <nav class="pagination">
-  {% if page > 1 %}<a href="/?{{ base_qs }}&page={{ page - 1 }}">← précédente</a>{% endif %}
-  {% if page * per_page < total %}<a href="/?{{ base_qs }}&page={{ page + 1 }}">suivante →</a>{% endif %}
+  {% if page > 1 %}<a href="/?{{ filters_qs }}&sort={{ sort }}&page={{ page - 1 }}">← précédente</a>{% endif %}
+  {% if page * per_page < total %}<a href="/?{{ filters_qs }}&sort={{ sort }}&page={{ page + 1 }}">suivante →</a>{% endif %}
 </nav>
+
+{% include "_legend.html" %}
 {% endblock %}

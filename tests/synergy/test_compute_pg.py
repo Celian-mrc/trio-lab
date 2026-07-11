@@ -59,9 +59,13 @@ async def _seed(conn, patch: str = "16.13", platform: str = "euw1") -> None:
 async def test_refresh_computes_expected_scores(pg_conn):
     await _seed(pg_conn)
     counts = compute.refresh(windows.make_window(["16.13"]), dsn=TEST_DSN, k=200.0)
-    assert counts == {"score_duo": 3, "score_trio": 1}
+    # Chaque combinaison est aussi matérialisée en vue « toutes régions »
+    # (platform='all') — une seule plateforme semée, donc le double exact.
+    assert counts == {"score_duo": 6, "score_trio": 2}
 
-    cur = await pg_conn.execute("SELECT wr, synergy, tier FROM score_duo WHERE roles = 'jgl_mid'")
+    cur = await pg_conn.execute(
+        "SELECT wr, synergy, tier FROM score_duo WHERE roles = 'jgl_mid' AND platform = 'euw1'"
+    )
     wr, synergy, tier = await cur.fetchone()
     assert wr == pytest.approx(0.6)
     assert synergy == pytest.approx(0.05)  # .60 − (.60+.50)/2
@@ -69,7 +73,7 @@ async def test_refresh_computes_expected_scores(pg_conn):
 
     cur = await pg_conn.execute(
         "SELECT games, games_eff, wr, synergy_raw, synergy_pred, synergy, ci_low, ci_high"
-        " FROM score_trio"
+        " FROM score_trio WHERE platform = 'euw1'"
     )
     games, games_eff, wr, raw, pred, smoothed, ci_low, ci_high = await cur.fetchone()
     assert (games, games_eff) == (10, pytest.approx(10.0))
@@ -79,6 +83,37 @@ async def test_refresh_computes_expected_scores(pg_conn):
     assert pred == pytest.approx(shrunk_jgl_mid / 3)
     assert smoothed == pytest.approx((10 * 0.2 + 200 * shrunk_jgl_mid / 3) / 210)
     assert 0.0 <= ci_low < 0.7 < ci_high <= 1.0
+
+
+async def test_all_platforms_view_combines_and_averages_stats(pg_conn):
+    """La vue 'all' somme les agrégats entre plateformes ; les stats sont moyennées."""
+    await _seed(pg_conn, platform="euw1")
+    await _seed(pg_conn, platform="kr")
+    # Stats matérialisées (007) sur le trio : euw1 gold@10 +800 sur 8 games
+    # renseignées, kr +200 sur 2 ; vision seulement côté euw1.
+    await pg_conn.execute(
+        "UPDATE agg_trio SET gold10_sum = 6400, gold10_n = 8, vision_sum = 1500, vision_n = 10"
+        " WHERE platform = 'euw1'"
+    )
+    await pg_conn.execute(
+        "UPDATE agg_trio SET gold10_sum = 400, gold10_n = 2 WHERE platform = 'kr'"
+    )
+    compute.refresh(windows.make_window(["16.13"]), dsn=TEST_DSN)
+
+    cur = await pg_conn.execute(
+        "SELECT games, wr, gold_diff_10, vision_score, drakes FROM score_trio"
+        " WHERE platform = 'all'"
+    )
+    games, wr, gold10, vision, drakes = await cur.fetchone()
+    assert games == 20  # 10 euw1 + 10 kr
+    assert wr == pytest.approx(0.7)  # 7 + 7 wins
+    assert gold10 == pytest.approx((6400 + 400) / (8 + 2))  # 680
+    assert vision == pytest.approx(150.0)  # seul euw1 renseigne : 1500/10
+    assert drakes is None  # aucune donnée nulle part
+
+    # La vue régionale reste intacte à côté de la vue combinée.
+    cur = await pg_conn.execute("SELECT gold_diff_10 FROM score_trio WHERE platform = 'euw1'")
+    assert (await cur.fetchone())[0] == pytest.approx(800.0)
 
 
 async def test_refresh_weights_multi_patch_window(pg_conn):
@@ -97,7 +132,7 @@ async def test_refresh_weights_multi_patch_window(pg_conn):
     compute.refresh(windows.make_window(["16.13", "16.12"]), dsn=TEST_DSN)
 
     cur = await pg_conn.execute(
-        "SELECT games, games_eff, wr FROM score_duo WHERE roles = 'jgl_mid'"
+        "SELECT games, games_eff, wr FROM score_duo WHERE roles = 'jgl_mid' AND platform = 'euw1'"
     )
     games, games_eff, wr = await cur.fetchone()
     assert games == 140
@@ -115,7 +150,7 @@ async def test_refresh_is_idempotent_per_window(pg_conn):
     second = compute.refresh(window, dsn=TEST_DSN)
     assert first == second
     cur = await pg_conn.execute("SELECT count(*) FROM score_trio")
-    assert (await cur.fetchone())[0] == 1
+    assert (await cur.fetchone())[0] == 2  # euw1 + 'all'
 
 
 async def test_rework_cut_drops_combos_without_effective_games(pg_conn, monkeypatch):
@@ -123,7 +158,8 @@ async def test_rework_cut_drops_combos_without_effective_games(pg_conn, monkeypa
     await _seed(pg_conn, patch="16.12")
     monkeypatch.setattr(windows, "REWORKS", {1: "16.13"})  # jungler retravaillé au 16.13
     counts = compute.refresh(windows.make_window(["16.13", "16.12"]), dsn=TEST_DSN)
-    # Les combos impliquant le champion 1 (2 duos + le trio) tombent ; mid_sup survit.
-    assert counts == {"score_duo": 1, "score_trio": 0}
-    cur = await pg_conn.execute("SELECT roles FROM score_duo")
+    # Les combos impliquant le champion 1 (2 duos + le trio) tombent ; mid_sup
+    # survit (en euw1 et dans la vue 'all').
+    assert counts == {"score_duo": 2, "score_trio": 0}
+    cur = await pg_conn.execute("SELECT DISTINCT roles FROM score_duo")
     assert await cur.fetchall() == [("mid_sup",)]

@@ -13,13 +13,22 @@ from psycopg.rows import dict_row
 
 from trio_lab.synergy.windows import patch_key
 
-# Tris autorisés de la tier list → clause SQL (liste blanche, jamais interpolé
-# depuis l'extérieur).
+# Tris autorisés → clause SQL (liste blanche, jamais interpolé depuis
+# l'extérieur). Les stats matérialisées (007) trient NULLS LAST : un trio sans
+# donnée ne squatte pas le haut du classement.
 TRIO_SORTS = {
     "synergy": "synergy DESC",
     "wr": "wr DESC",
     "games": "games DESC",
+    "gold10": "gold_diff_10 DESC NULLS LAST",
+    "gold25": "gold_diff_25 DESC NULLS LAST",
+    "vision": "vision_score DESC NULLS LAST",
+    "drakes": "drakes DESC NULLS LAST",
+    "soul": "soul_rate DESC NULLS LAST",
+    "herald": "herald_rate DESC NULLS LAST",
+    "tower1": "first_tower_rate DESC NULLS LAST",
 }
+DUO_SORTS = {key: TRIO_SORTS[key] for key in ("synergy", "wr", "games")}
 DUO_ROLES = ("jgl_mid", "jgl_sup", "mid_sup")
 _TIER_AT_LEAST = {
     "faible": ("faible", "moyen", "eleve"),
@@ -81,6 +90,8 @@ def trio_tierlist(
             f"""
             SELECT jgl_champion, mid_champion, sup_champion, games, games_eff, wr,
                    synergy_raw, synergy_pred, synergy, ci_low, ci_high, tier,
+                   gold_diff_10, gold_diff_25, vision_score, drakes, soul_rate,
+                   herald_rate, first_tower_rate,
                    count(*) OVER () AS total
             FROM score_trio
             WHERE {" AND ".join(where)}
@@ -117,7 +128,7 @@ def duo_tierlist(
             FROM score_duo
             WHERE window_label = %(window)s AND platform = %(platform)s
               AND roles = %(roles)s AND games >= %(min_games)s AND tier = ANY(%(tiers)s)
-            ORDER BY {TRIO_SORTS[sort]}, games DESC, champ_a, champ_b
+            ORDER BY {DUO_SORTS[sort]}, games DESC, champ_a, champ_b
             OFFSET %(offset)s LIMIT %(per_page)s
             """,
             {
@@ -221,13 +232,18 @@ def collection_status(conn: psycopg.Connection) -> dict:
 
 
 def trio_match_rows(
-    conn: psycopg.Connection, patches: list[str], platform: str, jgl: int, mid: int, sup: int
+    conn: psycopg.Connection,
+    patches: list[str],
+    platform: str | None,
+    jgl: int,
+    mid: int,
+    sup: int,
 ) -> list[dict]:
     """Lignes match_trio_stats du trio sur les patchs de la fenêtre.
 
     Enrichies de `patch` et `game_duration_s` pour `summary.summarize` (les
-    poids de fenêtre et le profil de tempo). Volume par trio modeste :
-    l'agrégation se fait en Python, module pur.
+    poids de fenêtre et le profil de tempo). `platform=None` = toutes les
+    régions. Volume par trio modeste : l'agrégation se fait en Python.
     """
     with conn.cursor(row_factory=dict_row) as cur:
         return cur.execute(
@@ -235,8 +251,10 @@ def trio_match_rows(
             SELECT m.patch, m.game_duration_s, t.*
             FROM match_trio_stats t
             JOIN matches m USING (match_id)
-            WHERE m.patch = ANY(%s) AND m.platform = %s
-              AND t.jgl_champion = %s AND t.mid_champion = %s AND t.sup_champion = %s
+            WHERE m.patch = ANY(%(patches)s)
+              AND (%(platform)s::text IS NULL OR m.platform = %(platform)s)
+              AND t.jgl_champion = %(jgl)s AND t.mid_champion = %(mid)s
+              AND t.sup_champion = %(sup)s
             """,
-            (patches, platform, jgl, mid, sup),
+            {"patches": patches, "platform": platform, "jgl": jgl, "mid": mid, "sup": sup},
         ).fetchall()

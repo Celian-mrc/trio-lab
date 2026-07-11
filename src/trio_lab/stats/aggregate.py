@@ -47,9 +47,19 @@ _DUO_SQL = """
 
 _TRIO_SQL = """
     INSERT INTO agg_trio (patch, platform, jgl_champion, mid_champion, sup_champion,
-                          games, wins)
+                          games, wins,
+                          gold10_sum, gold10_n, gold25_sum, gold25_n,
+                          vision_sum, vision_n, drakes_sum, drakes_n,
+                          soul_sum, soul_n, herald_sum, herald_n, tower1_sum, tower1_n)
     SELECT m.patch, m.platform, t.jgl_champion, t.mid_champion, t.sup_champion,
-           count(*), count(*) FILTER (WHERE t.win)
+           count(*), count(*) FILTER (WHERE t.win),
+           sum(t.gold_diff_10), count(t.gold_diff_10),
+           sum(t.gold_diff_25), count(t.gold_diff_25),
+           sum(t.vision_score), count(t.vision_score),
+           sum(t.drakes_taken), count(t.drakes_taken),
+           count(*) FILTER (WHERE t.soul_taken), count(t.soul_taken),
+           count(*) FILTER (WHERE t.herald_taken), count(t.herald_taken),
+           count(*) FILTER (WHERE t.first_tower), count(t.first_tower)
     FROM match_trio_stats t
     JOIN matches m USING (match_id)
     WHERE m.patch = %(patch)s
