@@ -18,3 +18,8 @@ data/*
 .vscode/
 .idea/
 Thumbs.db
+
+# Captures d'écran déposées à la racine pour relecture (jamais du contenu projet)
+/*.png
+/*.jpg
+/*.jpeg
