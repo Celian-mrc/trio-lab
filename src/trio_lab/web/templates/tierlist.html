@@ -75,10 +75,12 @@
       <td>{{ r.games }}</td>
       <td>{{ r.wr | pct }}<span class="sub">{{ r.ci_low | pct(0) }}–{{ r.ci_high | pct(0) }}</span></td>
       <td class="{{ 'pos' if r.synergy > 0 else 'neg' if r.synergy < 0 }}">{{ r.synergy | signed_pct }}</td>
-      <td class="gold">
-        {% for v in (r.gold_diff_5, r.gold_diff_10, r.gold_diff_15) %}
-        <span class="{{ 'pos' if v and v > 0 else 'neg' if v and v < 0 }}">{{ v | signed_int }}</span>
-        {% endfor %}
+      <td>
+        <span class="gold-values">
+          {% for v in (r.gold_diff_5, r.gold_diff_10, r.gold_diff_15) %}
+          <span class="{{ 'pos' if v and v > 0 else 'neg' if v and v < 0 }}">{{ v | signed_int }}</span>
+          {% endfor %}
+        </span>
       </td>
       <td>{{ r.vision_score | num(0) }}</td>
       <td>{{ r.drakes | num }}</td>
