@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Tier list des duos — Trio Lab{% endblock %}
+{% block content %}
+<h1>Tier list des duos</h1>
+
+<form method="get" action="/duos" class="filters">
+  <label>Fenêtre
+    <select name="window">
+      {% for w in windows %}<option value="{{ w }}" {{ 'selected' if w == window }}>{{ w }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Région
+    <select name="platform">
+      {% for p in platforms %}<option value="{{ p }}" {{ 'selected' if p == platform }}>{{ p }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Rôles
+    <select name="roles">
+      <option value="jgl_mid" {{ 'selected' if roles == 'jgl_mid' }}>Jungle + Mid</option>
+      <option value="jgl_sup" {{ 'selected' if roles == 'jgl_sup' }}>Jungle + Support</option>
+      <option value="mid_sup" {{ 'selected' if roles == 'mid_sup' }}>Mid + Support</option>
+    </select>
+  </label>
+  <label>Games min. <input type="number" name="min_games" value="{{ min_games }}" min="0" step="10"></label>
+  <label>Fiabilité min.
+    <select name="min_tier">
+      {% for t in ('faible', 'moyen', 'eleve') %}
+      <option value="{{ t }}" {{ 'selected' if min_tier == t }}>{{ t }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Tri
+    <select name="sort">
+      <option value="synergy" {{ 'selected' if sort == 'synergy' }}>synergie</option>
+      <option value="wr" {{ 'selected' if sort == 'wr' }}>winrate</option>
+      <option value="games" {{ 'selected' if sort == 'games' }}>games</option>
+    </select>
+  </label>
+  <button type="submit">Filtrer</button>
+</form>
+
+<p class="meta">{{ total }} duos — page {{ page }} / {{ ((total - 1) // per_page) + 1 if total else 1 }}</p>
+
+<table>
+  <thead>
+    <tr><th>Duo</th><th>Games</th><th>WR</th><th>Synergie</th><th>IC 95 %</th><th>Fiabilité</th></tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      <td class="trio-cell">
+        {% for cid in (r.champ_a, r.champ_b) %}
+        {% set c = champ(cid) %}
+        <span class="champ">{% if c.icon_url %}<img src="{{ c.icon_url }}" alt="" width="24" height="24">{% endif %}{{ c.name }}</span>
+        {% endfor %}
+      </td>
+      <td>{{ r.games }}</td>
+      <td>{{ r.wr | pct }}</td>
+      <td class="{{ 'pos' if r.synergy > 0 else 'neg' if r.synergy < 0 }}">{{ r.synergy | signed_pct }}</td>
+      <td>{{ r.ci_low | pct(0) }} – {{ r.ci_high | pct(0) }}</td>
+      <td><span class="tier tier-{{ r.tier }}">{{ r.tier }}</span></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="empty">Aucun duo ne correspond aux filtres.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% set base_qs = "window=" ~ window ~ "&platform=" ~ platform ~ "&roles=" ~ roles ~ "&min_games=" ~ min_games ~ "&min_tier=" ~ min_tier ~ "&sort=" ~ sort %}
+<nav class="pagination">
+  {% if page > 1 %}<a href="/duos?{{ base_qs }}&page={{ page - 1 }}">← précédente</a>{% endif %}
+  {% if page * per_page < total %}<a href="/duos?{{ base_qs }}&page={{ page + 1 }}">suivante →</a>{% endif %}
+</nav>
+{% endblock %}

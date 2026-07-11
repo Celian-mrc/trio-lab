@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Trio Lab{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx.min.js" defer></script>
+</head>
+<!-- hx-boost : liens et formulaires deviennent des swaps AJAX, URLs canoniques. -->
+<body hx-boost="true">
+  <header>
+    <a class="brand" href="/">Trio&nbsp;Lab</a>
+    <nav>
+      <a href="/?window={{ window }}&platform={{ platform }}">Trios</a>
+      <a href="/duos?window={{ window }}&platform={{ platform }}">Duos</a>
+    </nav>
+    <span class="context">{{ window }} · {{ platform }} · Emerald+</span>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <footer>
+    Données de match via l'API Riot. Trio Lab n'est pas affilié à Riot Games.
+  </footer>
+</body>
+</html>

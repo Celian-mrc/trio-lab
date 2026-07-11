@@ -1,0 +1,66 @@
+/* Trio Lab — style volontairement minimal (Phase 5 : « léger d'abord »). */
+:root {
+  --bg: #101418; --panel: #1a2129; --text: #e8e6e3; --muted: #9aa4af;
+  --accent: #4fc3f7; --pos: #66bb6a; --neg: #ef5350; --border: #2c3540;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.5 system-ui, "Segoe UI", sans-serif;
+}
+header {
+  display: flex; align-items: center; gap: 1.5rem;
+  padding: 0.7rem 1.2rem; background: var(--panel); border-bottom: 1px solid var(--border);
+}
+.brand { font-weight: 700; font-size: 1.15rem; color: var(--accent); text-decoration: none; }
+nav a { color: var(--text); text-decoration: none; margin-right: 1rem; }
+nav a:hover { color: var(--accent); }
+.context { margin-left: auto; color: var(--muted); font-size: 0.85rem; }
+main { max-width: 1100px; margin: 0 auto; padding: 1.2rem; }
+footer { text-align: center; color: var(--muted); font-size: 0.8rem; padding: 1.5rem; }
+h1 { font-size: 1.4rem; }
+h2 { font-size: 1.1rem; margin-top: 1.6rem; }
+.filters {
+  display: flex; flex-wrap: wrap; gap: 0.8rem; align-items: end;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 0.8rem 1rem; margin-bottom: 1rem;
+}
+.filters label { display: flex; flex-direction: column; font-size: 0.8rem; color: var(--muted); gap: 0.2rem; }
+.filters input, .filters select, .filters button {
+  background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: 5px; padding: 0.35rem 0.5rem; font-size: 0.9rem;
+}
+.filters input[type="number"] { width: 6rem; }
+.filters button { background: var(--accent); color: #06232f; font-weight: 600; cursor: pointer; }
+table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 8px; overflow: hidden; }
+th, td { padding: 0.5rem 0.7rem; text-align: left; border-bottom: 1px solid var(--border); }
+th { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
+table.narrow { width: auto; min-width: 20rem; }
+table.kv td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.trio-cell a { color: var(--text); text-decoration: none; display: flex; gap: 0.9rem; }
+.trio-cell a:hover .champ { color: var(--accent); }
+.champ { display: inline-flex; align-items: center; gap: 0.35rem; }
+.champ img { border-radius: 4px; vertical-align: middle; }
+.champ.big { font-size: 1.15rem; margin-right: 1.2rem; }
+.champ.big small { color: var(--muted); font-size: 0.75rem; }
+.pos { color: var(--pos); }
+.neg { color: var(--neg); }
+.tier { padding: 0.1rem 0.5rem; border-radius: 10px; font-size: 0.75rem; }
+.tier-faible { background: #4a3a20; color: #e0b96b; }
+.tier-moyen { background: #23405a; color: #86c5f2; }
+.tier-eleve { background: #1f4a2c; color: #8fd6a0; }
+.meta { color: var(--muted); font-size: 0.85rem; }
+.empty { color: var(--muted); text-align: center; }
+.pagination { display: flex; justify-content: space-between; margin: 1rem 0; }
+.pagination a { color: var(--accent); text-decoration: none; }
+.cards { display: flex; gap: 1rem; flex-wrap: wrap; }
+.card {
+  flex: 1 1 12rem; background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 0.8rem 1rem;
+}
+.card h3 { margin: 0 0 0.3rem; font-size: 0.85rem; color: var(--muted); text-transform: uppercase; }
+.big-number { font-size: 1.6rem; font-weight: 700; margin: 0.1rem 0; }
+.big-number small { font-size: 0.8rem; color: var(--muted); font-weight: 400; }
+.columns { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+@media (max-width: 800px) { .columns { grid-template-columns: 1fr; } }
+.trio-title { display: flex; flex-wrap: wrap; gap: 0.6rem; }

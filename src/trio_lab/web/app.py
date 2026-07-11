@@ -1,0 +1,341 @@
+"""Application FastAPI : pages Jinja2 (htmx en hx-boost) + API JSON de lecture.
+
+Les routes sont des `def` synchrones (threadpool FastAPI) sur un pool psycopg
+sync — pas d'event loop psycopg, donc pas de piège Windows. `create_app` prend
+un DSN et un index champion injectables : les tests passent la base de test et
+un index fixe (aucun appel Data Dragon).
+
+    python -m trio_lab.web          # sert sur $PORT (défaut 8000)
+"""
+
+from __future__ import annotations
+
+import logging
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from psycopg_pool import ConnectionPool
+
+from trio_lab import db
+from trio_lab.synergy.windows import make_window
+from trio_lab.web import champions, queries, summary
+
+logger = logging.getLogger(__name__)
+
+_HERE = Path(__file__).resolve().parent
+
+ROLE_LABELS = {"jgl": "Jungle", "mid": "Mid", "sup": "Support"}
+COUNTERS_SHOWN = 10  # pires et meilleurs matchups affichés sur la page détail
+
+
+def _fmt_pct(value: float | None, digits: int = 1) -> str:
+    return "—" if value is None else f"{100 * value:.{digits}f} %"
+
+
+def _fmt_signed_pct(value: float | None, digits: int = 1) -> str:
+    return "—" if value is None else f"{100 * value:+.{digits}f} %"
+
+
+def _fmt_signed_int(value: float | None) -> str:
+    return "—" if value is None else f"{value:+,.0f}".replace(",", " ")
+
+
+def _fmt_num(value: float | None, digits: int = 1) -> str:
+    return "—" if value is None else f"{value:.{digits}f}"
+
+
+def _fmt_duration(value: float | None) -> str:
+    if value is None:
+        return "—"
+    minutes, seconds = divmod(int(value), 60)
+    return f"{minutes}:{seconds:02d}"
+
+
+def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
+    """Construit l'application. `champion_index` : injecté par les tests."""
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        app.state.pool = ConnectionPool(db.require_dsn(dsn), min_size=1, max_size=4, open=True)
+        yield
+        app.state.pool.close()
+
+    app = FastAPI(title="Trio Lab", lifespan=lifespan)
+    app.mount("/static", StaticFiles(directory=_HERE / "static"), name="static")
+    templates = Jinja2Templates(directory=_HERE / "templates")
+    templates.env.filters.update(
+        pct=_fmt_pct,
+        signed_pct=_fmt_signed_pct,
+        signed_int=_fmt_signed_int,
+        num=_fmt_num,
+        duration=_fmt_duration,
+    )
+    state = {"champions": champion_index}
+
+    def champ_index() -> dict[int, champions.Champion]:
+        # Fetch paresseux et mémorisé : l'app démarre même si Data Dragon est
+        # injoignable (les ids restent affichables), et retentera au prochain hit.
+        if state["champions"] is None:
+            try:
+                state["champions"] = champions.fetch_index()
+            except OSError:
+                logger.warning("Data Dragon injoignable, index champion vide pour cette requête")
+                return {}
+        return state["champions"]
+
+    def champ(champ_id: int) -> champions.Champion:
+        found = champ_index().get(champ_id)
+        return found or champions.Champion(id=champ_id, name=f"#{champ_id}", icon_url="")
+
+    templates.env.globals["champ"] = champ
+    templates.env.globals["ROLE_LABELS"] = ROLE_LABELS
+
+    def resolve_champion(name_or_id: str | None) -> int | None:
+        """Filtre champion de la tier list : nom (recherche) ou id. None si vide."""
+        if not name_or_id or not name_or_id.strip():
+            return None
+        text = name_or_id.strip()
+        if text.isdigit():
+            return int(text)
+        found = champions.name_lookup(champ_index()).get(text.casefold())
+        if found is None:
+            raise HTTPException(404, f"champion inconnu : {text}")
+        return found
+
+    def resolve_context(conn, window: str | None, platform: str | None) -> tuple[str, str, dict]:
+        """(fenêtre, plateforme) validées + le contexte commun des templates."""
+        known = queries.available_windows(conn)
+        if not known:
+            raise HTTPException(503, "aucun score matérialisé (lancer python -m trio_lab.synergy)")
+        if window is None:
+            window = known[0]
+        elif window not in known:
+            raise HTTPException(404, f"fenêtre non matérialisée : {window}")
+        platforms = queries.available_platforms(conn, window)
+        if platform is None:
+            platform = platforms[0]
+        elif platform not in platforms:
+            raise HTTPException(404, f"plateforme absente de la fenêtre : {platform}")
+        context = {"window": window, "platform": platform, "windows": known, "platforms": platforms}
+        return window, platform, context
+
+    # --- Pages HTML ---
+
+    @app.get("/", response_class=HTMLResponse)
+    def tierlist_page(
+        request: Request,
+        window: str | None = None,
+        platform: str | None = None,
+        champion: str | None = None,
+        role: str | None = Query(None, pattern="^(jgl|mid|sup)$"),
+        min_games: int = Query(0, ge=0),
+        min_tier: str = Query("faible", pattern="^(faible|moyen|eleve)$"),
+        sort: str = Query("synergy", pattern="^(synergy|wr|games)$"),
+        page: int = Query(1, ge=1),
+    ):
+        with request.app.state.pool.connection() as conn:
+            window, platform, context = resolve_context(conn, window, platform)
+            champion_id = resolve_champion(champion)
+            result = queries.trio_tierlist(
+                conn,
+                window,
+                platform,
+                champion_id=champion_id,
+                role=role,
+                min_games=min_games,
+                min_tier=min_tier,
+                sort=sort,
+                page=page,
+            )
+        return templates.TemplateResponse(
+            request,
+            "tierlist.html",
+            {
+                **context,
+                **result,
+                "champion": champion or "",
+                "role": role or "",
+                "min_games": min_games,
+                "min_tier": min_tier,
+                "sort": sort,
+                "champion_names": sorted(c.name for c in champ_index().values()),
+            },
+        )
+
+    @app.get("/duos", response_class=HTMLResponse)
+    def duos_page(
+        request: Request,
+        window: str | None = None,
+        platform: str | None = None,
+        roles: str = Query("jgl_mid", pattern="^(jgl_mid|jgl_sup|mid_sup)$"),
+        min_games: int = Query(0, ge=0),
+        min_tier: str = Query("faible", pattern="^(faible|moyen|eleve)$"),
+        sort: str = Query("synergy", pattern="^(synergy|wr|games)$"),
+        page: int = Query(1, ge=1),
+    ):
+        with request.app.state.pool.connection() as conn:
+            window, platform, context = resolve_context(conn, window, platform)
+            result = queries.duo_tierlist(
+                conn,
+                window,
+                platform,
+                roles,
+                min_games=min_games,
+                min_tier=min_tier,
+                sort=sort,
+                page=page,
+            )
+        return templates.TemplateResponse(
+            request,
+            "duos.html",
+            {
+                **context,
+                **result,
+                "roles": roles,
+                "min_games": min_games,
+                "min_tier": min_tier,
+                "sort": sort,
+            },
+        )
+
+    def _trio_detail(conn, window: str, platform: str, jgl: int, mid: int, sup: int) -> dict:
+        score = queries.trio_score(conn, window, platform, jgl, mid, sup)
+        if score is None:
+            raise HTTPException(404, "trio non scoré sur cette fenêtre/plateforme")
+        patch_window = make_window(window.split("+"))
+        weights = patch_window.weights_for((jgl, mid, sup))
+        rows = queries.trio_match_rows(conn, list(patch_window.patches), platform, jgl, mid, sup)
+        counters = queries.trio_counters(conn, window, platform, jgl, mid, sup)
+        return {
+            "score": score,
+            "stats": summary.summarize(rows, weights),
+            "duos": queries.trio_duos(conn, window, platform, jgl, mid, sup),
+            "counters_worst": counters[:COUNTERS_SHOWN],
+            "counters_best": counters[::-1][:COUNTERS_SHOWN],
+        }
+
+    @app.get("/trio/{jgl}/{mid}/{sup}", response_class=HTMLResponse)
+    def trio_page(
+        request: Request,
+        jgl: int,
+        mid: int,
+        sup: int,
+        window: str | None = None,
+        platform: str | None = None,
+    ):
+        with request.app.state.pool.connection() as conn:
+            window, platform, context = resolve_context(conn, window, platform)
+            detail = _trio_detail(conn, window, platform, jgl, mid, sup)
+        return templates.TemplateResponse(request, "trio.html", {**context, **detail})
+
+    # --- API JSON ---
+
+    def _named(row: dict) -> dict:
+        """Ajoute les noms de champions aux ids d'une ligne de score."""
+        out = dict(row)
+        for key in (
+            "jgl_champion",
+            "mid_champion",
+            "sup_champion",
+            "champ_a",
+            "champ_b",
+            "enemy_champion",
+        ):
+            if key in out:
+                out[key + "_name"] = champ(out[key]).name
+        return out
+
+    @app.get("/api/windows")
+    def api_windows(request: Request):
+        with request.app.state.pool.connection() as conn:
+            known = queries.available_windows(conn)
+            return {
+                "windows": [
+                    {"label": label, "platforms": queries.available_platforms(conn, label)}
+                    for label in known
+                ]
+            }
+
+    @app.get("/api/champions")
+    def api_champions():
+        return {
+            "champions": [vars(c) for c in sorted(champ_index().values(), key=lambda c: c.name)]
+        }
+
+    @app.get("/api/trios")
+    def api_trios(
+        request: Request,
+        window: str | None = None,
+        platform: str | None = None,
+        champion: str | None = None,
+        role: str | None = Query(None, pattern="^(jgl|mid|sup)$"),
+        min_games: int = Query(0, ge=0),
+        min_tier: str = Query("faible", pattern="^(faible|moyen|eleve)$"),
+        sort: str = Query("synergy", pattern="^(synergy|wr|games)$"),
+        page: int = Query(1, ge=1),
+    ):
+        with request.app.state.pool.connection() as conn:
+            window, platform, _ = resolve_context(conn, window, platform)
+            result = queries.trio_tierlist(
+                conn,
+                window,
+                platform,
+                champion_id=resolve_champion(champion),
+                role=role,
+                min_games=min_games,
+                min_tier=min_tier,
+                sort=sort,
+                page=page,
+            )
+        result["rows"] = [_named(r) for r in result["rows"]]
+        return {"window": window, "platform": platform, **result}
+
+    @app.get("/api/trios/{jgl}/{mid}/{sup}")
+    def api_trio_detail(
+        request: Request,
+        jgl: int,
+        mid: int,
+        sup: int,
+        window: str | None = None,
+        platform: str | None = None,
+    ):
+        with request.app.state.pool.connection() as conn:
+            window, platform, _ = resolve_context(conn, window, platform)
+            detail = _trio_detail(conn, window, platform, jgl, mid, sup)
+        detail["score"] = _named(detail["score"])
+        detail["duos"] = [_named(r) for r in detail["duos"]]
+        detail["counters_worst"] = [_named(r) for r in detail["counters_worst"]]
+        detail["counters_best"] = [_named(r) for r in detail["counters_best"]]
+        return {"window": window, "platform": platform, **detail}
+
+    @app.get("/api/duos")
+    def api_duos(
+        request: Request,
+        window: str | None = None,
+        platform: str | None = None,
+        roles: str = Query("jgl_mid", pattern="^(jgl_mid|jgl_sup|mid_sup)$"),
+        min_games: int = Query(0, ge=0),
+        min_tier: str = Query("faible", pattern="^(faible|moyen|eleve)$"),
+        sort: str = Query("synergy", pattern="^(synergy|wr|games)$"),
+        page: int = Query(1, ge=1),
+    ):
+        with request.app.state.pool.connection() as conn:
+            window, platform, _ = resolve_context(conn, window, platform)
+            result = queries.duo_tierlist(
+                conn,
+                window,
+                platform,
+                roles,
+                min_games=min_games,
+                min_tier=min_tier,
+                sort=sort,
+                page=page,
+            )
+        result["rows"] = [_named(r) for r in result["rows"]]
+        return {"window": window, "platform": platform, "roles": roles, **result}
+
+    return app

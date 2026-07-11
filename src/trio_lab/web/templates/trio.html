@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% set jgl = champ(score.jgl_champion) %}
+{% set mid = champ(score.mid_champion) %}
+{% set sup = champ(score.sup_champion) %}
+{% block title %}{{ jgl.name }} / {{ mid.name }} / {{ sup.name }} — Trio Lab{% endblock %}
+{% block content %}
+<h1 class="trio-title">
+  {% for c, label in ((jgl, 'Jungle'), (mid, 'Mid'), (sup, 'Support')) %}
+  <span class="champ big">
+    {% if c.icon_url %}<img src="{{ c.icon_url }}" alt="" width="48" height="48">{% endif %}
+    {{ c.name }} <small>{{ label }}</small>
+  </span>
+  {% endfor %}
+</h1>
+
+<section class="cards">
+  <div class="card"><h3>Winrate</h3><p class="big-number">{{ score.wr | pct }}</p>
+    <p class="meta">{{ score.games }} games · IC {{ score.ci_low | pct(0) }} – {{ score.ci_high | pct(0) }}</p></div>
+  <div class="card"><h3>Synergie</h3>
+    <p class="big-number {{ 'pos' if score.synergy > 0 else 'neg' if score.synergy < 0 }}">{{ score.synergy | signed_pct }}</p>
+    <p class="meta">brute {{ score.synergy_raw | signed_pct }} · prédiction duos {{ score.synergy_pred | signed_pct }}
+      · fiabilité <span class="tier tier-{{ score.tier }}">{{ score.tier }}</span></p></div>
+  <div class="card"><h3>Tempo</h3>
+    <p class="big-number">{{ stats.avg_duration_win_s | duration }} <small>win</small>
+       / {{ stats.avg_duration_loss_s | duration }} <small>loss</small></p>
+    <p class="meta">durée moyenne des parties</p></div>
+</section>
+
+<section>
+  <h2>Avantage gold du trio</h2>
+  <table class="narrow">
+    <thead><tr>{% for m in stats.gold_diff %}<th>{{ m }} min</th>{% endfor %}</tr></thead>
+    <tbody><tr>
+      {% for m, v in stats.gold_diff.items() %}
+      <td class="{{ 'pos' if v and v > 0 else 'neg' if v and v < 0 }}">{{ v | signed_int }}</td>
+      {% endfor %}
+    </tr></tbody>
+  </table>
+</section>
+
+<section class="columns">
+  <div>
+    <h2>Objectifs</h2>
+    <table class="narrow kv">
+      <tr><td>Grubs pris (moy.)</td><td>{{ stats.grubs_taken | num }}</td></tr>
+      <tr><td>Héraut</td><td>{{ stats.herald_taken | pct }}</td></tr>
+      <tr><td>Atakhan</td><td>{{ stats.atakhan_taken | pct }}</td></tr>
+      <tr><td>Drakes (moy.)</td><td>{{ stats.drakes_taken | num }}</td></tr>
+      <tr><td>Âme obtenue</td><td>{{ stats.soul_taken | pct }}</td></tr>
+      <tr><td>WR sans l'âme</td><td>{{ stats.wr_without_soul | pct }}</td></tr>
+      <tr><td>Premier Nashor</td><td>{{ stats.nashor_first | pct }}</td></tr>
+      <tr><td>Timing 1er Nashor</td><td>{{ stats.nashor_first_s | duration }}</td></tr>
+      <tr><td>Première tour</td><td>{{ stats.first_tower | pct }}</td></tr>
+      <tr><td>Tours détruites (moy.)</td><td>{{ stats.towers_destroyed | num }}</td></tr>
+      <tr><td>Plaques (moy.)</td><td>{{ stats.plates_taken | num }}</td></tr>
+    </table>
+  </div>
+  <div>
+    <h2>Combat & vision</h2>
+    <table class="narrow kv">
+      <tr><td>First blood (trio)</td><td>{{ stats.first_blood_trio | pct }}</td></tr>
+      <tr><td>Kill participation &lt; 15 min</td><td>{{ stats.kill_participation_pre15 | pct }}</td></tr>
+      <tr><td>Part des dégâts de l'équipe</td><td>{{ stats.damage_share | pct }}</td></tr>
+      <tr><td>Score de vision (cumul trio)</td><td>{{ stats.vision_score | num }}</td></tr>
+      <tr><td>CC infligé (s, cumul trio)</td><td>{{ stats.cc_time_s | num }}</td></tr>
+    </table>
+    <h2>Duos internes</h2>
+    <table class="narrow">
+      <thead><tr><th>Duo</th><th>Games</th><th>WR</th><th>Synergie</th></tr></thead>
+      <tbody>
+        {% for d in duos %}
+        <tr>
+          <td>{{ champ(d.champ_a).name }} + {{ champ(d.champ_b).name }}</td>
+          <td>{{ d.games }}</td>
+          <td>{{ d.wr | pct }}</td>
+          <td class="{{ 'pos' if d.synergy > 0 else 'neg' if d.synergy < 0 }}">{{ d.synergy | signed_pct }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="empty">Aucun duo scoré.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="columns">
+  {% for title, counters in (("Pires matchups", counters_worst), ("Meilleurs matchups", counters_best)) %}
+  <div>
+    <h2>{{ title }}</h2>
+    <table class="narrow">
+      <thead><tr><th>Ennemi</th><th>Rôle</th><th>Games</th><th>WR</th><th>Δ lissé</th></tr></thead>
+      <tbody>
+        {% for c in counters %}
+        {% set e = champ(c.enemy_champion) %}
+        <tr>
+          <td class="trio-cell"><span class="champ">{% if e.icon_url %}<img src="{{ e.icon_url }}" alt="" width="24" height="24">{% endif %}{{ e.name }}</span></td>
+          <td>{{ c.enemy_role | lower }}</td>
+          <td>{{ c.games }}</td>
+          <td>{{ c.wr | pct }}</td>
+          <td class="{{ 'pos' if c.delta > 0 else 'neg' if c.delta < 0 }}">{{ c.delta | signed_pct(2) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="empty">Aucun matchup enregistré.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+</section>
+{% endblock %}

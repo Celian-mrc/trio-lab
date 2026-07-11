@@ -97,12 +97,22 @@ Phase par phase : la phase N+1 ne démarre pas avant que la phase N soit verte
       resteront ~0 tant que le volume par matchup est faible — max 7 games au
       2026-07-11)
 
-## Phase 5 — Interface
+## Phase 5 — Interface ✅
 
-- [ ] API de lecture (FastAPI) sur Postgres
-- [ ] Front : tier list des trios (filtres patch/région/rang), page détail
-      trio (toutes les stats, counters), recherche par champion
-- [ ] Choix du front à valider en début de phase (léger d'abord)
+- [x] API de lecture (FastAPI) sur Postgres (`trio_lab.web` : /api/trios,
+      /api/trios/{jgl}/{mid}/{sup}, /api/duos, /api/windows, /api/champions ;
+      pool psycopg sync, routes `def` en threadpool — pas de piège event loop)
+- [x] Front : tier list des trios (filtres fenêtre/région, champion+rôle,
+      games min, fiabilité min, tri), page détail trio (stats détaillées
+      agrégées à la volée sur match_trio_stats pondérées fenêtre, duos
+      internes, pires/meilleurs matchups), tier list duos
+      (⚠️ filtre « rang » impossible : le rang n'est pas une colonne de match —
+      collecte scopée Emerald+ ; à revisiter si un jour le collector tague le
+      rang moyen par match)
+- [x] Choix du front validé le 2026-07-11 : Jinja2 + htmx (hx-boost, vendorisé
+      dans static/), un seul service à déployer ; noms/icônes champions via
+      Data Dragon (index paresseux injectable dans les tests)
+      — `python -m trio_lab.web`, port $PORT (défaut 8000)
 
 ## Phase 6 — Déploiement Railway 24/24
 
