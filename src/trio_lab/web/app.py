@@ -249,6 +249,11 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 out[key + "_name"] = champ(out[key]).name
         return out
 
+    @app.get("/api/status")
+    def api_status(request: Request):
+        with request.app.state.pool.connection() as conn:
+            return queries.collection_status(conn)
+
     @app.get("/api/windows")
     def api_windows(request: Request):
         with request.app.state.pool.connection() as conn:

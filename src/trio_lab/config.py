@@ -33,3 +33,5 @@ DATABASE_URL: str | None = _get("DATABASE_URL")
 # --- Divers ---
 LOG_LEVEL: str = _get("LOG_LEVEL", "INFO")
 DATA_DIR: Path = Path(_get("DATA_DIR", str(PROJECT_ROOT / "data")))
+# Archives timeline JSON.gz (ARCHIVE_TIMELINES=0 pour désactiver — Railway).
+ARCHIVE_TIMELINES: bool = _get("ARCHIVE_TIMELINES", "1") != "0"

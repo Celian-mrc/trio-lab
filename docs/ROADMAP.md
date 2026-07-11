@@ -106,9 +106,8 @@ Phase par phase : la phase N+1 ne démarre pas avant que la phase N soit verte
       games min, fiabilité min, tri), page détail trio (stats détaillées
       agrégées à la volée sur match_trio_stats pondérées fenêtre, duos
       internes, pires/meilleurs matchups), tier list duos
-      (⚠️ filtre « rang » impossible : le rang n'est pas une colonne de match —
-      collecte scopée Emerald+ ; à revisiter si un jour le collector tague le
-      rang moyen par match)
+      (pas de filtre « rang » : la collecte est scopée Emerald+ et l'en-tête
+      de l'interface l'affiche — décision du 2026-07-11)
 - [x] Choix du front validé le 2026-07-11 : Jinja2 + htmx (hx-boost, vendorisé
       dans static/), un seul service à déployer ; noms/icônes champions via
       Data Dragon (index paresseux injectable dans les tests)
@@ -116,7 +115,17 @@ Phase par phase : la phase N+1 ne démarre pas avant que la phase N soit verte
 
 ## Phase 6 — Déploiement Railway 24/24
 
-- [ ] Collector en service Railway permanent (les 3 régions)
-- [ ] Postgres Railway en production, rétention/rotation par patch
-- [ ] Monitoring simple : volume collecté/jour, erreurs, 429
-- [ ] Interface hébergée sur Railway (accès perso)
+- [x] Collector en service Railway permanent (les 3 régions)
+      (`python -m trio_lab.collector --service` : patch courant auto via
+      Data Dragon avec bornes de repli si PATCH_DATES incomplet, cycles
+      batch → refresh agrégats/scores/counters, archives timeline
+      débrayées via ARCHIVE_TIMELINES=0, résilience par cycle)
+- [x] Postgres Railway en production, rétention/rotation par patch
+      (`trio_lab.maintenance` : purge quotidienne des matchs au-delà des
+      3 patchs les plus récents, cascade ; agg_*/score_*/journal conservés)
+- [x] Monitoring simple : volume collecté/jour, erreurs, 429
+      (`GET /api/status` : matchs/jour 7 j par plateforme, total, dernier
+      match, compteurs journal ; 429 visibles dans les logs Railway)
+- [ ] Interface hébergée sur Railway (accès perso) — code prêt
+      (`python -m trio_lab.web`, $PORT géré) ; **déploiement dashboard à
+      faire par Célian, checklist dans `docs/DEPLOY.md`**

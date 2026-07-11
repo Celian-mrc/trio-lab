@@ -158,3 +158,19 @@ def test_unknown_window_and_trio_are_404(pg_sync, client):
 
 def test_no_scores_yields_503(pg_sync, client):
     assert client.get("/api/trios").status_code == 503
+
+
+def test_api_status_reports_collection(pg_sync, client):
+    _seed_scores(pg_sync)
+    _seed_matches(pg_sync)
+    pg_sync.execute(
+        "INSERT INTO match_fetch_journal (match_id, platform, status, reason)"
+        " VALUES ('EUW1_X', 'euw1', 'excluded', 'duration')"
+    )
+    payload = client.get("/api/status").json()
+    assert payload["total_matches"] == 2
+    assert payload["last_collected_at"] is not None
+    assert payload["matches_per_patch"] == [{"patch": "16.13", "matches": 2}]
+    assert payload["journal"] == {"excluded": 1}
+    # Les 2 matchs semés datent d'aujourd'hui : présents dans la vue 7 jours.
+    assert sum(d["matches"] for d in payload["matches_per_day"]) == 2

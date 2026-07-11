@@ -19,7 +19,12 @@ mais l'API renvoie "16.x" dans `gameVersion`. On clé sur la valeur API (16.x).
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+import json
+import logging
+import urllib.request
+from datetime import UTC, datetime, timedelta
+
+logger = logging.getLogger(__name__)
 
 # patch "major.minor" (valeur API `gameVersion`) → (start, end) UTC.
 # Sources : patch notes officielles + LoL Wiki (Patch/2026_Annual_Cycle).
@@ -67,3 +72,59 @@ def epoch_bounds_for(patch: str) -> tuple[int, int]:
     """Bornes du patch directement en epoch secondes, prêtes pour `match-v5/ids`."""
     start, end = bounds_for(patch)
     return to_epoch_seconds(start), to_epoch_seconds(end)
+
+
+# --- Mode service (Phase 6) : patch courant auto, bornes de repli ---
+
+VERSIONS_URL = "https://ddragon.leagueoflegends.com/api/versions.json"
+_USER_AGENT = "trio-lab/0.1 (resolution du patch courant)"
+# Repli quand le patch courant n'est pas dans PATCH_DATES : large fenêtre
+# glissante (cadence patch = 2 semaines + marge). Le bornage n'est qu'un
+# pré-filtre économique — `gameVersion` reste l'autorité (inclusion.py), on
+# paie juste quelques appels detail de plus sur les matchs du patch précédent.
+_FALLBACK_LOOKBACK = timedelta(days=16)
+_FALLBACK_LOOKAHEAD = timedelta(days=2)
+
+
+def from_version(version: str) -> str:
+    """Version Data Dragon → patch API "major.minor" ("16.14.1" → "16.14")."""
+    major, minor = version.split(".")[:2]
+    return f"{major}.{minor}"
+
+
+def _fetch_versions() -> list[str]:
+    request = urllib.request.Request(VERSIONS_URL, headers={"User-Agent": _USER_AGENT})
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return json.load(response)
+
+
+def current_patch() -> str:
+    """Patch courant (valeur API "16.x") via Data Dragon — pas de clé requise.
+
+    Data Dragon publie la nouvelle version quelques heures après la mise en
+    production : au pire, le service collecte quelques heures de plus sur le
+    patch sortant, ce qui est correct (les matchs restent tagués `patch`).
+    """
+    patch = from_version(_fetch_versions()[0])
+    logger.info("patch courant Data Dragon : %s", patch)
+    return patch
+
+
+def service_bounds_for(patch: str) -> tuple[datetime, datetime]:
+    """`bounds_for` avec repli pour le mode service 24/24.
+
+    Un patch absent de PATCH_DATES ne doit pas tuer le service : on borne
+    largement autour de maintenant et on signale qu'il manque les dates.
+    """
+    try:
+        return bounds_for(patch)
+    except ValueError:
+        now = datetime.now(UTC)
+        logger.warning(
+            "patch %s absent de PATCH_DATES : bornes de repli (−%d j / +%d j) — "
+            "ajouter les dates officielles dans patches.py à l'occasion",
+            patch,
+            _FALLBACK_LOOKBACK.days,
+            _FALLBACK_LOOKAHEAD.days,
+        )
+        return now - _FALLBACK_LOOKBACK, now + _FALLBACK_LOOKAHEAD

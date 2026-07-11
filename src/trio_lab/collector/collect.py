@@ -53,13 +53,18 @@ async def run(
     max_attempts: int = storage.DEFAULT_MAX_ATTEMPTS,
     data_dir: Path | None = None,
     dsn: str | None = None,
+    strict_patch_bounds: bool = True,
 ) -> dict[str, int]:
     """Collecte sur plusieurs plateformes en concurrence. Retourne les compteurs agrégés.
 
     `target` = nombre de matchs téléchargés **par plateforme** avant arrêt ;
-    `None` = boucle sans fin (mode service 24/24, Phase 6).
+    `None` = boucle sans fin. `strict_patch_bounds=False` (mode service) :
+    un patch absent de PATCH_DATES reçoit des bornes de repli au lieu
+    d'échouer — le filtre `gameVersion` reste l'autorité.
     """
-    patches.bounds_for(patch)  # échec immédiat si le patch n'est pas renseigné
+    # Échec immédiat si le patch n'est pas renseigné (sauf mode service).
+    bounds = patches.bounds_for(patch) if strict_patch_bounds else patches.service_bounds_for(patch)
+    epoch_bounds = tuple(patches.to_epoch_seconds(b) for b in bounds)
     resolved_dir = data_dir if data_dir is not None else config.DATA_DIR
     results = await asyncio.gather(
         *(
@@ -71,6 +76,7 @@ async def run(
                 max_attempts=max_attempts,
                 data_dir=resolved_dir,
                 dsn=dsn,
+                epoch_bounds=epoch_bounds,
             )
             for p in platforms
         )
@@ -91,10 +97,11 @@ async def _collect_platform(
     max_attempts: int,
     data_dir: Path,
     dsn: str | None,
+    epoch_bounds: tuple[int, int],
 ) -> Counter[str]:
     """Boucle de collecte d'une plateforme. Une connexion Postgres dédiée par boucle."""
     counts: Counter[str] = Counter()
-    start_s, end_s = patches.epoch_bounds_for(patch)
+    start_s, end_s = epoch_bounds
     last_discovery = float("-inf")
     conn = await db.connect(dsn)
     try:
@@ -184,7 +191,10 @@ async def _process_match(
         participants = parsing.participant_rows(detail)
         timeline = await client.get_match_timeline(match_id, platform=platform)
         trio_stats, objective_events = extract.extract_match(detail, timeline)
-        storage.archive_timeline(data_dir, platform, patch, match_id, timeline)
+        # Archivage débrayable (ARCHIVE_TIMELINES=0) : sur Railway le
+        # filesystem est éphémère, écrire des JSON.gz n'aurait aucun sens.
+        if config.ARCHIVE_TIMELINES:
+            storage.archive_timeline(data_dir, platform, patch, match_id, timeline)
         await storage.insert_match(conn, row, participants, trio_stats, objective_events)
         counts["downloaded"] += 1
     except parsing.ParseError as exc:

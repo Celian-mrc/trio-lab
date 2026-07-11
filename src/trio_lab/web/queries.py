@@ -190,6 +190,36 @@ def trio_counters(
         ).fetchall()
 
 
+def collection_status(conn: psycopg.Connection) -> dict:
+    """État de la collecte pour le monitoring (`/api/status`, Phase 6)."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        per_day = cur.execute(
+            """
+            SELECT to_char(collected_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day,
+                   platform, count(*) AS matches
+            FROM matches
+            WHERE collected_at > now() - interval '7 days'
+            GROUP BY 1, 2 ORDER BY 1 DESC, 2
+            """
+        ).fetchall()
+        per_patch = cur.execute(
+            "SELECT patch, count(*) AS matches FROM matches GROUP BY patch ORDER BY patch"
+        ).fetchall()
+        journal = cur.execute(
+            "SELECT status, count(*) AS entries FROM match_fetch_journal GROUP BY status"
+        ).fetchall()
+        totals = cur.execute(
+            "SELECT count(*) AS total_matches, max(collected_at) AS last_collected_at FROM matches"
+        ).fetchone()
+    return {
+        "total_matches": totals["total_matches"],
+        "last_collected_at": totals["last_collected_at"],
+        "matches_per_day": per_day,
+        "matches_per_patch": per_patch,
+        "journal": {row["status"]: row["entries"] for row in journal},
+    }
+
+
 def trio_match_rows(
     conn: psycopg.Connection, patches: list[str], platform: str, jgl: int, mid: int, sup: int
 ) -> list[dict]:

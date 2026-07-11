@@ -185,6 +185,14 @@ async def test_pipeline_dedup_exclude_and_store(store, tmp_path):
     assert trio_rows[0]["jgl_champion"] == 2  # builder : JUNGLE équipe 100 = champion 2
 
 
+async def test_archiving_can_be_disabled(store, tmp_path, monkeypatch):
+    """ARCHIVE_TIMELINES=0 (Railway, fs éphémère) : ingestion sans JSON.gz."""
+    monkeypatch.setattr(collect.config, "ARCHIVE_TIMELINES", False)
+    counts = await collect.run(platforms=["euw1"], patch=PATCH, target=100, data_dir=tmp_path)
+    assert counts["downloaded"] == 2  # l'ingestion Postgres est inchangée
+    assert store.archived == []
+
+
 async def test_second_run_downloads_nothing(store, tmp_path):
     await collect.run(platforms=["euw1"], patch=PATCH, target=100, data_dir=tmp_path)
     store.requeue_players()
