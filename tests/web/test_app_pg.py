@@ -134,6 +134,11 @@ def test_api_trio_detail_stats_and_counters(pg_sync, client):
     worst = payload["counters_worst"][0]
     assert (worst["enemy_champion_name"], worst["enemy_role"]) == ("Nocturne", "JUNGLE")
     assert worst["delta"] == pytest.approx(-0.014)
+    # Score CC théorique (Phase 2b, complément de l'empirique) : les 3 noms de
+    # la fixture existent dans le fichier gelé, donc résolus + trio = somme.
+    cc = payload["cc_theoretical"]
+    assert cc["jgl"] is not None and cc["mid"] is not None and cc["sup"] is not None
+    assert cc["trio"] == pytest.approx(cc["jgl"] + cc["mid"] + cc["sup"])
 
 
 def test_html_pages_render(pg_sync, client):
@@ -145,9 +150,19 @@ def test_html_pages_render(pg_sync, client):
     detail = client.get("/trio/1/2/3")
     assert detail.status_code == 200
     assert "Nocturne" in detail.text
+    assert "CC théorique" in detail.text
     duos = client.get("/duos")
     assert duos.status_code == 200
     assert "Ahri" in duos.text
+
+
+def test_context_bar_shows_window_volume_and_freshness(pg_sync, client):
+    """Nombre de games de la fenêtre + fraîcheur de la collecte (en-tête)."""
+    _seed_scores(pg_sync)
+    _seed_matches(pg_sync)  # 2 matchs bruts, patch 16.13, collected_at = now()
+    home = client.get("/")
+    assert "2 games" in home.text
+    assert "maj il y a quelques secondes" in home.text
 
 
 def test_unknown_window_and_trio_are_404(pg_sync, client):

@@ -62,7 +62,10 @@
       <tr><td>Kill participation &lt; 15 min</td><td>{{ stats.kill_participation_pre15 | pct }}</td></tr>
       <tr><td>Part des dégâts de l'équipe</td><td>{{ stats.damage_share | pct }}</td></tr>
       <tr><td>Score de vision (cumul trio)</td><td>{{ stats.vision_score | num }}</td></tr>
-      <tr><td>CC infligé (s, cumul trio)</td><td>{{ stats.cc_time_s | num }}</td></tr>
+      <tr><td>CC infligé (s, cumul trio, empirique)</td><td>{{ stats.cc_time_s | num }}</td></tr>
+      <tr title="Score de kit (Phase 2b) : indépendant des games jouées, immunisé aux artefacts de mesure Riot — voir la note en bas de page.">
+        <td>CC théorique (kit, Σ trio)</td><td>{{ cc_theoretical.trio | num(2) }}</td>
+      </tr>
     </table>
     <h2>Duos internes</h2>
     <table class="narrow">
@@ -107,4 +110,16 @@
   </div>
   {% endfor %}
 </section>
+
+<details class="legend">
+  <summary>CC empirique vs théorique : pourquoi ça peut diverger ?</summary>
+  <p>Le CC empirique (<code>timeCCingOthers</code>) vient de l'API Riot et peut
+  être gonflé pour certains champions dont un effet (souvent un debuff
+  multi-cibles) est compté par erreur comme du contrôle — cas connu de
+  Nocturne (~170 s/game en moyenne pour un kit ne contenant qu'une peur
+  courte). Le CC théorique est calculé uniquement à partir du kit
+  (durées/zones/fiabilité des sorts) : moins précis sur le terrain, mais
+  immunisé à ce type d'artefact. En cas de gros écart entre les deux,
+  méfiance sur l'empirique.</p>
+</details>
 {% endblock %}

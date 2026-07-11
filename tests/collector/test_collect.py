@@ -261,6 +261,26 @@ async def test_loop_survives_transient_fanout_error(store, tmp_path, monkeypatch
     assert counts["players_scanned"] == 2
 
 
+async def test_loop_reconnects_after_error(store, tmp_path, monkeypatch):
+    """Une erreur de boucle reconnecte : pas de retentative indéfinie sur une
+    connexion morte (vécu en prod : coupure Postgres pendant un resize,
+    boucle d'échecs sans fin tant que la connexion n'était pas recréée)."""
+    monkeypatch.setattr(collect, "RiotClient", _FlakyFanoutClient)
+    monkeypatch.setattr(collect, "RETRY_PAUSE_S", 0)
+    connect_calls = 0
+
+    async def counting_connect(dsn=None):
+        nonlocal connect_calls
+        connect_calls += 1
+        return _FakeConn()
+
+    monkeypatch.setattr(collect.db, "connect", counting_connect)
+    await collect.run(platforms=["euw1"], patch=PATCH, target=100, data_dir=tmp_path)
+
+    # 1 connexion initiale + 1 reconnexion après l'unique erreur de boucle.
+    assert connect_calls == 2
+
+
 class _PerPlatformClient(_FakeClient):
     """Joueurs et matchs distincts par plateforme (insensible à l'ordonnancement)."""
 

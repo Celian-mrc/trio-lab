@@ -15,11 +15,17 @@ Reprenable et idempotent : tout l'état (joueurs, matchs, journal) vit en base ;
 relancer ignore le déjà-fait. Le débit est cadencé par le rate-limit API (~1
 match = 2 appels), le téléchargement est donc séquentiel par plateforme — la
 concurrence utile est entre régions, pas dans la région.
+
+Toute erreur de boucle (429 résiduel, timeout, **connexion Postgres coupée**)
+déclenche une reconnexion avant de retenter : sans ça, une coupure complète
+(ex. resize/restart du Postgres géré) bloquerait la boucle indéfiniment sur
+la même connexion morte — vécu en prod le 11/07/2026.
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
 from collections import Counter
@@ -160,6 +166,17 @@ async def _collect_platform(
                         RETRY_PAUSE_S,
                     )
                     await asyncio.sleep(RETRY_PAUSE_S)
+                    # Reconnexion : une connexion coupée (ex. resize/restart
+                    # Postgres) ne se répare pas toute seule — sans ceci, TOUTES
+                    # les tentatives suivantes échoueraient indéfiniment sur la
+                    # même connexion morte (vécu en prod le 11/07/2026, boucle
+                    # d'erreurs sans fin malgré la base redevenue disponible).
+                    with contextlib.suppress(Exception):  # connexion déjà morte, sans importance
+                        await conn.close()
+                    try:
+                        conn = await db.connect(dsn)
+                    except Exception as reconnect_exc:  # noqa: BLE001 — retenté au tour suivant
+                        logger.warning("%s : reconnexion échouée (%s)", platform, reconnect_exc)
     finally:
         await conn.close()
     logger.info("%s : fin de collecte, %s", platform, dict(counts))

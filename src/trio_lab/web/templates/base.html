@@ -15,7 +15,11 @@
       <a href="/?window={{ window }}&platform={{ platform }}">Trios</a>
       <a href="/duos?window={{ window }}&platform={{ platform }}">Duos</a>
     </nav>
-    <span class="context">{{ window }} · {{ 'toutes régions' if platform == 'all' else platform }} · Emerald+</span>
+    <span class="context">
+      {{ window }} · {{ 'toutes régions' if platform == 'all' else platform }} · Emerald+
+      {% if window_matches is defined %}· {{ "{:,}".format(window_matches).replace(",", " ") }} games{% endif %}
+      {% if last_collected_at is defined %}· maj {{ last_collected_at | since }}{% endif %}
+    </span>
   </header>
   <main>
     {% block content %}{% endblock %}

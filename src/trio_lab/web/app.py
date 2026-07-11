@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -21,6 +22,8 @@ from fastapi.templating import Jinja2Templates
 from psycopg_pool import ConnectionPool
 
 from trio_lab import db
+from trio_lab.ccref import champions as ccref_champions
+from trio_lab.ccref import score as ccref_score
 from trio_lab.synergy.windows import make_window
 from trio_lab.web import champions, queries, summary
 
@@ -55,6 +58,27 @@ def _fmt_duration(value: float | None) -> str:
     return f"{minutes}:{seconds:02d}"
 
 
+def _fmt_since(value: datetime | None) -> str:
+    """Ancienneté relative d'un horodatage (« il y a 4 min »).
+
+    Pas d'apostrophe dans le texte (ex. « à l'instant ») : Jinja l'échapperait
+    en `&#39;` dans le HTML rendu, ce qui casse toute comparaison de chaîne
+    littérale côté tests — vécu.
+    """
+    if value is None:
+        return "jamais"
+    delta = datetime.now(UTC) - value
+    minutes = int(delta.total_seconds() // 60)
+    if minutes < 1:
+        return "il y a quelques secondes"
+    if minutes < 60:
+        return f"il y a {minutes} min"
+    hours = minutes // 60
+    if hours < 24:
+        return f"il y a {hours} h"
+    return f"il y a {hours // 24} j"
+
+
 def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
     """Construit l'application. `champion_index` : injecté par les tests."""
 
@@ -73,8 +97,9 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         signed_int=_fmt_signed_int,
         num=_fmt_num,
         duration=_fmt_duration,
+        since=_fmt_since,
     )
-    state = {"champions": champion_index}
+    state = {"champions": champion_index, "cc_theoretical": None}
 
     def champ_index() -> dict[int, champions.Champion]:
         # Fetch paresseux et mémorisé : l'app démarre même si Data Dragon est
@@ -93,6 +118,26 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
 
     templates.env.globals["champ"] = champ
     templates.env.globals["ROLE_LABELS"] = ROLE_LABELS
+
+    def cc_theoretical() -> dict[int, float]:
+        """`{champion_id: score CC théorique de kit}` (Phase 2b, fichier gelé).
+
+        Complément de la colonne CC empirique (`timeCCingOthers`), immunisé
+        aux artefacts de mesure Riot (ex. Nocturne : ~170 s/game empiriques
+        pour un kit presque sans CC dur — cf. memory phase2b-relecture-workflow,
+        déjà documenté comme écart connu). Calculé une fois, mémorisé.
+        """
+        if state["cc_theoretical"] is None:
+            name_to_id = {c.name: c.id for c in champ_index().values()}
+            mapping: dict[int, float] = {}
+            for name, score_value in ccref_score.champion_scores().items():
+                champ_id = ccref_champions.resolve(name, name_to_id)
+                if champ_id is not None:
+                    mapping[champ_id] = score_value
+            state["cc_theoretical"] = mapping
+        return state["cc_theoretical"]
+
+    templates.env.globals["cc_theoretical"] = cc_theoretical
 
     def resolve_champion(name_or_id: str | None) -> int | None:
         """Filtre champion de la tier list : nom (recherche) ou id. None si vide."""
@@ -120,7 +165,15 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             platform = platforms[0]
         elif platform not in platforms:
             raise HTTPException(404, f"plateforme absente de la fenêtre : {platform}")
-        context = {"window": window, "platform": platform, "windows": known, "platforms": platforms}
+        freshness = queries.window_freshness(conn, window)
+        context = {
+            "window": window,
+            "platform": platform,
+            "windows": known,
+            "platforms": platforms,
+            "window_matches": freshness["matches"],
+            "last_collected_at": freshness["last_collected_at"],
+        }
         return window, platform, context
 
     # --- Pages HTML ---
@@ -224,12 +277,23 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             sup,
         )
         counters = queries.trio_counters(conn, window, platform, jgl, mid, sup)
+        cc_scores = cc_theoretical()
+        jgl_cc, mid_cc, sup_cc = cc_scores.get(jgl), cc_scores.get(mid), cc_scores.get(sup)
+        members_cc = (jgl_cc, mid_cc, sup_cc)
         return {
             "score": score,
             "stats": summary.summarize(rows, weights),
             "duos": queries.trio_duos(conn, window, platform, jgl, mid, sup),
             "counters_worst": counters[:COUNTERS_SHOWN],
             "counters_best": counters[::-1][:COUNTERS_SHOWN],
+            "cc_theoretical": {
+                "jgl": jgl_cc,
+                "mid": mid_cc,
+                "sup": sup_cc,
+                # Total seulement si les 3 membres sont résolus (sinon somme
+                # partielle trompeuse — affichée comme « — » à la place).
+                "trio": sum(members_cc) if None not in members_cc else None,
+            },
         }
 
     @app.get("/trio/{jgl}/{mid}/{sup}", response_class=HTMLResponse)

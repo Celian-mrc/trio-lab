@@ -207,6 +207,22 @@ def trio_counters(
         ).fetchall()
 
 
+def window_freshness(conn: psycopg.Connection, window: str) -> dict:
+    """Volume de matchs de la fenêtre + horodatage du dernier match collecté.
+
+    `matches` de la fenêtre = matchs bruts des patchs qui la composent
+    (`window.split("+")`) ; c'est le volume réel derrière les scores affichés,
+    pas `games_eff` (pondéré) ni le nombre de combinaisons scorées.
+    """
+    patches = window.split("+")
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            "SELECT count(*) AS matches, max(collected_at) AS last_collected_at"
+            " FROM matches WHERE patch = ANY(%s)",
+            (patches,),
+        ).fetchone()
+
+
 def collection_status(conn: psycopg.Connection) -> dict:
     """État de la collecte pour le monitoring (`/api/status`, Phase 6)."""
     with conn.cursor(row_factory=dict_row) as cur:
