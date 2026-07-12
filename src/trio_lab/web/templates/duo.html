@@ -9,11 +9,11 @@
 {% block title %}{{ a.name }} / {{ b.name }} — Trio Lab{% endblock %}
 {% block content %}
 <h1 class="trio-title">
-  {% for c, label in ((a, ROLE_LABELS[role_a]), (b, ROLE_LABELS[role_b])) %}
-  <span class="champ big">
+  {% for c, key, label in ((a, role_a, ROLE_LABELS[role_a]), (b, role_b, ROLE_LABELS[role_b])) %}
+  <a class="champ big" href="/champion/{{ key }}/{{ c.id }}?window={{ window }}&platform={{ platform }}">
     {% if c.icon_url %}<img src="{{ c.icon_url }}" alt="" width="48" height="48">{% endif %}
     {{ c.name }} <small>{{ label }}</small>
-  </span>
+  </a>
   {% endfor %}
 </h1>
 <p class="meta">Stats = parties de ce duo, quel que soit le 3e membre (jgl/mid/sup selon le rôle manquant).</p>

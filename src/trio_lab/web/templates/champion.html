@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% set c = champ(champion_id) %}
+{% block title %}{{ c.name }} ({{ ROLE_LABELS[role] }}) — Trio Lab{% endblock %}
+{% block content %}
+<h1 class="trio-title">
+  <span class="champ big">
+    {% if c.icon_url %}<img src="{{ c.icon_url }}" alt="" width="48" height="48">{% endif %}
+    {{ c.name }} <small>{{ ROLE_LABELS[role] }}</small>
+  </span>
+</h1>
+<p class="meta">Winrate individuel toutes compositions confondues (même fenêtre) — pas les stats
+  d'un trio ou duo précis.</p>
+
+<section class="cards">
+  <div class="card"><h3>Winrate</h3><p class="big-number">{{ baseline.wr | pct }}</p>
+    <p class="meta">{{ baseline.games }} games</p></div>
+  <div class="card"><h3>CC théorique</h3>
+    <p class="big-number" data-tooltip="Score de kit brut (durée des stuns/roots/etc., zone, fiabilité, cooldown), avant normalisation — pas sur l'échelle 0-100 des pages trio/duo, seulement comparable entre champions." aria-label="Score de kit brut (durée des stuns/roots/etc., zone, fiabilité, cooldown), avant normalisation — pas sur l'échelle 0-100 des pages trio/duo, seulement comparable entre champions.">{{ cc_theoretical | num(2) }}</p>
+    <p class="meta">score de kit, comparable entre champions</p></div>
+</section>
+
+<section class="columns">
+  {% for partner_role, rows in partners.items() %}
+  <div>
+    <h2>Meilleurs {{ {'jgl': 'junglers', 'mid': 'mids', 'sup': 'supports'}[partner_role] }}</h2>
+    <table class="narrow">
+      <thead><tr><th>Champion</th><th>Games</th><th>WR</th><th>Synergie</th><th>Fiabilité</th></tr></thead>
+      <tbody>
+        {% for r in rows %}
+        {% set p = champ(r.partner_champion) %}
+        <tr>
+          <td class="col-combo">
+            <a class="combo" href="/champion/{{ partner_role }}/{{ r.partner_champion }}?window={{ window }}&platform={{ platform }}">
+              <span class="champ">{% if p.icon_url %}<img src="{{ p.icon_url }}" alt="" width="22" height="22">{% endif %}{{ p.name }}</span>
+            </a>
+          </td>
+          <td>{{ r.games }}</td>
+          <td>{{ r.wr | pct }}</td>
+          <td class="{{ 'pos' if r.synergy > 0 else 'neg' if r.synergy < 0 }}">{{ r.synergy | signed_pct }}</td>
+          <td><span class="tier tier-{{ r.tier }}">{{ r.tier }}</span></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="empty">Aucun duo scoré.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+</section>
+
+<section>
+  <h2>Meilleurs trios</h2>
+  <table class="data">
+    <thead>
+      <tr><th class="col-combo">Trio</th><th>Games</th><th>WR</th><th>Synergie</th><th>Fiabilité</th></tr>
+    </thead>
+    <tbody>
+      {% for t in best_trios %}
+      <tr>
+        <td class="col-combo">
+          <a class="combo" href="/trio/{{ t.jgl_champion }}/{{ t.mid_champion }}/{{ t.sup_champion }}?window={{ window }}&platform={{ platform }}">
+            {% for cid, rkey in ((t.jgl_champion, 'jgl'), (t.mid_champion, 'mid'), (t.sup_champion, 'sup')) %}
+            {% set cc = champ(cid) %}
+            <span class="champ" title="{{ ROLE_LABELS[rkey] }}"><span class="role-badge role-{{ rkey }}">{{ rkey | upper }}</span>{% if cc.icon_url %}<img src="{{ cc.icon_url }}" alt="" width="22" height="22">{% endif %}{{ cc.name }}</span>
+            {% endfor %}
+          </a>
+        </td>
+        <td>{{ t.games }}</td>
+        <td>{{ t.wr | pct }}</td>
+        <td class="{{ 'pos' if t.synergy > 0 else 'neg' if t.synergy < 0 }}">{{ t.synergy | signed_pct }}</td>
+        <td><span class="tier tier-{{ t.tier }}">{{ t.tier }}</span></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="empty">Aucun trio scoré pour ce champion dans ce rôle.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

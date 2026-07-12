@@ -31,9 +31,12 @@ logger = logging.getLogger(__name__)
 _HERE = Path(__file__).resolve().parent
 
 ROLE_LABELS = {"jgl": "Jungle", "mid": "Mid", "sup": "Support"}
+ROLE_TO_TEAM_POSITION = {"jgl": "JUNGLE", "mid": "MIDDLE", "sup": "UTILITY"}
 COUNTERS_SHOWN = 10  # pires et meilleurs matchups affichés sur la page détail
 ALLIES_SHOWN = 10  # meilleurs alliés Top/ADC affichés sur la page détail
 DUO_BEST_TRIOS_SHOWN = 10  # meilleurs 3e membres affichés sur la page détail duo
+CHAMPION_PARTNERS_SHOWN = 5  # meilleurs partenaires par rôle affichés sur la page champion
+CHAMPION_TRIOS_SHOWN = 10  # meilleurs trios affichés sur la page champion
 
 
 def _fmt_pct(value: float | None, digits: int = 1) -> str:
@@ -387,6 +390,55 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         return templates.TemplateResponse(
             request, "duo.html", {**context, "roles": roles, **detail}
         )
+
+    def _champion_detail(conn, window: str, platform: str, role: str, champion_id: int) -> dict:
+        patch_window = make_window(window.split("+"))
+        weights = patch_window.weights_for((champion_id,))
+        patches = list(patch_window.patches)
+        baseline = queries.champion_baseline(
+            conn, patches, platform, ROLE_TO_TEAM_POSITION[role], champion_id, weights
+        )
+        if baseline is None:
+            raise HTTPException(404, "champion non scoré dans ce rôle sur cette fenêtre")
+        partners = {
+            partner_role: queries.champion_best_partners(
+                conn, window, platform, roles, role, champion_id, CHAMPION_PARTNERS_SHOWN
+            )
+            for roles, partner_role in queries.CHAMPION_PARTNER_GROUPS[role]
+        }
+        best_trios = queries.trio_tierlist(
+            conn,
+            window,
+            platform,
+            champion_id=champion_id,
+            role=role,
+            sort="synergy",
+            direction="desc",
+        )["rows"][:CHAMPION_TRIOS_SHOWN]
+        cc_theoretical = queries.cc_theoretical_scores(conn).get(champion_id)
+        return {
+            "role": role,
+            "champion_id": champion_id,
+            "baseline": baseline,
+            "partners": partners,
+            "best_trios": best_trios,
+            "cc_theoretical": cc_theoretical,
+        }
+
+    @app.get("/champion/{role}/{champion_id}", response_class=HTMLResponse)
+    def champion_page(
+        request: Request,
+        role: str,
+        champion_id: int,
+        window: str | None = None,
+        platform: str | None = None,
+    ):
+        if role not in ROLE_TO_TEAM_POSITION:
+            raise HTTPException(404, f"rôle inconnu : {role!r}")
+        with request.app.state.pool.connection() as conn:
+            window, platform, context = resolve_context(conn, window, platform)
+            detail = _champion_detail(conn, window, platform, role, champion_id)
+        return templates.TemplateResponse(request, "champion.html", {**context, **detail})
 
     # --- API JSON ---
 

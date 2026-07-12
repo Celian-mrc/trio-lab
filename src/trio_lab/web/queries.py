@@ -211,6 +211,84 @@ def member_wr(
     return result.wr if result else None
 
 
+def champion_baseline(
+    conn: psycopg.Connection,
+    patches: list[str],
+    platform: str,
+    role: str,
+    champion_id: int,
+    weights: dict[str, float],
+) -> dict | None:
+    """WR + games pondérés d'un champion dans un rôle — la fiche complète
+    (contrairement à `member_wr`, qui ne renvoie que le WR pour les pages
+    trio/duo). `None` si aucun games effectif sur la fenêtre."""
+    with conn.cursor() as cur:
+        rows = cur.execute(
+            """
+            SELECT patch, sum(games) AS games, sum(wins) AS wins
+            FROM agg_champion
+            WHERE patch = ANY(%(patches)s) AND role = %(role)s AND champion_id = %(champ)s
+              AND (%(platform)s = 'all' OR platform = %(platform)s)
+            GROUP BY patch
+            """,
+            {"patches": patches, "role": role, "champ": champion_id, "platform": platform},
+        ).fetchall()
+    result = scores.weighted_wr(rows, weights)
+    if result is None:
+        return None
+    return {"wr": result.wr, "games": result.games, "games_eff": result.games_eff}
+
+
+# (roles de score_duo, rôle du partenaire) accessibles depuis chaque rôle
+# fixé — ex. depuis 'jgl' : meilleurs mids (via 'jgl_mid') et meilleurs
+# supports (via 'jgl_sup').
+CHAMPION_PARTNER_GROUPS: dict[str, tuple[tuple[str, str], ...]] = {
+    "jgl": (("jgl_mid", "mid"), ("jgl_sup", "sup")),
+    "mid": (("jgl_mid", "jgl"), ("mid_sup", "sup")),
+    "sup": (("jgl_sup", "jgl"), ("mid_sup", "mid")),
+}
+
+
+def champion_best_partners(
+    conn: psycopg.Connection,
+    window: str,
+    platform: str,
+    roles: str,
+    fixed_role: str,
+    champion_id: int,
+    limit: int,
+) -> list[dict]:
+    """Meilleurs partenaires d'un champion (rôle fixé) dans l'autre rôle du
+    couple `roles` — ex. `fixed_role='jgl'`, `roles='jgl_mid'` → meilleurs mids.
+
+    `score_duo` porte des colonnes génériques `champ_a`/`champ_b` (pas de
+    colonnes par rôle comme `score_trio`/`match_trio_stats`) : `champ_a`
+    correspond toujours au premier rôle de `roles` (cf. `compute.DUO_ROLES`).
+    """
+    role_a, _role_b = roles.split("_")
+    fixed_col, partner_col = (
+        ("champ_a", "champ_b") if fixed_role == role_a else ("champ_b", "champ_a")
+    )
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            f"""
+            SELECT {partner_col} AS partner_champion, games, games_eff, wr, synergy, tier
+            FROM score_duo
+            WHERE window_label = %(window)s AND platform = %(platform)s AND roles = %(roles)s
+              AND {fixed_col} = %(champ)s
+            ORDER BY synergy DESC, games DESC
+            LIMIT %(limit)s
+            """,
+            {
+                "window": window,
+                "platform": platform,
+                "roles": roles,
+                "champ": champion_id,
+                "limit": limit,
+            },
+        ).fetchall()
+
+
 def cc_theoretical_scores(conn: psycopg.Connection) -> dict[int, float]:
     """Score CC théorique par champion, depuis la table matérialisée (010) —
     jamais le fichier gelé : le service web ne l'embarque pas (voir Dockerfile),

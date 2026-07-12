@@ -270,6 +270,34 @@ def test_html_pages_render(pg_sync, client):
     assert "Meilleurs supports" in duo_detail.text  # roles=jgl_mid → 3e rôle libre = support
 
 
+def test_champion_page_shows_baseline_partners_and_trios(pg_sync, client):
+    _seed_scores(pg_sync)  # score_trio (1,2,3) + score_duo jgl_mid (1,2)
+    pg_sync.execute(
+        "INSERT INTO agg_champion (patch, platform, role, champion_id, games, wins)"
+        " VALUES ('16.13', 'euw1', 'JUNGLE', 1, 20, 11)"
+    )
+    pg_sync.execute(
+        "INSERT INTO champion_cc_theoretical (champion_id, score) VALUES (1, 3.0)"
+    )
+    response = client.get("/champion/jgl/1")
+    assert response.status_code == 200
+    assert "Lee Sin" in response.text
+    assert "20 games" in response.text
+    assert "Meilleurs mids" in response.text
+    assert "Ahri" in response.text  # meilleur mid via score_duo jgl_mid (1,2)
+    assert "/trio/1/2/3" in response.text  # meilleurs trios
+
+
+def test_champion_page_unknown_role_is_404(pg_sync, client):
+    _seed_scores(pg_sync)
+    assert client.get("/champion/top/1").status_code == 404
+
+
+def test_champion_page_unscored_champion_is_404(pg_sync, client):
+    _seed_scores(pg_sync)
+    assert client.get("/champion/jgl/999").status_code == 404
+
+
 def test_context_bar_shows_window_volume_and_freshness(pg_sync, client):
     """Nombre de games de la fenêtre + fraîcheur de la collecte (en-tête)."""
     _seed_scores(pg_sync)

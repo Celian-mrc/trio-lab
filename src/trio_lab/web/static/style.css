@@ -105,6 +105,8 @@ a.combo:hover .champ { color: var(--accent); }
 .champ img { border-radius: 4px; }
 .champ.big { font-size: 1.1rem; margin-right: 1.1rem; }
 .champ.big small { color: var(--muted-fg); font-size: 0.72rem; }
+a.champ.big { color: var(--foreground); text-decoration: none; }
+a.champ.big:hover { color: var(--accent); }
 .role-badge {
   display: inline-block; padding: 0.05rem 0.28rem; border-radius: 4px;
   font-size: 0.58rem; font-weight: 700; letter-spacing: 0.04em;
