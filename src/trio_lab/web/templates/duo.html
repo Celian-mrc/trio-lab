@@ -17,6 +17,10 @@
   {% endfor %}
 </h1>
 <p class="meta">Stats = parties de ce duo, quel que soit le 3e membre (jgl/mid/sup selon le rôle manquant).</p>
+<p class="meta" data-tooltip="Le jeu ne détaille les stats (gold, dégâts, vision, objectifs) que par équipe complète (5 joueurs) — jamais par duo seul. Les tableaux ci-dessous montrent donc les stats du trio complet (duo + 3e membre quelconque) dans les games où ce duo apparaît : pas les stats de ces 2 champions isolés du reste de l'équipe." aria-label="Le jeu ne détaille les stats (gold, dégâts, vision, objectifs) que par équipe complète (5 joueurs) — jamais par duo seul. Les tableaux ci-dessous montrent donc les stats du trio complet (duo + 3e membre quelconque) dans les games où ce duo apparaît : pas les stats de ces 2 champions isolés du reste de l'équipe.">
+  Important : les tableaux ci-dessous (gold, objectifs, combat & vision) sont les stats du
+  <strong>trio complet</strong> (ce duo + un 3e membre quelconque) — jamais les stats de ces 2
+  champions isolés (le jeu ne les détaille pas à ce niveau).</p>
 
 <section class="cards">
   <div class="card"><h3>Winrate</h3><p class="big-number">{{ score.wr | pct }}</p>
@@ -38,7 +42,7 @@
 </section>
 
 <section>
-  <h2>Avantage gold du duo</h2>
+  <h2>Avantage gold du trio</h2>
   <table class="narrow">
     <thead><tr>{% for m in stats.gold_diff %}<th>{{ m }} min</th>{% endfor %}</tr></thead>
     <tbody><tr>
@@ -51,7 +55,7 @@
 
 <section class="columns">
   <div>
-    <h2>Objectifs</h2>
+    <h2>Objectifs (trio)</h2>
     <table class="narrow kv">
       <tr><td>Grubs pris (moy.)</td><td>{{ stats.grubs_taken | num }}</td></tr>
       <tr><td>Héraut</td><td>{{ stats.herald_taken | pct }}</td></tr>
@@ -67,13 +71,13 @@
     </table>
   </div>
   <div>
-    <h2>Combat & vision</h2>
+    <h2>Combat & vision (trio)</h2>
     <table class="narrow kv">
       <tr><td>First blood (trio)</td><td>{{ stats.first_blood_trio | pct }}</td></tr>
       <tr><td>Kill participation &lt; 15 min</td><td>{{ stats.kill_participation_pre15 | pct }}</td></tr>
-      <tr><td>Part des dégâts de l'équipe</td><td>{{ stats.damage_share | pct }}</td></tr>
+      <tr><td>Part des dégâts du trio dans l'équipe</td><td>{{ stats.damage_share | pct }}</td></tr>
       <tr><td>Score de vision (cumul trio)</td><td>{{ stats.vision_score | num }}</td></tr>
-      <tr><td>CC infligé, mesuré en jeu (Σ timeCCingOthers)</td><td>{{ stats.cc_time_s | num }} s</td></tr>
+      <tr><td>CC infligé, mesuré en jeu (cumul trio)</td><td>{{ stats.cc_time_s | num }} s</td></tr>
     </table>
     <h2>CC — empirique vs théorique <span class="meta">(0-100, les 3 valeurs sont comparables entre elles)</span></h2>
     <p class="meta">L'empirique vient du chrono du jeu : le temps réel où ce duo (+ un 3e membre
