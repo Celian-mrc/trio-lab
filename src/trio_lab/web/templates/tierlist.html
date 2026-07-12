@@ -20,7 +20,7 @@
       {% for name in champion_names %}<option value="{{ name }}">{% endfor %}
     </datalist>
   </label>
-  <label>Rôle
+  <label data-tooltip="N'a d'effet que combiné à un champion : filtre les trios où ce champion est précisément dans ce rôle." aria-label="N'a d'effet que combiné à un champion : filtre les trios où ce champion est précisément dans ce rôle.">Rôle
     <select name="role">
       <option value="" {{ 'selected' if not role }}>tous</option>
       {% for key, label in ROLE_LABELS.items() %}
@@ -56,7 +56,7 @@
       <th>{{ sort_link('games', 'Games') }}</th>
       <th data-tooltip="Intervalle de Wilson à 95 % sous le winrate" aria-label="Intervalle de Wilson à 95 % sous le winrate">{{ sort_link('wr', 'WR') }}</th>
       <th>{{ sort_link('synergy', 'Synergie') }}</th>
-      <th data-tooltip="Avantage gold moyen du trio à 5 / 10 / 15 min" aria-label="Avantage gold moyen du trio à 5 / 10 / 15 min">
+      <th>
         <span class="gold-header">
           <span class="gold-label">Gold</span>
           <span class="gold-values">{{ sort_link('gold5', '@5') }}{{ sort_link('gold10', '@10') }}{{ sort_link('gold15', '@15') }}</span>
