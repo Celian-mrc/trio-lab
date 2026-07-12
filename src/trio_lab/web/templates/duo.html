@@ -25,7 +25,7 @@
     <p class="big-number {{ 'pos' if score.synergy > 0 else 'neg' if score.synergy < 0 }}"
        data-tooltip="Écart entre le winrate réel de ce duo et la moyenne des winrates individuels de ses 2 champions." aria-label="Écart entre le winrate réel de ce duo et la moyenne des winrates individuels de ses 2 champions.">{{ score.synergy | signed_pct }}</p>
     <p class="meta">fiabilité <span class="tier tier-{{ score.tier }}">{{ score.tier }}</span></p>
-    <p class="meta" data-tooltip="Winrate individuel de chaque champion dans son rôle (toutes compositions confondues, même fenêtre) — la moyenne de ces 2 valeurs est la base soustraite au winrate du duo pour obtenir la synergie." aria-label="Winrate individuel de chaque champion dans son rôle (toutes compositions confondues, même fenêtre) — la moyenne de ces 2 valeurs est la base soustraite au winrate du duo pour obtenir la synergie.">WR individuels : {{ a.name }} {{ member_wr.a | pct(0) }} · {{ b.name }} {{ member_wr.b | pct(0) }}</p>
+    <p class="meta" data-tooltip="Winrate individuel de chaque champion dans son rôle (toutes compositions confondues, même fenêtre) — la moyenne de ces 2 valeurs est la base soustraite au winrate du duo pour obtenir la synergie." aria-label="Winrate individuel de chaque champion dans son rôle (toutes compositions confondues, même fenêtre) — la moyenne de ces 2 valeurs est la base soustraite au winrate du duo pour obtenir la synergie.">WR individuels : {{ a.name }} {{ member_wr.a | pct }} · {{ b.name }} {{ member_wr.b | pct }}</p>
   </div>
   <div class="card"><h3>Tempo</h3>
     <p class="big-number">{{ stats.avg_duration_win_s | duration }} <small>win</small>
