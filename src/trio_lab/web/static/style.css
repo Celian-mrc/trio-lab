@@ -145,6 +145,28 @@ a.combo:hover .champ { color: var(--accent); }
 .trio-cell a { color: var(--foreground); text-decoration: none; display: flex; gap: 0.9rem; }
 .trio-cell a:hover .champ { color: var(--accent); }
 
+/* --- Tooltips CSS-only (attribut `title`) ---
+   `title` reste dans le HTML pour l'accessibilité (lecteurs d'écran, appui
+   long tactile) ; on affiche par-dessus une infobulle personnalisée, plus
+   rapide (0.15s vs ~1s natif) et repérable (soulignement pointillé sur les
+   éléments de texte, curseur "aide" partout). */
+[title] { cursor: help; position: relative; }
+span[title], .big-number[title] { border-bottom: 1px dotted var(--muted-fg); }
+[title]::after {
+  content: attr(title);
+  position: absolute; z-index: 20; top: 100%; left: 50%;
+  transform: translateX(-50%); margin-top: 0.4rem;
+  background: var(--foreground); color: var(--background);
+  font-size: 0.72rem; font-weight: 400; line-height: 1.35;
+  padding: 0.4rem 0.6rem; border-radius: 6px;
+  width: max-content; max-width: 20rem; white-space: normal;
+  text-align: left; text-transform: none; letter-spacing: normal;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity 0.1s ease 0.15s, visibility 0.1s ease 0.15s;
+}
+[title]:hover::after, [title]:focus-visible::after { opacity: 1; visibility: visible; }
+
 /* --- Légende --- */
 .legend {
   margin-top: 1.25rem; color: var(--muted-fg); font-size: 0.8rem;
