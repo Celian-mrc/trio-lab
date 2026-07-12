@@ -162,7 +162,7 @@ Vayne,E,airborne,set,,,0,,,l'airborne est inconditionnel
 Vayne,E,stun,set,,,1,,,conditionnel (collision mur)
 Skarner,Q,slow,exclude,,,,,,doublon — à supprimer (relecture)
 Ashe,W,slow,add,2,25,0,multi,skillshot,applique le slow du passif Frost Shot (ligne manquante côté wiki)
-Fiddlesticks,R,fear,add,1.75,,0,multi,skillshot,l'ulti applique le fear du Q (1.25-2.25 s — moyenne) ; ligne manquante côté wiki
+Fiddlesticks,R,fear,add,1.75,,1,multi,skillshot,l'ulti applique le fear du Q à condition que les ennemis n'aient pas la vision sur Fiddlesticks (1.25-2.25 s — moyenne) ; ligne manquante côté wiki
 Neeko,E,root,add,2.4,,1,multi,skillshot,root renforcé si le projectile traverse une unité (1.8-3 s — moyenne)
 Ambessa,E,slow,set,,,,,skillshot,relecture fiabilité : skillshot
 Amumu,R,stun,set,,,,,skillshot,relecture fiabilité : skillshot
@@ -222,3 +222,14 @@ Urgot,R,fear,set,,,1,,,conditionnel (connaissance jeu) : déclenché à l'exécu
 Vex,P,fear,set,,,1,,,conditionnel (connaissance jeu) : proc du passif sur dash ennemi — à vérifier
 Zilean,Q,stun,set,,,1,,,conditionnel (connaissance jeu) : deux bombes superposées requises — à vérifier
 Taliyah,Q,stun,exclude,,,,,,"stun du Q amélioré (Worked Ground) réservé aux monstres, pas aux champions ennemis (fandom) — dominait 55 % du score CC théorique de Taliyah, seul champion sans note_relecture sur cette ligne"
+Draven,E,airborne,set,0.5,,,,,"ne dure pas 2 s (retour utilisateur, knock-aside court, pas un airborne long) — défaut appliqué : knockback/pull 0.5 s (politique du 2026-07-10) — à vérifier"
+Gnar,E,slow,set,0.5,80.0,,multi,,"forme mega retenue (zone multi) — forme mini exclue ci-dessous, valeur identique sinon (doublon multi-formes, politique 2026-07-12 : garder la variante la plus forte)"
+Gnar,E,slow,exclude,,,,,,"forme mini exclue — cf. ligne set ci-dessus (doublon multi-formes)"
+Gnar,Q,slow,set,2.0,40.0,,multi,,"forme mega retenue (slow 40 % vs 25 %) — forme mini exclue ci-dessous (doublon multi-formes, politique 2026-07-12 : garder la variante la plus forte)"
+Gnar,Q,slow,exclude,,,,,,"forme mini exclue — cf. ligne set ci-dessus (doublon multi-formes)"
+Heimerdinger,E,slow,set,2.0,35.0,,multi,,"forme de base + amélioration ultimate, valeur identique — doublon exclu ci-dessous (politique multi-formes 2026-07-12)"
+Heimerdinger,E,slow,exclude,,,,,,"doublon — cf. ligne set ci-dessus (valeur identique entre les 2 formes)"
+Heimerdinger,E,stun,set,1.5,,,multi,,"forme de base + amélioration ultimate, valeur identique — déjà protégé par la règle du max (CC dur), doublon exclu pour la propreté des données"
+Heimerdinger,E,stun,exclude,,,,,,"doublon — cf. ligne set ci-dessus (valeur identique entre les 2 formes)"
+Kayn,W,slow,set,1.5,90.0,,multi,,"formes base/bleue/rouge, valeur identique extraite pour 2 d'entre elles — doublon exclu ci-dessous (politique multi-formes 2026-07-12)"
+Kayn,W,slow,exclude,,,,,,"doublon — cf. ligne set ci-dessus (valeur identique entre 2 des formes)"

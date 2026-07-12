@@ -93,7 +93,7 @@ Darius,W,slow,1.0,90.0,mono,point_click,base,0,0,
 Diana,R,airborne,2.0,,multi,skillshot,ultimate,1,0,relecture : relecture fiabilité : skillshot
 Diana,R,slow,2.0,50.0,multi,skillshot,ultimate,0,0,relecture : relecture fiabilité : skillshot
 Dr. Mundo,Q,slow,2.0,40.0,mono,skillshot,base,0,0,
-Draven,E,airborne,2.0,,multi,skillshot,base,1,0,
+Draven,E,airborne,0.5,,multi,skillshot,base,1,0,"relecture : ne dure pas 2 s (retour utilisateur, knock-aside court, pas un airborne long) — défaut appliqué : knockback/pull 0.5 s (politique du 2026-07-10) — à vérifier"
 Draven,E,slow,2.0,30.0,multi,skillshot,base,0,0,"%slow depuis leveling « Slow », moyenne retenue"
 Ekko,Q,slow,1.75,50.0,multi,skillshot,base,0,0,"%slow depuis leveling « Slow », moyenne retenue"
 Ekko,W,slow,2.0,40.0,multi,skillshot,base,0,0,
@@ -105,7 +105,7 @@ Fiddlesticks,E,silence,1.25,,multi,skillshot,base,0,0,
 Fiddlesticks,E,slow,1.25,40.0,multi,skillshot,base,0,0,"%slow depuis leveling « Slow », moyenne retenue"
 Fiddlesticks,Q,fear,1.6,,mono,point_click,base,0,0,"durée depuis leveling « Fear Duration », moyenne retenue"
 Fiddlesticks,Q,slow,1.6,90.0,mono,point_click,base,0,0,relecture : slow 1.6 s
-Fiddlesticks,R,fear,1.75,,multi,skillshot,ultimate,0,0,relecture (ajout) : l'ulti applique le fear du Q (1.25-2.25 s — moyenne) ; ligne manquante côté wiki
+Fiddlesticks,R,fear,1.75,,multi,skillshot,ultimate,0,1,relecture (ajout) : l'ulti applique le fear du Q à condition que les ennemis n'aient pas la vision sur Fiddlesticks (1.25-2.25 s — moyenne) ; ligne manquante côté wiki
 Fiora,E,slow,1.0,30.0,mono,point_click,base,0,0,
 Fiora,W,slow,2.0,25.0,mono,skillshot,base,0,1,relecture : relecture zone/fiabilité : zone mono
 Fiora,W,stun,2.0,,mono,skillshot,base,0,1,relecture : stun conditionnel 2 s (parade) ; relecture zone/fiabilité : zone mono
@@ -118,10 +118,8 @@ Galio,W,taunt,1.0,,multi,skillshot,base,0,0,relecture : relecture zone/fiabilit�
 Gangplank,E,slow,2.0,60.0,multi,skillshot,base,0,0,"%slow depuis leveling « Slow », moyenne retenue"
 Gangplank,R,slow,0.5,30.0,multi,skillshot,ultimate,0,0,
 Garen,Q,silence,1.5,,mono,point_click,base,0,0,
-Gnar,E,slow,0.5,80.0,mono,skillshot,base,0,0,
-Gnar,E,slow,0.5,80.0,multi,skillshot,base,0,0,
-Gnar,Q,slow,2.0,25.0,multi,skillshot,base,0,0,"%slow depuis leveling « Slow », moyenne retenue"
-Gnar,Q,slow,2.0,40.0,multi,skillshot,base,0,0,"%slow depuis leveling « Slow », moyenne retenue"
+Gnar,E,slow,0.5,80.0,multi,skillshot,base,0,0,"relecture : forme mega retenue (zone multi) — forme mini exclue ci-dessous, valeur identique sinon (doublon multi-formes, politique 2026-07-12 : garder la variante la plus forte)"
+Gnar,Q,slow,2.0,40.0,multi,skillshot,base,0,0,"relecture : forme mega retenue (slow 40 % vs 25 %) — forme mini exclue ci-dessous (doublon multi-formes, politique 2026-07-12 : garder la variante la plus forte)"
 Gnar,R,airborne,1.5,,multi,skillshot,ultimate,1,0,"durée depuis leveling « Disable Duration », moyenne retenue"
 Gnar,R,slow,1.5,45.0,multi,skillshot,ultimate,0,1,"durée depuis leveling « Disable Duration », moyenne retenue ; conditionnel (collision/charge) — heuristique, à vérifier"
 Gnar,R,stun,1.5,,multi,skillshot,ultimate,0,1,"durée depuis leveling « Disable Duration », moyenne retenue ; conditionnel (collision/charge) — heuristique, à vérifier"
@@ -136,10 +134,8 @@ Hecarim,E,airborne,0.5,,mono,point_click,base,1,0,défaut appliqué : knockback/
 Hecarim,E,stun,0.25,,mono,point_click,base,0,0,
 Hecarim,R,fear,1.125,,multi,skillshot,ultimate,0,0,"durée variable ({{pp|type=distance traveled|0.75 to 1.5 for 11|0 to 1000}}), moyenne retenue"
 Hecarim,R,slow,1.125,49.5,multi,skillshot,ultimate,0,0,relecture : slow 1.125 s
-Heimerdinger,E,slow,2.0,35.0,multi,skillshot,base,0,0,
-Heimerdinger,E,slow,2.0,35.0,multi,skillshot,base,0,0,
-Heimerdinger,E,stun,1.5,,multi,skillshot,base,0,0,
-Heimerdinger,E,stun,1.5,,multi,skillshot,base,0,0,
+Heimerdinger,E,slow,2.0,35.0,multi,skillshot,base,0,0,"relecture : forme de base + amélioration ultimate, valeur identique — doublon exclu ci-dessous (politique multi-formes 2026-07-12)"
+Heimerdinger,E,stun,1.5,,multi,skillshot,base,0,0,"relecture : forme de base + amélioration ultimate, valeur identique — déjà protégé par la règle du max (CC dur), doublon exclu pour la propreté des données"
 Hwei,E,airborne,0.5,,multi,skillshot,base,1,0,défaut appliqué : knockback/pull 0.5 s — à vérifier
 Hwei,E,slow,,35.0,multi,skillshot,base,0,0,
 Hwei,E,slow,1.25,55.0,multi,skillshot,base,0,0,"%slow depuis leveling « Slow », moyenne retenue"
@@ -186,8 +182,7 @@ Karthus,W,slow,5.0,60.0,mono,skillshot,base,0,0,"%slow depuis leveling « Slow �
 Kassadin,E,slow,1.0,60.0,multi,skillshot,base,0,0,"%slow depuis leveling « Slow », moyenne retenue"
 Kayle,Q,slow,2.0,35.0,mono,skillshot,base,0,0,"%slow depuis leveling « Slow », moyenne retenue"
 Kayn,W,airborne,1.0,,multi,skillshot,base,0,0,forme Rhaast
-Kayn,W,slow,1.5,90.0,multi,skillshot,base,0,0,
-Kayn,W,slow,1.5,90.0,multi,skillshot,base,0,0,forme Rhaast
+Kayn,W,slow,1.5,90.0,multi,skillshot,base,0,0,"relecture : formes base/bleue/rouge, valeur identique extraite pour 2 d'entre elles — doublon exclu ci-dessous (politique multi-formes 2026-07-12)"
 Kennen,P,stun,1.25,,multi,skillshot,base,0,1,relecture : conditionnel (connaissance jeu) : 3 marques d'énergie requises — à vérifier
 Kha'Zix,P,slow,2.0,25.0,mono,point_click,base,0,1,relecture : relecture fiabilité : point_click ; relecture conditionnel : 1 (cible isolée requise)
 Kha'Zix,W,slow,2.0,40.0,multi,skillshot,base,0,0,
