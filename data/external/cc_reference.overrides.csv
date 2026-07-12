@@ -233,3 +233,5 @@ Heimerdinger,E,stun,set,1.5,,,multi,,"forme de base + amélioration ultimate, va
 Heimerdinger,E,stun,exclude,,,,,,"doublon — cf. ligne set ci-dessus (valeur identique entre les 2 formes)"
 Kayn,W,slow,set,1.5,90.0,,multi,,"formes base/bleue/rouge, valeur identique extraite pour 2 d'entre elles — doublon exclu ci-dessous (politique multi-formes 2026-07-12)"
 Kayn,W,slow,exclude,,,,,,"doublon — cf. ligne set ci-dessus (valeur identique entre 2 des formes)"
+Yunara,W,slow,set,1.5,99.0,1,multi,,"W amélioré par l'ultimate (retour utilisateur) — variante la plus forte retenue (1.5 s conditionnel > 1.0 s inconditionnel une fois les coefficients appliqués), variante de base exclue ci-dessous (politique multi-formes 2026-07-12)"
+Yunara,W,slow,exclude,,,,,,"variante de base exclue — cf. ligne set ci-dessus (doublon multi-formes)"

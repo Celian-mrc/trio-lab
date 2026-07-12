@@ -466,8 +466,7 @@ Yone,R,airborne,1.0,,multi,skillshot,ultimate,1,0,
 Yone,R,stun,1.0,,multi,skillshot,ultimate,0,0,
 Yorick,E,slow,1.5,30.0,multi,skillshot,base,0,0,
 Yorick,W,airborne,0.25,,multi,skillshot,base,1,0,
-Yunara,W,slow,1.5,99.0,multi,skillshot,base,0,1,"conditionnel (collision/charge) — heuristique, à vérifier"
-Yunara,W,slow,1.0,99.0,multi,skillshot,base,0,0,
+Yunara,W,slow,1.5,99.0,multi,skillshot,base,0,1,"relecture : W amélioré par l'ultimate (retour utilisateur) — variante la plus forte retenue (1.5 s conditionnel > 1.0 s inconditionnel une fois les coefficients appliqués), variante de base exclue ci-dessous (politique multi-formes 2026-07-12)"
 Yuumi,Q,slow,1.0,20.0,mono,skillshot,base,0,0,
 Yuumi,R,slow,1.25,10.0,multi,skillshot,ultimate,0,0,relecture : non vérifiable sur le fandom — valeurs extraites conservées
 Zaahen,Q,airborne,0.75,,mono,point_click,base,0,0,
