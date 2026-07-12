@@ -221,13 +221,14 @@ def test_html_pages_render(pg_sync, client):
     assert "Détail du calcul théorique" in detail.text
     assert "Mélangé (recommandé)" in detail.text
     assert "Meilleurs alliés" in detail.text
+    assert "/duo/jgl_mid/1/2" in detail.text  # lien depuis les duos internes
     duos = client.get("/duos")
     assert duos.status_code == 200
     assert "Ahri" in duos.text
     assert "/duo/jgl_mid/1/2" in duos.text  # lien vers la page détail duo
     duo_detail = client.get("/duo/jgl_mid/1/2")
     assert duo_detail.status_code == 200
-    assert "Meilleurs 3" in duo_detail.text
+    assert "Meilleurs supports" in duo_detail.text  # roles=jgl_mid → 3e rôle libre = support
 
 
 def test_context_bar_shows_window_volume_and_freshness(pg_sync, client):

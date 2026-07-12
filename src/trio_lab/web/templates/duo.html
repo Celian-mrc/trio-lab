@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 {% set duo_role_keys = {'jgl_mid': ('jgl', 'mid'), 'jgl_sup': ('jgl', 'sup'), 'mid_sup': ('mid', 'sup')} %}
 {% set role_a, role_b = duo_role_keys[roles] %}
+{# Rôle du "3e membre" : le seul rôle qui ne fait pas déjà partie du duo. #}
+{% set missing_role = {'jgl_mid': 'sup', 'jgl_sup': 'mid', 'mid_sup': 'jgl'}[roles] %}
+{% set missing_role_plural = {'jgl_mid': 'supports', 'jgl_sup': 'mids', 'mid_sup': 'junglers'}[roles] %}
 {% set a = champ(score.champ_a) %}
 {% set b = champ(score.champ_b) %}
 {% block title %}{{ a.name }} / {{ b.name }} — Trio Lab{% endblock %}
@@ -94,8 +97,9 @@
 </section>
 
 <section>
-  <h2>Meilleurs 3<sup>e</sup> membres</h2>
-  <p class="meta">Meilleurs trios formés à partir de ce duo, triés par synergie.</p>
+  <h2>Meilleurs {{ missing_role_plural }}</h2>
+  <p class="meta">Meilleur {{ ROLE_LABELS[missing_role] | lower }} à ajouter à ce duo (seul rôle
+    encore libre dans un trio), trié par synergie.</p>
   <table class="narrow">
     <thead><tr><th>Trio</th><th>Games</th><th>WR</th><th>Synergie</th><th>Fiabilité</th></tr></thead>
     <tbody>

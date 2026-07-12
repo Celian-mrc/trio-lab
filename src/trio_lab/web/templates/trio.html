@@ -100,7 +100,7 @@
       <tbody>
         {% for d in duos %}
         <tr>
-          <td>{{ champ(d.champ_a).name }} + {{ champ(d.champ_b).name }}</td>
+          <td class="trio-cell"><a href="/duo/{{ d.roles }}/{{ d.champ_a }}/{{ d.champ_b }}?window={{ window }}&platform={{ platform }}">{{ champ(d.champ_a).name }} + {{ champ(d.champ_b).name }}</a></td>
           <td>{{ d.games }}</td>
           <td>{{ d.wr | pct }}</td>
           <td class="{{ 'pos' if d.synergy > 0 else 'neg' if d.synergy < 0 }}">{{ d.synergy | signed_pct }}</td>
