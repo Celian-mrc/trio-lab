@@ -221,3 +221,4 @@ Tahm Kench,Q,stun,set,,,1,,,conditionnel (connaissance jeu) : 3 stacks d'An Acqu
 Urgot,R,fear,set,,,1,,,conditionnel (connaissance jeu) : déclenché à l'exécution de la cible — à vérifier
 Vex,P,fear,set,,,1,,,conditionnel (connaissance jeu) : proc du passif sur dash ennemi — à vérifier
 Zilean,Q,stun,set,,,1,,,conditionnel (connaissance jeu) : deux bombes superposées requises — à vérifier
+Taliyah,Q,stun,exclude,,,,,,"stun du Q amélioré (Worked Ground) réservé aux monstres, pas aux champions ennemis (fandom) — dominait 55 % du score CC théorique de Taliyah, seul champion sans note_relecture sur cette ligne"

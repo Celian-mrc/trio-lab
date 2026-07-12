@@ -1,4 +1,4 @@
-# cc_reference.draft.csv — BROUILLON généré le 2026-07-11 par `python -m trio_lab.ccref`.
+# cc_reference.draft.csv — BROUILLON généré le 2026-07-12 par `python -m trio_lab.ccref`.
 # NE PAS FIGER SANS RELECTURE HUMAINE (CLAUDE.md règle 4) : durées/%slow extraits
 # par heuristiques depuis la prose du wiki ; toute ligne avec `note_relecture`
 # non vide demande une vérification. Après relecture : renommer en
@@ -400,7 +400,6 @@ Tahm Kench,W,stun,1.0,,multi,skillshot,base,0,0,
 Taliyah,E,slow,2.0,20.0,multi,skillshot,base,0,0,relecture : zone de slow
 Taliyah,E,stun,0.75,,multi,skillshot,base,0,1,relecture : stun conditionnel 0.75 s (dash à travers les mines)
 Taliyah,Q,slow,1.5,30.0,multi,skillshot,base,0,0,"%slow depuis leveling « Slow », moyenne retenue"
-Taliyah,Q,stun,3.0,,multi,skillshot,base,0,0,
 Taliyah,R,airborne,0.5,,multi,skillshot,ultimate,1,0,relecture : le mur dure mais le hop est de 0.5 s ; relecture zone/fiabilité : zone multi
 Taliyah,W,airborne,1.0,,multi,skillshot,base,1,0,
 Taric,E,stun,1.5,,multi,skillshot,base,0,0,
