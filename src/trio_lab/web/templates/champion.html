@@ -10,10 +10,6 @@
 </h1>
 <p class="meta">Winrate individuel toutes compositions confondues (même fenêtre) — pas les stats
   d'un trio ou duo précis.</p>
-<p class="meta" data-tooltip="Le jeu ne détaille les stats (gold, dégâts, vision, objectifs) que par équipe complète (5 joueurs) — jamais par joueur seul. Les tableaux ci-dessous montrent donc les stats du trio (jungle + mid + support) dans les games où ce champion occupe ce rôle, quels que soient les 2 autres membres : pas les stats de ce champion pris isolément." aria-label="Le jeu ne détaille les stats (gold, dégâts, vision, objectifs) que par équipe complète (5 joueurs) — jamais par joueur seul. Les tableaux ci-dessous montrent donc les stats du trio (jungle + mid + support) dans les games où ce champion occupe ce rôle, quels que soient les 2 autres membres : pas les stats de ce champion pris isolément.">
-  Important : les tableaux ci-dessous (gold, objectifs, combat & vision) sont les stats du
-  <strong>trio complet</strong> (jungle + mid + support) dans les games où ce champion tient ce
-  rôle — jamais les stats de ce champion seul (le jeu ne les détaille pas à ce niveau).</p>
 
 <section class="cards">
   <div class="card"><h3>Winrate</h3><p class="big-number">{{ baseline.wr | pct }}</p>
@@ -25,44 +21,6 @@
     <p class="big-number">{{ stats.avg_duration_win_s | duration }} <small>win</small>
        / {{ stats.avg_duration_loss_s | duration }} <small>loss</small></p>
     <p class="meta">durée moyenne des parties</p></div>
-</section>
-
-<section>
-  <h2>Avantage gold du trio</h2>
-  <table class="narrow">
-    <thead><tr>{% for m in stats.gold_diff %}<th>{{ m }} min</th>{% endfor %}</tr></thead>
-    <tbody><tr>
-      {% for m, v in stats.gold_diff.items() %}
-      <td class="{{ 'pos' if v and v > 0 else 'neg' if v and v < 0 }}">{{ v | signed_int }}</td>
-      {% endfor %}
-    </tr></tbody>
-  </table>
-</section>
-
-<section class="columns">
-  <div>
-    <h2>Objectifs (trio)</h2>
-    <table class="narrow kv">
-      <tr><td>Grubs pris (moy.)</td><td>{{ stats.grubs_taken | num }}</td></tr>
-      <tr><td>Héraut</td><td>{{ stats.herald_taken | pct }}</td></tr>
-      <tr><td>Drakes (moy.)</td><td>{{ stats.drakes_taken | num }}</td></tr>
-      <tr><td>Âme obtenue</td><td>{{ stats.soul_taken | pct }}</td></tr>
-      <tr><td>WR avec l'âme</td><td>{{ stats.wr_with_soul | pct }}</td></tr>
-      <tr><td>WR sans l'âme</td><td>{{ stats.wr_without_soul | pct }}</td></tr>
-      <tr><td>Première tour</td><td>{{ stats.first_tower | pct }}</td></tr>
-      <tr><td>Tours détruites (moy.)</td><td>{{ stats.towers_destroyed | num }}</td></tr>
-    </table>
-  </div>
-  <div>
-    <h2>Combat & vision (trio)</h2>
-    <table class="narrow kv">
-      <tr><td>First blood (trio)</td><td>{{ stats.first_blood_trio | pct }}</td></tr>
-      <tr><td>Kill participation &lt; 15 min</td><td>{{ stats.kill_participation_pre15 | pct }}</td></tr>
-      <tr><td>Part des dégâts du trio dans l'équipe</td><td>{{ stats.damage_share | pct }}</td></tr>
-      <tr><td>Score de vision (cumul trio)</td><td>{{ stats.vision_score | num }}</td></tr>
-      <tr><td>CC infligé, mesuré en jeu (cumul trio)</td><td>{{ stats.cc_time_s | num }} s</td></tr>
-    </table>
-  </div>
 </section>
 
 <section class="columns">

@@ -268,6 +268,11 @@ def test_html_pages_render(pg_sync, client):
     duo_detail = client.get("/duo/jgl_mid/1/2")
     assert duo_detail.status_code == 200
     assert "Meilleurs supports" in duo_detail.text  # roles=jgl_mid → 3e rôle libre = support
+    # Pas de tableaux gold/objectifs/combat & vision sur la page duo : stats de
+    # trio complet, pas propres à ce duo seul (retour utilisateur, 2026-07-13).
+    assert "Avantage gold" not in duo_detail.text
+    assert "Objectifs" not in duo_detail.text
+    assert "Combat & vision" not in duo_detail.text
 
 
 def test_champion_page_shows_baseline_partners_and_trios(pg_sync, client):
@@ -290,9 +295,12 @@ def test_champion_page_shows_baseline_partners_and_trios(pg_sync, client):
     assert "Meilleurs mids" in response.text
     assert "Ahri" in response.text  # meilleur mid via score_duo jgl_mid (1,2)
     assert "/trio/1/2/3" in response.text  # meilleurs trios
-    # Stats d'équipe (match_trio_stats) des games où ce champion est en jungle —
-    # mêmes valeurs que la page trio (1,2,3), cf. test_api_trio_detail_stats_and_counters.
-    assert "+300" in response.text  # gold_diff @10 moyen (1000 et -400 → 300)
+    # Pas de tableaux gold/objectifs/combat & vision sur cette page : ce sont des
+    # stats de trio complet (match_trio_stats), pas propres à ce champion seul —
+    # source de confusion (retour utilisateur, 2026-07-13), retirées de l'HTML.
+    assert "Avantage gold" not in response.text
+    assert "Objectifs" not in response.text
+    assert "Combat & vision" not in response.text
 
 
 def test_champion_page_hides_low_reliability_partners_and_trios(pg_sync, client):
