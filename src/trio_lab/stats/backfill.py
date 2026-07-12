@@ -32,6 +32,7 @@ async def run(*, data_dir: Path | None = None, dsn: str | None = None) -> dict[s
     counts: Counter[str] = Counter()
     conn = await db.connect(dsn)
     try:
+        cc_reliability = await storage.fetch_cc_reliability(conn)
         cur = await conn.execute(
             """
             SELECT m.match_id, m.platform, m.patch
@@ -58,7 +59,9 @@ async def run(*, data_dir: Path | None = None, dsn: str | None = None) -> dict[s
                     timeline = json.load(fh)
                 try:
                     detail = await client.get_match(match_id, platform=platform)
-                    trio_stats, objective_events = extract.extract_match(detail, timeline)
+                    trio_stats, objective_events = extract.extract_match(
+                        detail, timeline, cc_reliability
+                    )
                 except ParseError as exc:
                     logger.warning("%s : inextractible (%s)", match_id, exc)
                     counts["unextractable"] += 1

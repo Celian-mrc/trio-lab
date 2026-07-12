@@ -225,13 +225,21 @@ def gold_diffs(
 
 
 def combat_stats(
-    detail: dict[str, Any], timeline: dict[str, Any], trios: dict[int, TrioMembers]
+    detail: dict[str, Any],
+    timeline: dict[str, Any],
+    trios: dict[int, TrioMembers],
+    cc_reliability: dict[int, float] | None = None,
 ) -> dict[int, dict[str, Any]]:
     """first blood trio, KP<15 du trio, part des dégâts, vision, CC, plaques équipe.
 
     KP<15 = kills de l'équipe avant 15:00 où un membre du trio est tueur ou
     assistant ÷ kills de l'équipe sur la même fenêtre (exécutions comprises au
     dénominateur) ; `None` si l'équipe n'a aucun kill avant 15:00.
+
+    `cc_reliability` : `{champion_id: coefficient ∈ (0, 1]}` (cf. ccref.reliability)
+    appliqué à `timeCCingOthers` avant sommation trio — certains champions
+    (Nocturne confirmé) gonflent cette stat Riot sans immobiliser réellement
+    plus que la moyenne. `None`/absent = 1.0, aucune correction.
     """
     trio_pids = {team: set(trios[team].pids) for team in TEAMS}
     stats: dict[int, dict[str, Any]] = {team: {} for team in TEAMS}
@@ -265,7 +273,8 @@ def combat_stats(
         if pid in trio_pids[team]:
             damage[team]["trio"] += p.get("totalDamageDealtToChampions", 0)
             stats[team]["vision_score"] += p.get("visionScore", 0)
-            stats[team]["cc_time_s"] += p.get("timeCCingOthers", 0)
+            reliability = (cc_reliability or {}).get(p.get("championId"), 1.0)
+            stats[team]["cc_time_s"] += round(p.get("timeCCingOthers", 0) * reliability)
             if p.get("firstBloodKill") or p.get("firstBloodAssist"):
                 stats[team]["first_blood_trio"] = True
     for team in TEAMS:
@@ -279,12 +288,15 @@ def combat_stats(
 
 
 def extract_match(
-    detail: dict[str, Any], timeline: dict[str, Any]
+    detail: dict[str, Any],
+    timeline: dict[str, Any],
+    cc_reliability: dict[int, float] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """(2 lignes `match_trio_stats`, N lignes `match_objective_events`) d'un match.
 
     Lève `ParseError` si les données sont inexploitables (trio incomplet,
-    timeline d'un autre match, gagnant indéterminé).
+    timeline d'un autre match, gagnant indéterminé). `cc_reliability` : cf.
+    `combat_stats`.
     """
     match_id = detail["metadata"]["matchId"]
     tl_match_id = timeline["metadata"]["matchId"]
@@ -296,7 +308,7 @@ def extract_match(
     events = objective_events(timeline)
     objectives = team_objectives(events)
     gold = gold_diffs(timeline, trios)
-    combat = combat_stats(detail, timeline, trios)
+    combat = combat_stats(detail, timeline, trios, cc_reliability)
 
     trio_rows = []
     for team in TEAMS:

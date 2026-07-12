@@ -66,6 +66,9 @@
       <tr title="Score de kit (Phase 2b), brut avant normalisation.">
         <td>CC théorique (kit, Σ trio, brut)</td><td>{{ cc_theoretical.trio | num(2) }}</td>
       </tr>
+      <tr><td>&nbsp;&nbsp;dont {{ jgl.name }} (jungle)</td><td>{{ cc_theoretical.jgl | num(2) }}</td></tr>
+      <tr><td>&nbsp;&nbsp;dont {{ mid.name }} (mid)</td><td>{{ cc_theoretical.mid | num(2) }}</td></tr>
+      <tr><td>&nbsp;&nbsp;dont {{ sup.name }} (support)</td><td>{{ cc_theoretical.sup | num(2) }}</td></tr>
     </table>
     <h2>CC — empirique vs théorique, sur 100</h2>
     <table class="narrow kv">

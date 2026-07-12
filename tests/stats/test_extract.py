@@ -208,6 +208,19 @@ def test_endgame_stats_sums_and_shares():
     assert stats[200]["first_blood_trio"] is False  # FB par le top, hors trio
 
 
+def test_cc_time_s_applies_per_champion_reliability():
+    """championId == participantId côté équipe 100 (builder) : jgl=2, mid=3, sup=5."""
+    detail = build_detail()
+    stats = extract.combat_stats(
+        detail, build_timeline(), extract.trios_of(detail), cc_reliability={2: 0.5}
+    )
+    # jgl (champ 2, cc brut 4) atténué à 2 ; mid (6) et sup (10) inchangés (défaut 1.0).
+    assert stats[100]["cc_time_s"] == 2 + 6 + 10
+    # Sans reliability fournie : comportement identique à avant (aucune atténuation).
+    baseline = extract.combat_stats(detail, build_timeline(), extract.trios_of(detail))
+    assert baseline[100]["cc_time_s"] == 2 * (2 + 3 + 5)
+
+
 # --- extract_match ---
 
 

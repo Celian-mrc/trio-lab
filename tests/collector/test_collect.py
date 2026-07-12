@@ -88,6 +88,7 @@ class _FakeStore:
         self.trio_stats: dict[str, tuple[list, list]] = {}
         self.journal: dict[str, dict] = {}
         self.archived: list[str] = []
+        self.cc_reliability: dict[int, float] = {}
 
     def requeue_players(self):
         """Simule le recyclage de la file (joueurs redevenus les plus anciens)."""
@@ -99,6 +100,9 @@ class _FakeStore:
             # Curseur préservé en cas de redécouverte (ON CONFLICT).
             self.players.setdefault(row.puuid, {"platform": row.platform, "fetched": False})
         return len(rows)
+
+    async def fetch_cc_reliability(self, conn):
+        return dict(self.cc_reliability)
 
     async def next_player(self, conn, *, platform):
         return next(
@@ -183,6 +187,18 @@ async def test_pipeline_dedup_exclude_and_store(store, tmp_path):
     trio_rows, _events = store.trio_stats["EUW1_p1"]
     assert [r["team_id"] for r in trio_rows] == [100, 200]
     assert trio_rows[0]["jgl_champion"] == 2  # builder : JUNGLE équipe 100 = champion 2
+
+
+async def test_cc_reliability_is_loaded_once_and_applied_at_extraction(store, tmp_path):
+    """La fiabilité CC (table champion_cc_reliability) est chargée une fois par
+    boucle de plateforme et atténue `cc_time_s` à l'ingestion (cf. extract.py)."""
+    store.cc_reliability = {2: 0.5}  # champion 2 = jgl équipe 100 (builder)
+    await collect.run(platforms=["euw1"], patch=PATCH, target=100, data_dir=tmp_path)
+
+    trio_rows, _events = store.trio_stats["EUW1_p1"]
+    # Sans correction : 2×(2+3+5) = 20 (cf. test_extract.py). Avec jgl (champ 2,
+    # cc brut 4) atténué à 2 : 2 + 6 + 10 = 18.
+    assert trio_rows[0]["cc_time_s"] == 18
 
 
 async def test_archiving_can_be_disabled(store, tmp_path, monkeypatch):

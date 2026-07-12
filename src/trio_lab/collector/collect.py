@@ -110,6 +110,11 @@ async def _collect_platform(
     start_s, end_s = epoch_bounds
     last_discovery = float("-inf")
     conn = await db.connect(dsn)
+    # Chargé une fois (table vide → {}, aucune correction) : le ratio évolue
+    # lentement, pas besoin de le recharger à chaque match ni à chaque
+    # reconnexion — un redéploiement/redémarrage du service suffit à le
+    # rafraîchir après un `sync_reliability`.
+    cc_reliability = await storage.fetch_cc_reliability(conn)
     try:
         async with RiotClient() as client:
             while target is None or counts["downloaded"] < target:
@@ -143,6 +148,7 @@ async def _collect_platform(
                             max_attempts=max_attempts,
                             data_dir=data_dir,
                             counts=counts,
+                            cc_reliability=cc_reliability,
                         )
                         processed = counts["downloaded"] + counts["excluded"] + counts["errors"]
                         if processed % LOG_EVERY == 0:
@@ -193,6 +199,7 @@ async def _process_match(
     max_attempts: int,
     data_dir: Path,
     counts: Counter[str],
+    cc_reliability: dict[int, float] | None = None,
 ) -> None:
     """Télécharge et ingère un match ; toute issue est journalisée, rien ne remonte."""
     try:
@@ -207,7 +214,7 @@ async def _process_match(
         row = parsing.match_row(detail, platform=platform)
         participants = parsing.participant_rows(detail)
         timeline = await client.get_match_timeline(match_id, platform=platform)
-        trio_stats, objective_events = extract.extract_match(detail, timeline)
+        trio_stats, objective_events = extract.extract_match(detail, timeline, cc_reliability)
         # Archivage débrayable (ARCHIVE_TIMELINES=0) : sur Railway le
         # filesystem est éphémère, écrire des JSON.gz n'aurait aucun sens.
         if config.ARCHIVE_TIMELINES:
