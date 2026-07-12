@@ -74,15 +74,6 @@ async def mark_player_fetched(conn: psycopg.AsyncConnection, puuid: str) -> None
     await conn.execute("UPDATE players SET matches_fetched_at = now() WHERE puuid = %s", (puuid,))
 
 
-async def fetch_cc_reliability(conn: psycopg.AsyncConnection) -> dict[int, float]:
-    """`{champion_id: coefficient}` (cf. ccref.reliability), table vide → `{}`
-    (aucune correction, comportement de repli sûr tant qu'elle n'est pas
-    synchronisée). Chargée une fois par boucle de plateforme : le ratio
-    évolue lentement (méta/patch), pas besoin d'un rafraîchissement continu."""
-    cur = await conn.execute("SELECT champion_id, reliability FROM champion_cc_reliability")
-    return dict(await cur.fetchall())
-
-
 # --- dédoublonnage / journal ---
 
 

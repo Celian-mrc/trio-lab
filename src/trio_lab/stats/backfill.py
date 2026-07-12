@@ -18,6 +18,7 @@ from collections import Counter
 from pathlib import Path
 
 from trio_lab import config, db
+from trio_lab.ccref.reliability import CC_TIME_RELIABILITY
 from trio_lab.collector import storage
 from trio_lab.collector.client import RiotClient
 from trio_lab.collector.parsing import ParseError
@@ -32,7 +33,6 @@ async def run(*, data_dir: Path | None = None, dsn: str | None = None) -> dict[s
     counts: Counter[str] = Counter()
     conn = await db.connect(dsn)
     try:
-        cc_reliability = await storage.fetch_cc_reliability(conn)
         cur = await conn.execute(
             """
             SELECT m.match_id, m.platform, m.patch
@@ -60,7 +60,7 @@ async def run(*, data_dir: Path | None = None, dsn: str | None = None) -> dict[s
                 try:
                     detail = await client.get_match(match_id, platform=platform)
                     trio_stats, objective_events = extract.extract_match(
-                        detail, timeline, cc_reliability
+                        detail, timeline, CC_TIME_RELIABILITY
                     )
                 except ParseError as exc:
                     logger.warning("%s : inextractible (%s)", match_id, exc)
