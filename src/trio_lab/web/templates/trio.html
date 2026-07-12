@@ -64,19 +64,20 @@
       <tr><td>CC infligé, mesuré en jeu (Σ timeCCingOthers)</td><td>{{ stats.cc_time_s | num }} s</td></tr>
     </table>
     <h2>CC — empirique vs théorique <span class="meta">(0-100, les 3 valeurs sont comparables entre elles)</span></h2>
-    <p class="meta">Le CC empirique (mesuré en jeu) peut être gonflé pour certains champions par un
-      artefact de mesure Riot (cas connu : Nocturne, corrigé). Le CC théorique (calculé à partir du
-      kit seul) est immunisé à ce type d'artefact mais moins précis sur le terrain — en cas de gros
-      écart entre les deux, méfiance sur l'empirique. Le mélangé combine les deux (lissé par le
-      volume de games) : c'est le score à retenir en priorité.</p>
+    <p class="meta">L'empirique vient du chrono du jeu : le temps réel où ce trio a gardé des
+      ennemis sous contrôle sur les games déjà jouées. Le théorique est calculé depuis les sorts
+      des champions (durée des stuns, roots, etc.), sans regarder aucune game jouée. Le mélangé
+      combine les deux — c'est le score à retenir : il privilégie l'empirique quand le trio est
+      beaucoup joué, et le théorique quand il l'est peu (pas encore assez de games pour un chrono
+      fiable).</p>
     <table class="narrow kv">
-      <tr title="Σ timeCCingOthers du trio, plafonné à 240 s (≈ p99 des trios scorés) puis ramené sur 100 : au-delà, les valeurs sont surtout des artefacts de mesure Riot.">
+      <tr title="Mesuré directement sur les games jouées (Σ timeCCingOthers du trio), plafonné à 240 s puis ramené sur 100.">
         <td>Empirique</td><td>{{ cc_scores.empirical_pct | pct100 }}</td>
       </tr>
       <tr title="Score de kit (durées/zones/fiabilité des sorts, cf. détail ci-dessous) ramené sur 100 via un repère fixe : 3 × le score max d'un champion (plafond mathématique, jamais atteignable en pratique).">
         <td>Théorique</td><td>{{ cc_scores.theoretical_pct | pct100 }}</td>
       </tr>
-      <tr title="Lissage bayésien (même mécanique que la synergie) : tiré vers le théorique si peu de games, vers l'empirique sinon.">
+      <tr title="Le score à retenir : combine les deux, en donnant plus de poids à l'empirique quand le trio est beaucoup joué.">
         <td><strong>Mélangé (recommandé)</strong></td><td><strong>{{ cc_scores.blended_pct | pct100 }}</strong></td>
       </tr>
     </table>
@@ -157,22 +158,16 @@
 </section>
 
 <details class="legend">
-  <summary>CC empirique vs théorique : pourquoi ça peut diverger ?</summary>
-  <p>Le CC empirique (<code>timeCCingOthers</code>) vient de l'API Riot et peut
-  être gonflé pour certains champions dont un effet (souvent un debuff
-  multi-cibles) est compté par erreur comme du contrôle — cas connu de
-  Nocturne (~170 s/game en moyenne pour un kit ne contenant qu'une peur
-  courte). Le CC théorique est calculé uniquement à partir du kit
-  (durées/zones/fiabilité des sorts) : moins précis sur le terrain, mais
-  immunisé à ce type d'artefact. En cas de gros écart entre les deux,
-  méfiance sur l'empirique.</p>
-  <p>Les 3 scores sur 100 : <strong>empirique</strong> plafonné à 240 s
-  (~p99 des trios scorés) pour ne pas laisser les valeurs extrêmes écraser
-  l'échelle ; <strong>théorique</strong> normalisé sur 3× le score max d'un
-  champion (repère mathématique, jamais atteignable) ; <strong>mélangé</strong>
-  = lissage bayésien des deux (même mécanique que la synergie) — tiré vers le
-  théorique si le trio est peu joué, vers l'empirique sinon. Limite : ce
-  lissage ne corrige qu'en partie un biais structurel (type Nocturne) à haut
-  volume, ce n'est pas du bruit qui se moyenne avec plus de games.</p>
+  <summary>Empirique, théorique, mélangé : comment ça se calcule ?</summary>
+  <p><strong>Empirique</strong> : le CC réellement infligé par ce trio
+  (<code>timeCCingOthers</code>, le chrono officiel de Riot), plafonné à
+  240 s (~p99 des trios) puis ramené sur 100 pour ne pas laisser quelques
+  valeurs extrêmes écraser l'échelle. <strong>Théorique</strong> : un score
+  de kit (durée des stuns/roots/etc., zone d'effet, fiabilité des sorts —
+  cf. détail ci-dessus), ramené sur 100 via un repère fixe : 3× le score
+  max d'un champion (un plafond mathématique, jamais atteignable en
+  pratique, aucun champion n'occupant plusieurs rôles). <strong>Mélangé</strong>
+  : combine les deux, pondéré par le volume de games du trio — c'est le
+  chiffre à retenir par défaut.</p>
 </details>
 {% endblock %}
