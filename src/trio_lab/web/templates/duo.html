@@ -31,6 +31,10 @@
     <p class="big-number">{{ stats.avg_duration_win_s | duration }} <small>win</small>
        / {{ stats.avg_duration_loss_s | duration }} <small>loss</small></p>
     <p class="meta">durée moyenne des parties</p></div>
+  <div class="card"><h3>Scaling</h3>
+    <p class="big-number {{ 'pos' if score.scaling and score.scaling > 0 else 'neg' if score.scaling and score.scaling < 0 }}"
+       data-tooltip="Pente du winrate selon la durée de la game (tranches de 5 min), mesurée uniquement (pas de prédiction si peu de games) : positif = ce duo gagne plus souvent en game longue, négatif = il gagne plus souvent en game courte." aria-label="Pente du winrate selon la durée de la game (tranches de 5 min), mesurée uniquement (pas de prédiction si peu de games) : positif = ce duo gagne plus souvent en game longue, négatif = il gagne plus souvent en game courte.">{{ score.scaling | signed_pct(2) }}</p>
+    <p class="meta">points de WR par tranche de 5 min</p></div>
 </section>
 
 <section>

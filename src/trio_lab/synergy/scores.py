@@ -135,3 +135,23 @@ def smooth(raw: float, games_eff: float, prediction: float, k: float = DEFAULT_P
     if k < 0:
         raise ValueError(f"k négatif : {k}")
     return (games_eff * raw + k * prediction) / (games_eff + k)
+
+
+def weighted_slope(points: Iterable[tuple[float, float, float]]) -> float | None:
+    """Pente d'une régression linéaire pondérée y ~ x (moindres carrés).
+
+    `points` = (x, y, poids). Utilisé pour le score de scaling (WR ~ tranche
+    de durée) : pas de dépendance lourde (numpy/scipy, CLAUDE.md), la formule
+    fermée suffit pour une régression à une variable.
+    """
+    pts = list(points)
+    if len(pts) < 2:
+        return None
+    w_sum = sum(w for _, _, w in pts)
+    if w_sum <= 0.0:
+        return None
+    x_mean = sum(w * x for x, _, w in pts) / w_sum
+    y_mean = sum(w * y for _, y, w in pts) / w_sum
+    num = sum(w * (x - x_mean) * (y - y_mean) for x, y, w in pts)
+    den = sum(w * (x - x_mean) ** 2 for x, _, w in pts)
+    return num / den if den > 0.0 else None

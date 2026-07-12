@@ -36,13 +36,16 @@ async def test_refresh_counts_games_and_wins(pg_conn):
     await _ingest(pg_conn, "EUW1_B", winning_team=200)
     counts = aggregate.refresh("16.13", dsn=TEST_DSN)
     # 10 champions uniques (un par rôle/équipe), 3 duos × 2 équipes, 1 trio × 2 équipes,
-    # 5 ennemis × 2 trios pour les counters, 2 alliés (Top/Bottom) × 2 trios pour les alliés.
+    # 5 ennemis × 2 trios pour les counters, 2 alliés (Top/Bottom) × 2 trios pour les alliés,
+    # même durée pour les 2 matchs (builder) donc 1 seule tranche par combo.
     assert counts == {
         "agg_champion": 10,
         "agg_duo": 6,
         "agg_trio": 2,
         "agg_trio_vs_champion": 10,
         "agg_trio_with_ally": 4,
+        "agg_trio_duration": 2,
+        "agg_duo_duration": 6,
     }
 
     cur = await pg_conn.execute(

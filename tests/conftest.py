@@ -45,6 +45,7 @@ async def pg_conn():
     await conn.execute(
         "TRUNCATE players, matches, match_fetch_journal,"
         " agg_champion, agg_duo, agg_trio, agg_trio_vs_champion, agg_trio_with_ally,"
+        " agg_trio_duration, agg_duo_duration,"
         " score_duo, score_trio, score_trio_vs_champion, score_trio_with_ally,"
         " champion_cc_theoretical CASCADE"
     )

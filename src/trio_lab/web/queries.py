@@ -32,13 +32,14 @@ TRIO_SORTS = {
     "tower1": "first_tower_rate",
     "cc": "cc_time_s",
     "cc_blend": "cc_blended_pct",
+    "scaling": "scaling",
 }
 DUO_SORTS = dict(TRIO_SORTS)  # score_duo porte les mêmes colonnes depuis 008/009/010
 SORT_DIRECTIONS = {"asc": "ASC", "desc": "DESC"}
 _STAT_COLUMNS_SQL = (
     "gold_diff_5, gold_diff_10, gold_diff_15, vision_score, drakes,"
     " soul_rate, herald_rate, first_tower_rate, cc_time_s,"
-    " cc_theoretical_pct, cc_empirical_pct, cc_blended_pct"
+    " cc_theoretical_pct, cc_empirical_pct, cc_blended_pct, scaling"
 )
 DUO_ROLES = ("jgl_mid", "jgl_sup", "mid_sup")
 _TIER_AT_LEAST = {
@@ -172,7 +173,7 @@ def trio_score(
             """
             SELECT jgl_champion, mid_champion, sup_champion, games, games_eff, wr,
                    synergy_raw, synergy_pred, synergy, ci_low, ci_high, tier,
-                   cc_theoretical_pct, cc_empirical_pct, cc_blended_pct
+                   cc_theoretical_pct, cc_empirical_pct, cc_blended_pct, scaling
             FROM score_trio
             WHERE window_label = %s AND platform = %s
               AND jgl_champion = %s AND mid_champion = %s AND sup_champion = %s

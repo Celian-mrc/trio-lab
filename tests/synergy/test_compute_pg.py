@@ -84,6 +84,57 @@ async def test_refresh_computes_expected_scores(pg_conn):
     assert smoothed == pytest.approx((10 * 0.2 + 200 * shrunk_jgl_mid / 3) / 210)
     assert 0.0 <= ci_low < 0.7 < ci_high <= 1.0
 
+    # Pas de agg_trio_duration/agg_duo_duration semées : scaling reste NULL
+    # (pas de lissage vers un prior, cf. migration 015).
+    cur = await pg_conn.execute("SELECT scaling FROM score_trio WHERE platform = 'euw1'")
+    assert (await cur.fetchone())[0] is None
+    cur = await pg_conn.execute(
+        "SELECT scaling FROM score_duo WHERE roles = 'jgl_mid' AND platform = 'euw1'"
+    )
+    assert (await cur.fetchone())[0] is None
+
+
+async def test_scaling_slope_materialized_with_enough_buckets(pg_conn):
+    """4 tranches de durée, WR parfaitement linéaire (.3/.5/.7/.9 sur
+    15/20/25/30 min) : pente exacte = 0.2 point de WR par tranche de 5 min."""
+    await _seed(pg_conn)
+    buckets = [(15, 10, 3), (20, 10, 5), (25, 10, 7), (30, 10, 9)]
+    for bucket, games, wins in buckets:
+        await pg_conn.execute(
+            "INSERT INTO agg_trio_duration (patch, platform, jgl_champion, mid_champion,"
+            " sup_champion, duration_bucket, games, wins)"
+            " VALUES ('16.13', 'euw1', 1, 2, 3, %s, %s, %s)",
+            (bucket, games, wins),
+        )
+        await pg_conn.execute(
+            "INSERT INTO agg_duo_duration (patch, platform, roles, champ_a, champ_b,"
+            " duration_bucket, games, wins) VALUES ('16.13', 'euw1', 'jgl_mid', 1, 2, %s, %s, %s)",
+            (bucket, games, wins),
+        )
+    compute.refresh(windows.make_window(["16.13"]), dsn=TEST_DSN, k=200.0)
+
+    cur = await pg_conn.execute("SELECT scaling FROM score_trio WHERE platform = 'euw1'")
+    assert (await cur.fetchone())[0] == pytest.approx(0.2)
+    cur = await pg_conn.execute(
+        "SELECT scaling FROM score_duo WHERE roles = 'jgl_mid' AND platform = 'euw1'"
+    )
+    assert (await cur.fetchone())[0] == pytest.approx(0.2)
+
+
+async def test_scaling_null_below_bucket_threshold(pg_conn):
+    """2 tranches seulement (< SCALING_MIN_BUCKETS = 3) : scaling reste NULL."""
+    await _seed(pg_conn)
+    for bucket, games, wins in ((15, 10, 3), (20, 10, 5)):
+        await pg_conn.execute(
+            "INSERT INTO agg_trio_duration (patch, platform, jgl_champion, mid_champion,"
+            " sup_champion, duration_bucket, games, wins)"
+            " VALUES ('16.13', 'euw1', 1, 2, 3, %s, %s, %s)",
+            (bucket, games, wins),
+        )
+    compute.refresh(windows.make_window(["16.13"]), dsn=TEST_DSN, k=200.0)
+    cur = await pg_conn.execute("SELECT scaling FROM score_trio WHERE platform = 'euw1'")
+    assert (await cur.fetchone())[0] is None
+
 
 async def test_cc_pct_columns_materialized_for_duo_and_trio(pg_conn):
     """`champion_cc_theoretical` peuplée → score_duo/score_trio portent les

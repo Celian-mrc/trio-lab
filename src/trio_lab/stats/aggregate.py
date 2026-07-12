@@ -109,12 +109,45 @@ _TRIO_WITH_ALLY_SQL = """
              p.role, p.champion_id
 """
 
+_DURATION_BUCKET_SQL = "LEAST(40, 5 * (m.game_duration_s / 300))"
+
+_TRIO_DURATION_SQL = f"""
+    INSERT INTO agg_trio_duration (patch, platform, jgl_champion, mid_champion,
+                                   sup_champion, duration_bucket, games, wins)
+    SELECT m.patch, m.platform, t.jgl_champion, t.mid_champion, t.sup_champion,
+           {_DURATION_BUCKET_SQL}, count(*), count(*) FILTER (WHERE t.win)
+    FROM match_trio_stats t
+    JOIN matches m USING (match_id)
+    WHERE m.patch = %(patch)s
+    GROUP BY m.patch, m.platform, t.jgl_champion, t.mid_champion, t.sup_champion,
+             {_DURATION_BUCKET_SQL}
+"""
+
+_DUO_DURATION_SQL = f"""
+    INSERT INTO agg_duo_duration (patch, platform, roles, champ_a, champ_b,
+                                  duration_bucket, games, wins)
+    SELECT m.patch, m.platform, d.roles, d.champ_a, d.champ_b,
+           {_DURATION_BUCKET_SQL}, count(*), count(*) FILTER (WHERE t.win)
+    FROM match_trio_stats t
+    JOIN matches m USING (match_id)
+    CROSS JOIN LATERAL (VALUES
+        ('jgl_mid', t.jgl_champion, t.mid_champion),
+        ('jgl_sup', t.jgl_champion, t.sup_champion),
+        ('mid_sup', t.mid_champion, t.sup_champion)
+    ) AS d(roles, champ_a, champ_b)
+    WHERE m.patch = %(patch)s
+    GROUP BY m.patch, m.platform, d.roles, d.champ_a, d.champ_b,
+             {_DURATION_BUCKET_SQL}
+"""
+
 _TABLES_SQL = {
     "agg_champion": _CHAMPION_SQL,
     "agg_duo": _DUO_SQL,
     "agg_trio": _TRIO_SQL,
     "agg_trio_vs_champion": _TRIO_VS_CHAMPION_SQL,
     "agg_trio_with_ally": _TRIO_WITH_ALLY_SQL,
+    "agg_trio_duration": _TRIO_DURATION_SQL,
+    "agg_duo_duration": _DUO_DURATION_SQL,
 }
 
 

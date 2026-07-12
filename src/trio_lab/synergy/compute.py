@@ -33,6 +33,14 @@ DUO_ROLES: dict[str, tuple[str, str]] = {
 
 _PerPatch = list[tuple[str, int, int]]  # (patch, games, wins)
 
+# Score de scaling (WR ~ tranche de durée, cf. migration 015) : uniquement
+# empirique, pas de lissage vers un prior (mélange avec la trajectoire de
+# gold testé et écarté — corrélation quasi nulle, cf. commentaire migration).
+# En dessous de ces seuils, `scaling` reste NULL plutôt que de publier une
+# pente calculée sur un bruit de 1-2 games.
+SCALING_MIN_BUCKET_GAMES = 3
+SCALING_MIN_BUCKETS = 3
+
 # Stat de score → paire (somme, dénominateur) d'agg_trio/agg_duo. Chaque stat
 # a son propre n : gold_diff_10 est NULL si la partie finit avant 10 min.
 STAT_PAIRS: dict[str, tuple[str, str]] = {
@@ -164,6 +172,56 @@ def _load(conn: psycopg.Connection, window: PatchWindow):
     return indiv, duos, trios, cc_theo_scores
 
 
+def _load_duration_buckets(
+    conn: psycopg.Connection, patches: list[str], *, table: str, key_columns: tuple[str, ...]
+) -> dict[tuple, dict[int, _PerPatch]]:
+    """Charge `agg_trio_duration`/`agg_duo_duration`, groupé par combo puis par tranche.
+
+    Réutilise `scores.add_combined_platform` (clé `(platform, *rest)`) en
+    incluant la tranche dans `*rest` : la vue 'all' est donc déjà sommée par
+    tranche, pas seulement par combo.
+    """
+    columns = ", ".join(key_columns)
+    flat: dict[tuple, _PerPatch] = defaultdict(list)
+    with conn.cursor() as cur:
+        for row in cur.execute(
+            f"SELECT platform, {columns}, duration_bucket, patch, games, wins"  # noqa: S608
+            f" FROM {table} WHERE patch = ANY(%s)",
+            (patches,),
+        ):
+            platform, *key, bucket, patch, games, wins = row
+            flat[(platform, *key, bucket)].append((patch, games, wins))
+    scores.add_combined_platform(flat)
+    grouped: dict[tuple, dict[int, _PerPatch]] = defaultdict(dict)
+    for (platform, *key, bucket), rows in flat.items():
+        grouped[(platform, *key)][bucket] = rows
+    return grouped
+
+
+def _scaling_slope(
+    by_bucket: dict[int, _PerPatch] | None, weights: dict[str, float]
+) -> float | None:
+    """Pente WR ~ tranche de durée (points de WR par tranche de 5 min).
+
+    `None` tant que le volume ne permet pas au moins `SCALING_MIN_BUCKETS`
+    tranches avec chacune au moins `SCALING_MIN_BUCKET_GAMES` games bruts —
+    en dessous, un point de la régression serait du bruit pur.
+    """
+    if not by_bucket:
+        return None
+    points: list[tuple[float, float, float]] = []
+    for bucket, rows in by_bucket.items():
+        if sum(games for _, games, _ in rows) < SCALING_MIN_BUCKET_GAMES:
+            continue
+        wr = scores.weighted_wr(rows, weights)
+        if wr is None:
+            continue
+        points.append((bucket / 5.0, wr.wr, wr.games_eff))
+    if len(points) < SCALING_MIN_BUCKETS:
+        return None
+    return scores.weighted_slope(points)
+
+
 def refresh(
     window: PatchWindow,
     *,
@@ -174,6 +232,16 @@ def refresh(
     """Recalcule les scores d'une fenêtre. Retourne le nombre de lignes par table."""
     with psycopg.connect(db.require_dsn(dsn)) as conn:
         indiv, duos, trios, cc_theo_scores = _load(conn, window)
+        patches = list(window.patches)
+        duo_durations = _load_duration_buckets(
+            conn, patches, table="agg_duo_duration", key_columns=("roles", "champ_a", "champ_b")
+        )
+        trio_durations = _load_duration_buckets(
+            conn,
+            patches,
+            table="agg_trio_duration",
+            key_columns=("jgl_champion", "mid_champion", "sup_champion"),
+        )
 
         def member_wr(platform: str, role: str, champ: int, weights) -> scores.WeightedWR | None:
             rows = indiv.get((platform, role, champ))
@@ -213,6 +281,7 @@ def refresh(
                     "ci_low": ci_low,
                     "ci_high": ci_high,
                     "tier": scores.reliability_tier(combo.games_eff, thresholds),
+                    "scaling": _scaling_slope(duo_durations.get((platform, roles, a, b)), weights),
                     **stats,
                     **_cc_pct_fields(
                         (a, b), cc_theo_scores, stats["cc_time_s"], combo.games_eff, k
@@ -262,6 +331,9 @@ def refresh(
                     "ci_low": ci_low,
                     "ci_high": ci_high,
                     "tier": scores.reliability_tier(combo.games_eff, thresholds),
+                    "scaling": _scaling_slope(
+                        trio_durations.get((platform, jgl, mid, sup)), weights
+                    ),
                     **stats,
                     **_cc_pct_fields(
                         (jgl, mid, sup), cc_theo_scores, stats["cc_time_s"], combo.games_eff, k
@@ -278,10 +350,10 @@ def refresh(
                         f"""
                         INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b,
                                                games, games_eff, wr, synergy, ci_low, ci_high, tier,
-                                               {_SCORE_STAT_SQL})
+                                               scaling, {_SCORE_STAT_SQL})
                         VALUES (%(window_label)s, %(platform)s, %(roles)s, %(champ_a)s, %(champ_b)s,
                                 %(games)s, %(games_eff)s, %(wr)s, %(synergy)s, %(ci_low)s,
-                                %(ci_high)s, %(tier)s, {_SCORE_STAT_PLACEHOLDERS})
+                                %(ci_high)s, %(tier)s, %(scaling)s, {_SCORE_STAT_PLACEHOLDERS})
                         """,
                         duo_rows,
                     )
@@ -291,11 +363,11 @@ def refresh(
                         INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,
                                                 sup_champion, games, games_eff, wr, synergy_raw,
                                                 synergy_pred, synergy, ci_low, ci_high, tier,
-                                                {_SCORE_STAT_SQL})
+                                                scaling, {_SCORE_STAT_SQL})
                         VALUES (%(window_label)s, %(platform)s, %(jgl_champion)s, %(mid_champion)s,
                                 %(sup_champion)s, %(games)s, %(games_eff)s, %(wr)s, %(synergy_raw)s,
                                 %(synergy_pred)s, %(synergy)s, %(ci_low)s, %(ci_high)s, %(tier)s,
-                                {_SCORE_STAT_PLACEHOLDERS})
+                                %(scaling)s, {_SCORE_STAT_PLACEHOLDERS})
                         """,
                         trio_rows,
                     )

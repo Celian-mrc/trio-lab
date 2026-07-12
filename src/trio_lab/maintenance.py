@@ -150,6 +150,8 @@ _AGG_TABLES = (
     "agg_trio",
     "agg_trio_vs_champion",
     "agg_trio_with_ally",
+    "agg_trio_duration",
+    "agg_duo_duration",
 )
 
 

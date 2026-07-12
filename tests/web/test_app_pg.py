@@ -41,6 +41,7 @@ def pg_sync():
         conn.execute(
             "TRUNCATE players, matches, match_fetch_journal,"
             " agg_champion, agg_duo, agg_trio, agg_trio_vs_champion, agg_trio_with_ally,"
+            " agg_trio_duration, agg_duo_duration,"
             " score_duo, score_trio, score_trio_vs_champion, score_trio_with_ally,"
             " champion_cc_theoretical CASCADE"
         )
@@ -59,24 +60,25 @@ def _seed_scores(conn) -> None:
     valeurs arbitraires cohérentes utilisées telles quelles par la page détail,
     jamais recalculées), (4,5,6) −.02 (CC non matérialisé, teste le chemin None)."""
     rows = (
-        (1, 2, 3, 40, 0.60, 0.05, 42.0, 50.0, 43.7),
-        (4, 5, 6, 80, 0.48, -0.02, None, None, None),
+        (1, 2, 3, 40, 0.60, 0.05, 42.0, 50.0, 43.7, 0.015),
+        (4, 5, 6, 80, 0.48, -0.02, None, None, None, None),
     )
-    for jgl, mid, sup, games, wr, syn, cc_theo, cc_emp, cc_blend in rows:
+    for jgl, mid, sup, games, wr, syn, cc_theo, cc_emp, cc_blend, scaling in rows:
         conn.execute(
             "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
             " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
-            " ci_low, ci_high, tier, cc_theoretical_pct, cc_empirical_pct, cc_blended_pct)"
+            " ci_low, ci_high, tier, cc_theoretical_pct, cc_empirical_pct, cc_blended_pct,"
+            " scaling)"
             " VALUES ('16.13', 'euw1', %s, %s, %s, %s, %s, %s,"
-            " %s, 0.0, %s, 0.3, 0.8, 'faible', %s, %s, %s)",
-            (jgl, mid, sup, games, float(games), wr, syn, syn, cc_theo, cc_emp, cc_blend),
+            " %s, 0.0, %s, 0.3, 0.8, 'faible', %s, %s, %s, %s)",
+            (jgl, mid, sup, games, float(games), wr, syn, syn, cc_theo, cc_emp, cc_blend, scaling),
         )
     conn.execute(
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
         " games_eff, wr, synergy, ci_low, ci_high, tier,"
-        " cc_theoretical_pct, cc_empirical_pct, cc_blended_pct)"
+        " cc_theoretical_pct, cc_empirical_pct, cc_blended_pct, scaling)"
         " VALUES ('16.13', 'euw1', 'jgl_mid', 1, 2, 60, 60.0, 0.58, 0.03, 0.4, 0.7, 'moyen',"
-        " 37.5, 45.0, 40.2)"
+        " 37.5, 45.0, 40.2, -0.01)"
     )
     conn.execute(
         "INSERT INTO score_trio_vs_champion (window_label, platform, jgl_champion,"
@@ -127,6 +129,14 @@ def test_api_trios_sorted_by_synergy(pg_sync, client):
     assert payload["rows"][0]["jgl_champion_name"] == "Lee Sin"
 
 
+def test_api_trios_sorted_by_scaling_nulls_last(pg_sync, client):
+    _seed_scores(pg_sync)  # trio (1,2,3) scaling=.015, trio (4,5,6) scaling=NULL
+    payload = client.get("/api/trios", params={"sort": "scaling"}).json()
+    assert [r["jgl_champion"] for r in payload["rows"]] == [1, 4]
+    payload = client.get("/api/trios", params={"sort": "scaling", "dir": "asc"}).json()
+    assert [r["jgl_champion"] for r in payload["rows"]] == [1, 4]  # NULL toujours en dernier
+
+
 def test_api_trios_champion_filter_by_name_and_role(pg_sync, client):
     _seed_scores(pg_sync)
     payload = client.get("/api/trios", params={"champion": "Ahri", "role": "mid"}).json()
@@ -157,6 +167,7 @@ def test_api_trio_detail_stats_and_counters(pg_sync, client):
         )
     payload = client.get("/api/trios/1/2/3").json()
     assert payload["score"]["wr"] == pytest.approx(0.60)
+    assert payload["score"]["scaling"] == pytest.approx(0.015)
     # WR individuel baseline (agg_champion), utilisé pour la synergie brute
     # mais jamais matérialisé — recalculé en lecture pour la page détail.
     member_wr = payload["member_wr"]
@@ -213,6 +224,7 @@ def test_api_duo_detail_stats_and_best_trios(pg_sync, client):
     assert payload["score"]["wr"] == pytest.approx(0.58)
     assert payload["score"]["champ_a_name"] == "Lee Sin"
     assert payload["score"]["champ_b_name"] == "Ahri"
+    assert payload["score"]["scaling"] == pytest.approx(-0.01)
     assert payload["member_wr"]["a"] == pytest.approx(0.55)
     assert payload["member_wr"]["b"] == pytest.approx(0.45)
     # Stats du duo = celles du trio complet dans les parties où il apparaît,
@@ -240,12 +252,14 @@ def test_html_pages_render(pg_sync, client):
     home = client.get("/")
     assert home.status_code == 200
     assert "Lee Sin" in home.text
+    assert "Scaling" in home.text
     detail = client.get("/trio/1/2/3")
     assert detail.status_code == 200
     assert "Nocturne" in detail.text
     assert "Détail du calcul théorique" in detail.text
     assert "Mélangé (recommandé)" in detail.text
     assert "Meilleurs alliés" in detail.text
+    assert "+1.50 %" in detail.text  # card Scaling (0.015 → signed_pct(2))
     assert "/duo/jgl_mid/1/2" in detail.text  # lien depuis les duos internes
     duos = client.get("/duos")
     assert duos.status_code == 200

@@ -69,6 +69,7 @@
       <th data-tooltip="Taux de première tour" aria-label="Taux de première tour">{{ sort_link('tower1', '1re tour') }}</th>
       <th data-tooltip="CC infligé mesuré en jeu, cumul trio (Σ timeCCingOthers)." aria-label="CC infligé mesuré en jeu, cumul trio (Σ timeCCingOthers).">{{ sort_link('cc', 'CC') }}</th>
       <th data-tooltip="CC sur 100 : mélange le CC mesuré en jeu et un score calculé depuis les sorts des champions — le score à privilégier pour comparer les trios. Détail sur la page trio." aria-label="CC sur 100 : mélange le CC mesuré en jeu et un score calculé depuis les sorts des champions — le score à privilégier pour comparer les trios. Détail sur la page trio.">{{ sort_link('cc_blend', 'CC lissé') }}</th>
+      <th data-tooltip="Pente du winrate selon la durée de la game (tranches de 5 min) : positif = ce trio gagne plus souvent en game longue, négatif = il gagne plus souvent en game courte. Mesuré uniquement (pas de prédiction si peu de games)." aria-label="Pente du winrate selon la durée de la game (tranches de 5 min) : positif = ce trio gagne plus souvent en game longue, négatif = il gagne plus souvent en game courte. Mesuré uniquement (pas de prédiction si peu de games).">{{ sort_link('scaling', 'Scaling') }}</th>
       <th>Fiabilité</th>
     </tr>
   </thead>
@@ -103,10 +104,11 @@
       <td>{{ r.first_tower_rate | pct(0) }}</td>
       <td>{{ r.cc_time_s | num(0) }}</td>
       <td>{{ r.cc_blended_pct | pct100 }}</td>
+      <td class="{{ 'pos' if r.scaling and r.scaling > 0 else 'neg' if r.scaling and r.scaling < 0 }}">{{ r.scaling | signed_pct(2) }}</td>
       <td><span class="tier tier-{{ r.tier }}">{{ r.tier }}</span></td>
     </tr>
     {% else %}
-    <tr><td colspan="13" class="empty">Aucun trio ne correspond aux filtres.</td></tr>
+    <tr><td colspan="14" class="empty">Aucun trio ne correspond aux filtres.</td></tr>
     {% endfor %}
   </tbody>
 </table>

@@ -116,3 +116,32 @@ def test_add_combined_platform_is_idempotent():
     scores.add_combined_platform(mapping)
     scores.add_combined_platform(mapping)  # les entrées 'all' sont ignorées en source
     assert mapping[("all", 1)] == [("16.13", 10, 5)]
+
+
+# --- weighted_slope ---
+
+
+def test_weighted_slope_perfect_line():
+    # y = 2x + 1, poids égaux : pente exacte.
+    points = [(0.0, 1.0, 10.0), (1.0, 3.0, 10.0), (2.0, 5.0, 10.0)]
+    assert scores.weighted_slope(points) == pytest.approx(2.0)
+
+
+def test_weighted_slope_weights_favor_higher_confidence_points():
+    # Point (2, 100) quasi ignoré (poids infime) : la pente colle aux 2 premiers.
+    points = [(0.0, 0.0, 100.0), (1.0, 1.0, 100.0), (2.0, 100.0, 0.001)]
+    assert scores.weighted_slope(points) == pytest.approx(1.0, abs=0.01)
+
+
+def test_weighted_slope_needs_at_least_two_points():
+    assert scores.weighted_slope([]) is None
+    assert scores.weighted_slope([(0.0, 1.0, 10.0)]) is None
+
+
+def test_weighted_slope_none_when_all_weights_zero():
+    assert scores.weighted_slope([(0.0, 1.0, 0.0), (1.0, 2.0, 0.0)]) is None
+
+
+def test_weighted_slope_none_when_x_constant():
+    # Variance nulle en x : pente indéfinie (dénominateur nul).
+    assert scores.weighted_slope([(5.0, 1.0, 10.0), (5.0, 2.0, 10.0)]) is None
