@@ -44,8 +44,9 @@ async def pg_conn():
     conn = await db.connect(TEST_DSN)
     await conn.execute(
         "TRUNCATE players, matches, match_fetch_journal,"
-        " agg_champion, agg_duo, agg_trio, agg_trio_vs_champion,"
-        " score_duo, score_trio, score_trio_vs_champion, champion_cc_theoretical CASCADE"
+        " agg_champion, agg_duo, agg_trio, agg_trio_vs_champion, agg_trio_with_ally,"
+        " score_duo, score_trio, score_trio_vs_champion, score_trio_with_ally,"
+        " champion_cc_theoretical CASCADE"
     )
     try:
         yield conn

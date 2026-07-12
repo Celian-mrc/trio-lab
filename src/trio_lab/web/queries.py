@@ -13,25 +13,27 @@ from psycopg.rows import dict_row
 
 from trio_lab.synergy.windows import patch_key
 
-# Tris autorisés → clause SQL (liste blanche, jamais interpolé depuis
-# l'extérieur). Les stats matérialisées (007) trient NULLS LAST : un trio sans
-# donnée ne squatte pas le haut du classement.
+# Tris autorisés → colonne SQL (liste blanche, jamais interpolée depuis
+# l'extérieur). La direction est un paramètre séparé (`SORT_DIRECTIONS`) ;
+# NULLS LAST dans les deux sens, pour qu'un trio sans donnée ne squatte
+# jamais le haut du classement (ni en croissant, ni en décroissant).
 TRIO_SORTS = {
-    "synergy": "synergy DESC",
-    "wr": "wr DESC",
-    "games": "games DESC",
-    "gold5": "gold_diff_5 DESC NULLS LAST",
-    "gold10": "gold_diff_10 DESC NULLS LAST",
-    "gold15": "gold_diff_15 DESC NULLS LAST",
-    "vision": "vision_score DESC NULLS LAST",
-    "drakes": "drakes DESC NULLS LAST",
-    "soul": "soul_rate DESC NULLS LAST",
-    "herald": "herald_rate DESC NULLS LAST",
-    "tower1": "first_tower_rate DESC NULLS LAST",
-    "cc": "cc_time_s DESC NULLS LAST",
-    "cc_blend": "cc_blended_pct DESC NULLS LAST",
+    "synergy": "synergy",
+    "wr": "wr",
+    "games": "games",
+    "gold5": "gold_diff_5",
+    "gold10": "gold_diff_10",
+    "gold15": "gold_diff_15",
+    "vision": "vision_score",
+    "drakes": "drakes",
+    "soul": "soul_rate",
+    "herald": "herald_rate",
+    "tower1": "first_tower_rate",
+    "cc": "cc_time_s",
+    "cc_blend": "cc_blended_pct",
 }
 DUO_SORTS = dict(TRIO_SORTS)  # score_duo porte les mêmes colonnes depuis 008/009/010
+SORT_DIRECTIONS = {"asc": "ASC", "desc": "DESC"}
 _STAT_COLUMNS_SQL = (
     "gold_diff_5, gold_diff_10, gold_diff_15, vision_score, drakes,"
     " soul_rate, herald_rate, first_tower_rate, cc_time_s,"
@@ -72,9 +74,11 @@ def trio_tierlist(
     min_games: int = 0,
     min_tier: str = "faible",
     sort: str = "synergy",
+    direction: str = "desc",
     page: int = 1,
 ) -> dict:
     """Une page de tier list des trios + le total pour la pagination."""
+    order_dir = SORT_DIRECTIONS[direction]
     where = ["window_label = %(window)s", "platform = %(platform)s", "games >= %(min_games)s"]
     params: dict = {
         "window": window,
@@ -102,7 +106,8 @@ def trio_tierlist(
                    count(*) OVER () AS total
             FROM score_trio
             WHERE {" AND ".join(where)}
-            ORDER BY {TRIO_SORTS[sort]}, games DESC, jgl_champion, mid_champion, sup_champion
+            ORDER BY {TRIO_SORTS[sort]} {order_dir} NULLS LAST,
+                     games DESC, jgl_champion, mid_champion, sup_champion
             OFFSET %(offset)s LIMIT %(per_page)s
             """,
             params,
@@ -122,11 +127,13 @@ def duo_tierlist(
     min_games: int = 0,
     min_tier: str = "faible",
     sort: str = "synergy",
+    direction: str = "desc",
     page: int = 1,
 ) -> dict:
     """Une page de tier list des duos d'un couple de rôles."""
     if roles not in DUO_ROLES:
         raise ValueError(f"roles inconnu : {roles!r}")
+    order_dir = SORT_DIRECTIONS[direction]
     with conn.cursor(row_factory=dict_row) as cur:
         rows = cur.execute(
             f"""
@@ -136,7 +143,7 @@ def duo_tierlist(
             FROM score_duo
             WHERE window_label = %(window)s AND platform = %(platform)s
               AND roles = %(roles)s AND games >= %(min_games)s AND tier = ANY(%(tiers)s)
-            ORDER BY {DUO_SORTS[sort]}, games DESC, champ_a, champ_b
+            ORDER BY {DUO_SORTS[sort]} {order_dir} NULLS LAST, games DESC, champ_a, champ_b
             OFFSET %(offset)s LIMIT %(per_page)s
             """,
             {
@@ -215,6 +222,24 @@ def trio_counters(
             ORDER BY delta ASC, games DESC
             """,
             (window, platform, jgl, mid, sup),
+        ).fetchall()
+
+
+def trio_allies(
+    conn: psycopg.Connection, window: str, platform: str, jgl: int, mid: int, sup: int, limit: int
+) -> list[dict]:
+    """Meilleurs alliés Top/ADC du trio, du plus fort uplift au plus faible."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            """
+            SELECT ally_role, ally_champion, games, games_eff, wr, uplift_raw, uplift, tier
+            FROM score_trio_with_ally
+            WHERE window_label = %s AND platform = %s
+              AND jgl_champion = %s AND mid_champion = %s AND sup_champion = %s
+            ORDER BY uplift DESC, games DESC
+            LIMIT %s
+            """,
+            (window, platform, jgl, mid, sup, limit),
         ).fetchall()
 
 

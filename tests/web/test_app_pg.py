@@ -28,6 +28,7 @@ _INDEX = {
     4: Champion(4, "Vi", ""),
     5: Champion(5, "Orianna", ""),
     6: Champion(6, "Leona", ""),
+    44: Champion(44, "Renekton", ""),
     64: Champion(64, "Nocturne", ""),
 }
 
@@ -39,8 +40,9 @@ def pg_sync():
     with psycopg.connect(TEST_DSN, autocommit=True) as conn:
         conn.execute(
             "TRUNCATE players, matches, match_fetch_journal,"
-            " agg_champion, agg_duo, agg_trio, agg_trio_vs_champion,"
-            " score_duo, score_trio, score_trio_vs_champion, champion_cc_theoretical CASCADE"
+            " agg_champion, agg_duo, agg_trio, agg_trio_vs_champion, agg_trio_with_ally,"
+            " score_duo, score_trio, score_trio_vs_champion, score_trio_with_ally,"
+            " champion_cc_theoretical CASCADE"
         )
         yield conn
 
@@ -80,6 +82,13 @@ def _seed_scores(conn) -> None:
         " delta_raw, delta, ci_low, ci_high, tier)"
         " VALUES ('16.13', 'euw1', 1, 2, 3, 'JUNGLE', 64, 12, 12.0, 0.35,"
         " -0.25, -0.014, 0.1, 0.6, 'faible')"
+    )
+    conn.execute(
+        "INSERT INTO score_trio_with_ally (window_label, platform, jgl_champion,"
+        " mid_champion, sup_champion, ally_role, ally_champion, games, games_eff, wr,"
+        " uplift_raw, uplift, ci_low, ci_high, tier)"
+        " VALUES ('16.13', 'euw1', 1, 2, 3, 'TOP', 44, 15, 15.0, 0.70,"
+        " 0.10, 0.045, 0.4, 0.9, 'faible')"
     )
 
 
@@ -149,6 +158,9 @@ def test_api_trio_detail_stats_and_counters(pg_sync, client):
     worst = payload["counters_worst"][0]
     assert (worst["enemy_champion_name"], worst["enemy_role"]) == ("Nocturne", "JUNGLE")
     assert worst["delta"] == pytest.approx(-0.014)
+    best_ally = payload["allies_best"][0]
+    assert (best_ally["ally_champion_name"], best_ally["ally_role"]) == ("Renekton", "TOP")
+    assert best_ally["uplift"] == pytest.approx(0.045)
     # Score CC théorique brut par champion : lu depuis `champion_cc_theoretical`
     # (table matérialisée, jamais le fichier gelé — absent de l'image Docker
     # du service web, cf. Dockerfile).
@@ -173,8 +185,9 @@ def test_html_pages_render(pg_sync, client):
     detail = client.get("/trio/1/2/3")
     assert detail.status_code == 200
     assert "Nocturne" in detail.text
-    assert "CC théorique" in detail.text
-    assert "Mélangé (lissé par le volume)" in detail.text
+    assert "Détail du calcul théorique" in detail.text
+    assert "Mélangé (recommandé)" in detail.text
+    assert "Meilleurs alliés" in detail.text
     duos = client.get("/duos")
     assert duos.status_code == 200
     assert "Ahri" in duos.text

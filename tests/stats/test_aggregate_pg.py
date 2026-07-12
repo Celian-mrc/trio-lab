@@ -36,12 +36,13 @@ async def test_refresh_counts_games_and_wins(pg_conn):
     await _ingest(pg_conn, "EUW1_B", winning_team=200)
     counts = aggregate.refresh("16.13", dsn=TEST_DSN)
     # 10 champions uniques (un par rôle/équipe), 3 duos × 2 équipes, 1 trio × 2 équipes,
-    # 5 ennemis × 2 trios pour les counters.
+    # 5 ennemis × 2 trios pour les counters, 2 alliés (Top/Bottom) × 2 trios pour les alliés.
     assert counts == {
         "agg_champion": 10,
         "agg_duo": 6,
         "agg_trio": 2,
         "agg_trio_vs_champion": 10,
+        "agg_trio_with_ally": 4,
     }
 
     cur = await pg_conn.execute(
@@ -73,6 +74,14 @@ async def test_refresh_counts_games_and_wins(pg_conn):
     cur = await pg_conn.execute(
         "SELECT games, wins FROM agg_trio_vs_champion"
         " WHERE jgl_champion = 2 AND enemy_role = 'JUNGLE' AND enemy_champion = 12"
+    )
+    assert await cur.fetchall() == [(2, 1)]
+
+    # Alliés : le trio 100 (2/3/5) est accompagné du même Top (1) et ADC (4)
+    # dans les 2 matchs (builder déterministe) et en gagne 1.
+    cur = await pg_conn.execute(
+        "SELECT games, wins FROM agg_trio_with_ally"
+        " WHERE jgl_champion = 2 AND ally_role = 'TOP' AND ally_champion = 1"
     )
     assert await cur.fetchall() == [(2, 1)]
 

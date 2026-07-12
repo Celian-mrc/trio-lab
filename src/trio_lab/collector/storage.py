@@ -153,7 +153,7 @@ _TRIO_STATS_SQL = """
         match_id, team_id, jgl_champion, mid_champion, sup_champion, win,
         gold_diff_5, gold_diff_10, gold_diff_15, gold_diff_20,
         gold_diff_25, gold_diff_30, gold_diff_35,
-        grubs_taken, herald_taken, atakhan_taken, drakes_taken, soul_taken,
+        grubs_taken, herald_taken, drakes_taken, soul_taken,
         nashor_first, nashor_first_s, first_tower, towers_destroyed, plates_taken,
         first_blood_trio, kill_participation_pre15, damage_share, vision_score, cc_time_s
     ) VALUES (
@@ -161,7 +161,7 @@ _TRIO_STATS_SQL = """
         %(win)s,
         %(gold_diff_5)s, %(gold_diff_10)s, %(gold_diff_15)s, %(gold_diff_20)s,
         %(gold_diff_25)s, %(gold_diff_30)s, %(gold_diff_35)s,
-        %(grubs_taken)s, %(herald_taken)s, %(atakhan_taken)s, %(drakes_taken)s,
+        %(grubs_taken)s, %(herald_taken)s, %(drakes_taken)s,
         %(soul_taken)s,
         %(nashor_first)s, %(nashor_first_s)s, %(first_tower)s, %(towers_destroyed)s,
         %(plates_taken)s,

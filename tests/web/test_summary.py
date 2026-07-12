@@ -16,7 +16,6 @@ def _row(patch="16.13", win=True, duration=1800, **overrides):
         "gold_diff_10": None,
         "grubs_taken": None,
         "herald_taken": None,
-        "atakhan_taken": None,
         "drakes_taken": None,
         "soul_taken": None,
         "nashor_first": None,

@@ -31,6 +31,7 @@ _HERE = Path(__file__).resolve().parent
 
 ROLE_LABELS = {"jgl": "Jungle", "mid": "Mid", "sup": "Support"}
 COUNTERS_SHOWN = 10  # pires et meilleurs matchups affichés sur la page détail
+ALLIES_SHOWN = 10  # meilleurs alliés Top/ADC affichés sur la page détail
 
 
 def _fmt_pct(value: float | None, digits: int = 1) -> str:
@@ -167,6 +168,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
     _ROLE_PATTERN = "^(jgl|mid|sup)?$"
     _TRIO_SORT_PATTERN = f"^({'|'.join(queries.TRIO_SORTS)})$"
     _DUO_SORT_PATTERN = f"^({'|'.join(queries.DUO_SORTS)})$"
+    _DIR_PATTERN = f"^({'|'.join(queries.SORT_DIRECTIONS)})$"
 
     @app.get("/", response_class=HTMLResponse)
     def tierlist_page(
@@ -178,6 +180,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         min_games: int = Query(0, ge=0),
         min_tier: str = Query("faible", pattern="^(faible|moyen|eleve)$"),
         sort: str = Query("synergy", pattern=_TRIO_SORT_PATTERN),
+        direction: str = Query("desc", pattern=_DIR_PATTERN, alias="dir"),
         page: int = Query(1, ge=1),
     ):
         role = role or None
@@ -193,6 +196,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 min_games=min_games,
                 min_tier=min_tier,
                 sort=sort,
+                direction=direction,
                 page=page,
             )
         return templates.TemplateResponse(
@@ -206,6 +210,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 "min_games": min_games,
                 "min_tier": min_tier,
                 "sort": sort,
+                "direction": direction,
                 "champion_names": sorted(c.name for c in champ_index().values()),
             },
         )
@@ -219,6 +224,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         min_games: int = Query(0, ge=0),
         min_tier: str = Query("faible", pattern="^(faible|moyen|eleve)$"),
         sort: str = Query("synergy", pattern=_DUO_SORT_PATTERN),
+        direction: str = Query("desc", pattern=_DIR_PATTERN, alias="dir"),
         page: int = Query(1, ge=1),
     ):
         with request.app.state.pool.connection() as conn:
@@ -231,6 +237,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 min_games=min_games,
                 min_tier=min_tier,
                 sort=sort,
+                direction=direction,
                 page=page,
             )
         return templates.TemplateResponse(
@@ -243,6 +250,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 "min_games": min_games,
                 "min_tier": min_tier,
                 "sort": sort,
+                "direction": direction,
             },
         )
 
@@ -261,6 +269,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             sup,
         )
         counters = queries.trio_counters(conn, window, platform, jgl, mid, sup)
+        allies = queries.trio_allies(conn, window, platform, jgl, mid, sup, ALLIES_SHOWN)
         stats = summary.summarize(rows, weights)
         cc_scores = queries.cc_theoretical_scores(conn)
         jgl_cc, mid_cc, sup_cc = cc_scores.get(jgl), cc_scores.get(mid), cc_scores.get(sup)
@@ -274,6 +283,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             "duos": queries.trio_duos(conn, window, platform, jgl, mid, sup),
             "counters_worst": counters[:COUNTERS_SHOWN],
             "counters_best": counters[::-1][:COUNTERS_SHOWN],
+            "allies_best": allies,
             "cc_theoretical": {"jgl": jgl_cc, "mid": mid_cc, "sup": sup_cc, "trio": trio_cc_raw},
             # Pourcentages 0-100 déjà matérialisés par synergy.compute (mêmes
             # valeurs que la tier list, jamais recalculés ici : évite toute
@@ -313,6 +323,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             "champ_a",
             "champ_b",
             "enemy_champion",
+            "ally_champion",
         ):
             if key in out:
                 out[key + "_name"] = champ(out[key]).name
@@ -350,6 +361,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         min_games: int = Query(0, ge=0),
         min_tier: str = Query("faible", pattern="^(faible|moyen|eleve)$"),
         sort: str = Query("synergy", pattern=_TRIO_SORT_PATTERN),
+        direction: str = Query("desc", pattern=_DIR_PATTERN, alias="dir"),
         page: int = Query(1, ge=1),
     ):
         with request.app.state.pool.connection() as conn:
@@ -363,6 +375,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 min_games=min_games,
                 min_tier=min_tier,
                 sort=sort,
+                direction=direction,
                 page=page,
             )
         result["rows"] = [_named(r) for r in result["rows"]]
@@ -384,6 +397,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         detail["duos"] = [_named(r) for r in detail["duos"]]
         detail["counters_worst"] = [_named(r) for r in detail["counters_worst"]]
         detail["counters_best"] = [_named(r) for r in detail["counters_best"]]
+        detail["allies_best"] = [_named(r) for r in detail["allies_best"]]
         return {"window": window, "platform": platform, **detail}
 
     @app.get("/api/duos")
@@ -395,6 +409,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         min_games: int = Query(0, ge=0),
         min_tier: str = Query("faible", pattern="^(faible|moyen|eleve)$"),
         sort: str = Query("synergy", pattern=_DUO_SORT_PATTERN),
+        direction: str = Query("desc", pattern=_DIR_PATTERN, alias="dir"),
         page: int = Query(1, ge=1),
     ):
         with request.app.state.pool.connection() as conn:
@@ -407,6 +422,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 min_games=min_games,
                 min_tier=min_tier,
                 sort=sort,
+                direction=direction,
                 page=page,
             )
         result["rows"] = [_named(r) for r in result["rows"]]

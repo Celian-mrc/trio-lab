@@ -131,21 +131,19 @@ def test_first_nashor_and_first_tower_are_exclusive():
     assert stats[200]["towers_destroyed"] == 2
 
 
-def test_grubs_herald_atakhan_counters():
+def test_grubs_herald_counters():
     stats = extract.team_objectives(
         _obj_events(
             ("VOID_GRUB", 100, 500),
             ("VOID_GRUB", 100, 510),
             ("VOID_GRUB", 200, 520),
             ("RIFT_HERALD", 200, 960),
-            ("ATAKHAN", 100, 1300),
         )
     )
     assert stats[100]["grubs_taken"] == 2
     assert stats[200]["grubs_taken"] == 1
     assert stats[200]["herald_taken"] is True
     assert stats[100]["herald_taken"] is False
-    assert stats[100]["atakhan_taken"] is True
 
 
 # --- gold_diffs ---

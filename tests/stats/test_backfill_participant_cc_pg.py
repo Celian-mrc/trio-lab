@@ -73,7 +73,6 @@ async def _seed_match_without_participant_cc(conn) -> None:
                     "gold_diff_35",
                     "grubs_taken",
                     "herald_taken",
-                    "atakhan_taken",
                     "drakes_taken",
                     "soul_taken",
                     "nashor_first",

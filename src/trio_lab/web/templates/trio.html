@@ -44,7 +44,6 @@
     <table class="narrow kv">
       <tr><td>Grubs pris (moy.)</td><td>{{ stats.grubs_taken | num }}</td></tr>
       <tr><td>Héraut</td><td>{{ stats.herald_taken | pct }}</td></tr>
-      <tr><td>Atakhan</td><td>{{ stats.atakhan_taken | pct }}</td></tr>
       <tr><td>Drakes (moy.)</td><td>{{ stats.drakes_taken | num }}</td></tr>
       <tr><td>Âme obtenue</td><td>{{ stats.soul_taken | pct }}</td></tr>
       <tr><td>WR sans l'âme</td><td>{{ stats.wr_without_soul | pct }}</td></tr>
@@ -62,26 +61,34 @@
       <tr><td>Kill participation &lt; 15 min</td><td>{{ stats.kill_participation_pre15 | pct }}</td></tr>
       <tr><td>Part des dégâts de l'équipe</td><td>{{ stats.damage_share | pct }}</td></tr>
       <tr><td>Score de vision (cumul trio)</td><td>{{ stats.vision_score | num }}</td></tr>
-      <tr><td>CC infligé (s, cumul trio, empirique)</td><td>{{ stats.cc_time_s | num }}</td></tr>
-      <tr title="Score de kit (Phase 2b), brut avant normalisation.">
-        <td>CC théorique (kit, Σ trio, brut)</td><td>{{ cc_theoretical.trio | num(2) }}</td>
-      </tr>
-      <tr><td>&nbsp;&nbsp;dont {{ jgl.name }} (jungle)</td><td>{{ cc_theoretical.jgl | num(2) }}</td></tr>
-      <tr><td>&nbsp;&nbsp;dont {{ mid.name }} (mid)</td><td>{{ cc_theoretical.mid | num(2) }}</td></tr>
-      <tr><td>&nbsp;&nbsp;dont {{ sup.name }} (support)</td><td>{{ cc_theoretical.sup | num(2) }}</td></tr>
+      <tr><td>CC infligé, mesuré en jeu (Σ timeCCingOthers)</td><td>{{ stats.cc_time_s | num }} s</td></tr>
     </table>
-    <h2>CC — empirique vs théorique, sur 100</h2>
+    <h2>CC — empirique vs théorique <span class="meta">(0-100, les 3 valeurs sont comparables entre elles)</span></h2>
+    <p class="meta">Le CC empirique (mesuré en jeu) peut être gonflé pour certains champions par un
+      artefact de mesure Riot (cas connu : Nocturne, corrigé). Le CC théorique (calculé à partir du
+      kit seul) est immunisé à ce type d'artefact mais moins précis sur le terrain — en cas de gros
+      écart entre les deux, méfiance sur l'empirique. Le mélangé combine les deux (lissé par le
+      volume de games) : c'est le score à retenir en priorité.</p>
     <table class="narrow kv">
-      <tr title="Plafonné à p99 des trios scorés (240 s) : au-delà, valeurs surtout des artefacts de mesure Riot.">
+      <tr title="Σ timeCCingOthers du trio, plafonné à 240 s (≈ p99 des trios scorés) puis ramené sur 100 : au-delà, les valeurs sont surtout des artefacts de mesure Riot.">
         <td>Empirique</td><td>{{ cc_scores.empirical_pct | pct100 }}</td>
       </tr>
-      <tr title="Repère : 3 × le score max d'un champion (plafond mathématique, jamais atteignable).">
+      <tr title="Score de kit (durées/zones/fiabilité des sorts, cf. détail ci-dessous) ramené sur 100 via un repère fixe : 3 × le score max d'un champion (plafond mathématique, jamais atteignable en pratique).">
         <td>Théorique</td><td>{{ cc_scores.theoretical_pct | pct100 }}</td>
       </tr>
       <tr title="Lissage bayésien (même mécanique que la synergie) : tiré vers le théorique si peu de games, vers l'empirique sinon.">
-        <td>Mélangé (lissé par le volume)</td><td>{{ cc_scores.blended_pct | pct100 }}</td>
+        <td><strong>Mélangé (recommandé)</strong></td><td><strong>{{ cc_scores.blended_pct | pct100 }}</strong></td>
       </tr>
     </table>
+    <details>
+      <summary class="meta">Détail du calcul théorique (score de kit brut, avant normalisation sur 100)</summary>
+      <table class="narrow kv">
+        <tr><td>Total trio</td><td>{{ cc_theoretical.trio | num(2) }}</td></tr>
+        <tr><td>&nbsp;&nbsp;dont {{ jgl.name }} (jungle)</td><td>{{ cc_theoretical.jgl | num(2) }}</td></tr>
+        <tr><td>&nbsp;&nbsp;dont {{ mid.name }} (mid)</td><td>{{ cc_theoretical.mid | num(2) }}</td></tr>
+        <tr><td>&nbsp;&nbsp;dont {{ sup.name }} (support)</td><td>{{ cc_theoretical.sup | num(2) }}</td></tr>
+      </table>
+    </details>
     <h2>Duos internes</h2>
     <table class="narrow">
       <thead><tr><th>Duo</th><th>Games</th><th>WR</th><th>Synergie</th></tr></thead>
@@ -124,6 +131,29 @@
     </table>
   </div>
   {% endfor %}
+</section>
+
+<section>
+  <h2>Meilleurs alliés (Top / ADC)</h2>
+  <p class="meta">WR du trio quand il est accompagné de ce champion Top ou ADC, comparé à son WR
+    global — jamais de combinaison 5v5 (CLAUDE.md), le grain est un allié individuel.</p>
+  <table class="narrow">
+    <thead><tr><th>Allié</th><th>Rôle</th><th>Games</th><th>WR</th><th>Uplift lissé</th></tr></thead>
+    <tbody>
+      {% for a in allies_best %}
+      {% set c = champ(a.ally_champion) %}
+      <tr>
+        <td class="trio-cell"><span class="champ">{% if c.icon_url %}<img src="{{ c.icon_url }}" alt="" width="24" height="24">{% endif %}{{ c.name }}</span></td>
+        <td>{{ a.ally_role | lower }}</td>
+        <td>{{ a.games }}</td>
+        <td>{{ a.wr | pct }}</td>
+        <td class="{{ 'pos' if a.uplift > 0 else 'neg' if a.uplift < 0 }}">{{ a.uplift | signed_pct(2) }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="empty">Aucun allié enregistré.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </section>
 
 <details class="legend">

@@ -144,7 +144,13 @@ def purge_old_patches(
     return {"purged_patches": old, "matches_deleted": deleted}
 
 
-_AGG_TABLES = ("agg_champion", "agg_duo", "agg_trio", "agg_trio_vs_champion")
+_AGG_TABLES = (
+    "agg_champion",
+    "agg_duo",
+    "agg_trio",
+    "agg_trio_vs_champion",
+    "agg_trio_with_ally",
+)
 
 
 def purge_stale_aggregates(
@@ -178,7 +184,7 @@ def purge_stale_aggregates(
     return {"purged_patches": old, "agg_rows_deleted": deleted}
 
 
-_SCORE_TABLES = ("score_duo", "score_trio", "score_trio_vs_champion")
+_SCORE_TABLES = ("score_duo", "score_trio", "score_trio_vs_champion", "score_trio_with_ally")
 
 
 def purge_stale_scores(

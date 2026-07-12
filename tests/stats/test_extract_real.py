@@ -48,7 +48,6 @@ def test_game1_objectives():
     assert r100["herald_taken"] is True and r200["herald_taken"] is False
     assert (r100["drakes_taken"], r200["drakes_taken"]) == (0, 3)
     assert r100["soul_taken"] is False and r200["soul_taken"] is False  # 3 drakes ≠ âme
-    assert r100["atakhan_taken"] is False and r200["atakhan_taken"] is False
     assert r100["nashor_first"] is False and r200["nashor_first"] is False
     assert r100["nashor_first_s"] is None and r200["nashor_first_s"] is None
     assert r100["first_tower"] is True  # première tour (owner 200) à 819 s

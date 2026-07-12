@@ -4,7 +4,8 @@ Orchestration SYNCHRONE : chaque cycle relance `asyncio.run` sur un batch fini
 (`target` par plateforme), si bien qu'entre deux batchs le patch courant est
 re-résolu via Data Dragon — le passage 16.13 → 16.14 ne demande aucune
 intervention. Après chaque batch : agrégats du patch courant + scores de
-synergie + counters sur la fenêtre des patchs présents dans `agg_trio` (≤ 3 —
+synergie + counters + meilleurs alliés sur la fenêtre des patchs présents
+dans `agg_trio` (≤ 3 —
 volontairement PAS `matches`, pour que la profondeur statistique ne dépende
 pas de la rétention brute), puis purge des scores à la fenêtre courante
 (bon marché, faite à chaque cycle) et des events (cadence courte, jamais
@@ -27,7 +28,7 @@ import psycopg
 from trio_lab import db, maintenance
 from trio_lab.collector import collect, patches
 from trio_lab.stats import aggregate
-from trio_lab.synergy import compute, counters
+from trio_lab.synergy import allies, compute, counters
 from trio_lab.synergy.windows import PatchWindow, make_window, patch_key
 
 logger = logging.getLogger(__name__)
@@ -52,7 +53,7 @@ def scoring_window(dsn: str | None = None) -> PatchWindow | None:
 
 
 def refresh_scores(patch: str, dsn: str | None = None) -> None:
-    """Agrégats du patch courant + scores/counters de la fenêtre glissante.
+    """Agrégats du patch courant + scores/counters/alliés de la fenêtre glissante.
 
     Purge aussi les scores hors fenêtre courante : bon marché (DELETE simple)
     et empêche `score_*` d'accumuler un nouveau doublon à chaque rollover.
@@ -63,6 +64,7 @@ def refresh_scores(patch: str, dsn: str | None = None) -> None:
         return
     compute.refresh(window, dsn=dsn)
     counters.refresh(window, dsn=dsn)
+    allies.refresh(window, dsn=dsn)
     maintenance.purge_stale_scores(dsn=dsn)
 
 

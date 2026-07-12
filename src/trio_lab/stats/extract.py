@@ -9,7 +9,8 @@ Mappings repris de l'adapter Riot de macro-lab (règles validées là-bas) :
   de la victime) ; `BUILDING_KILL` → **opposé** de `teamId` (le propriétaire
   subit) ; `ELITE_MONSTER_KILL` → `killerTeamId` ;
 - monstres : `HORDE`→VOID_GRUB, `RIFTHERALD`→RIFT_HERALD, `BARON_NASHOR`→BARON,
-  `ATAKHAN`, `DRAGON` (+ sous-types internes), `ELDER_DRAGON` à part ;
+  `DRAGON` (+ sous-types internes), `ELDER_DRAGON` à part (Atakhan n'existe
+  plus cette saison, non suivi) ;
 - frames natives : frame d'indice m = snapshot à t = m×60000 ms.
 
 ⚠️ `DRAGON_SOUL_GIVEN` n'est PAS l'obtention de l'âme : c'est l'**annonce du
@@ -48,7 +49,6 @@ MONSTER_MAP: dict[str, str] = {
     "BARON_NASHOR": "BARON",
     "RIFTHERALD": "RIFT_HERALD",
     "HORDE": "VOID_GRUB",
-    "ATAKHAN": "ATAKHAN",
 }
 
 
@@ -99,7 +99,7 @@ def trios_of(detail: dict[str, Any]) -> dict[int, TrioMembers]:
 
 
 def objective_events(timeline: dict[str, Any]) -> list[dict[str, Any]]:
-    """Events d'objectifs ordonnés : drakes (+ type), héraut, grubs, Atakhan,
+    """Events d'objectifs ordonnés : drakes (+ type), héraut, grubs,
     Nashor, elder, tours (+ emplacement), first blood.
 
     `seq` est 1-indexé, chronologique. `team_id` = équipe qui prend l'objectif.
@@ -168,7 +168,6 @@ def team_objectives(events: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
         team: {
             "grubs_taken": 0,
             "herald_taken": False,
-            "atakhan_taken": False,
             "drakes_taken": 0,
             "soul_taken": False,
             "nashor_first": False,
@@ -185,8 +184,6 @@ def team_objectives(events: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
             team["grubs_taken"] += 1
         elif etype == "RIFT_HERALD":
             team["herald_taken"] = True
-        elif etype == "ATAKHAN":
-            team["atakhan_taken"] = True
         elif etype == "DRAGON":
             team["drakes_taken"] += 1
             if team["drakes_taken"] >= SOUL_DRAKES:

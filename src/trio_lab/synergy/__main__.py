@@ -5,6 +5,7 @@
 
 `--patches` : fenêtre du patch le plus récent au plus ancien (1 à 3), poids
 1.0/0.6/0.35. `--counters` : rafraîchit aussi score_trio_vs_champion (Phase 4).
+`--allies` : rafraîchit aussi score_trio_with_ally (meilleurs alliés Top/ADC).
 Prérequis : `python -m trio_lab.stats.aggregate --patch X` pour chaque patch
 de la fenêtre.
 """
@@ -15,7 +16,7 @@ import argparse
 import logging
 
 from trio_lab import config
-from trio_lab.synergy import compute, counters, scores, windows
+from trio_lab.synergy import allies, compute, counters, scores, windows
 
 
 def main() -> None:
@@ -36,6 +37,11 @@ def main() -> None:
         action="store_true",
         help="rafraîchir aussi les counters (score_trio_vs_champion)",
     )
+    parser.add_argument(
+        "--allies",
+        action="store_true",
+        help="rafraîchir aussi les meilleurs alliés (score_trio_with_ally)",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -45,6 +51,8 @@ def main() -> None:
     compute.refresh(window, k=args.k)
     if args.counters:
         counters.refresh(window, k=args.k)
+    if args.allies:
+        allies.refresh(window, k=args.k)
 
 
 if __name__ == "__main__":

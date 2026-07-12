@@ -167,9 +167,12 @@ def blended_pct(
     est tiré vers le théorique, stable ; un trio très joué reste proche de
     l'empirique.
 
-    Limite à connaître : ce lissage réduit mais n'élimine pas le biais d'un
-    kit à artefact structurel (Nocturne) à haut volume — ce n'est pas du
-    bruit qui se moyenne, mais un biais systématique du kit.
+    Limite à connaître : ce lissage réduit mais n'élimine pas un biais
+    structurel à haut volume — ce n'est pas du bruit qui se moyenne avec plus
+    de games. Le cas connu (Nocturne, `timeCCingOthers` gonflé par son
+    ultimate) est corrigé en amont, à l'ingestion (`ccref.reliability`), donc
+    déjà absent de `empirical` ici ; ce lissage reste la protection pour un
+    éventuel futur cas non encore identifié.
     """
     raw = empirical if empirical is not None else theoretical
     return smooth(raw, games_eff, theoretical, k)

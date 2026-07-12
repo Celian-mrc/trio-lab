@@ -33,7 +33,9 @@ la majorité des trios auront trop peu de games pour un winrate fiable. Stratég
    même pipeline.
 3. **Counters** : trio vs trio ennemi est combinatoirement intraitable (10^13).
    On calcule les counters **par champion ennemi individuel** (ex. « ce trio
-   souffre contre Nocturne jungle »).
+   souffre contre Nocturne jungle »). Même raisonnement côté allié : pas de
+   combinaison 5v5, mais un **meilleur allié Top/ADC individuel** (ex. « ce
+   trio est boosté par tel Top »).
 4. **Fenêtre multi-patchs glissante.** Les patchs ne sont **jamais fusionnés au
    stockage** : chaque match garde sa colonne `patch`, la fenêtre (1 à 3 patchs)
    est un filtre appliqué à la lecture. Patchs récents pondérés plus fort
@@ -50,9 +52,9 @@ Toutes extraites des endpoints match-v5 + timeline :
 - Winrate, nombre de games, score de synergie, intervalle de confiance
 - **Avantage gold** à 5/10/15/20/25/30/35 min
 - **Score de vision** cumulé du trio
-- **Objectifs** : grubs (nombre pris), héraut, Atakhan, drakes (1er/2e/3e/4e…),
+- **Objectifs** : grubs (nombre pris), héraut, drakes (1er/2e/3e/4e…),
   taux d'obtention de l'âme, winrate quand l'âme est perdue, Nashor (taux de
-  premier Nashor, timing moyen)
+  premier Nashor, timing moyen) — Atakhan non suivi (absent cette saison)
 - **Tours** : première tour, ordre et emplacements des tours détruites, gold de
   plaques avant 14 min
 - **Combat** : dégâts (part du trio dans les dégâts de l'équipe), first blood,
@@ -60,6 +62,9 @@ Toutes extraites des endpoints match-v5 + timeline :
 - **Profil de tempo** : durée moyenne des games gagnées vs perdues (trio
   early-game vs scaling)
 - **Counters** : winrate du trio face à chaque champion ennemi (par rôle)
+- **Meilleurs alliés** : winrate du trio accompagné de chaque champion
+  Top/ADC individuel (jamais de combinaison 5v5, même raisonnement que les
+  counters)
 
 ## Score CC théorique par champion
 

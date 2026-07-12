@@ -96,6 +96,11 @@ Phase par phase : la phase N+1 ne démarre pas avant que la phase N soit verte
       `python -m trio_lab.synergy --patches X --counters` ; les deltas
       resteront ~0 tant que le volume par matchup est faible — max 7 games au
       2026-07-11)
+- [x] Meilleurs alliés Top/ADC individuels (miroir des counters côté allié,
+      2026-07-12) : `migrations/014_allies.sql`, `synergy/allies.py` →
+      `score_trio_with_ally` (uplift = WR(trio + allié) − WR global, même
+      lissage), branché dans le cycle service et la rétention ; page détail
+      trio (section « Meilleurs alliés »)
 
 ## Phase 5 — Interface ✅
 

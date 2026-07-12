@@ -21,7 +21,6 @@ GOLD_MINUTES = (5, 10, 15, 20, 25, 30, 35)
 _MEAN_KEYS = (
     "grubs_taken",
     "herald_taken",
-    "atakhan_taken",
     "drakes_taken",
     "soul_taken",
     "nashor_first",
