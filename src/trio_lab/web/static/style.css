@@ -151,12 +151,10 @@ a.combo:hover .champ { color: var(--accent); }
    l'autre. `data-tooltip` évite ce doublon ; `aria-label` porte le même
    texte pour l'accessibilité (lecteurs d'écran) sans déclencher de popup
    native. Volontairement PAS appliqué aux badges de rôle (jgl/mid/sup) sur
-   chaque ligne des tier lists : gardés en `title` natif, sobre — un
-   soulignement pointillé sur chaque champion de chaque ligne serait un bruit
-   visuel constant plutôt qu'une aide ponctuelle. */
+   chaque ligne des tier lists : gardés en `title` natif, sobre. */
 [data-tooltip] { cursor: help; position: relative; }
-span[data-tooltip], .big-number[data-tooltip] { border-bottom: 1px dotted var(--muted-fg); }
-[data-tooltip]::after {
+/* Popup (::before, pour laisser ::after à la petite icône ci-dessous). */
+[data-tooltip]::before {
   content: attr(data-tooltip);
   position: absolute; z-index: 20; top: 100%; left: 50%;
   transform: translateX(-50%); margin-top: 0.4rem;
@@ -169,7 +167,14 @@ span[data-tooltip], .big-number[data-tooltip] { border-bottom: 1px dotted var(--
   opacity: 0; visibility: hidden; pointer-events: none;
   transition: opacity 0.1s ease 0.15s, visibility 0.1s ease 0.15s;
 }
-[data-tooltip]:hover::after, [data-tooltip]:focus-visible::after { opacity: 1; visibility: visible; }
+[data-tooltip]:hover::before, [data-tooltip]:focus-visible::before { opacity: 1; visibility: visible; }
+/* Icône indicateur ⓘ : seulement sur les éléments de texte compacts (pas
+   sur les <tr> du tableau CC — une icône y casserait la mise en page table,
+   et les lignes y sont déjà clairement labellisées). */
+span[data-tooltip]::after, .big-number[data-tooltip]::after, th[data-tooltip]::after {
+  content: "\24D8"; display: inline-block; margin-left: 0.3em;
+  font-size: 0.8em; color: var(--muted-fg); vertical-align: 0.05em;
+}
 
 /* --- Légende --- */
 .legend {
