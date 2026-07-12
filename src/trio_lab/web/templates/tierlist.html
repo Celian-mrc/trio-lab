@@ -20,7 +20,7 @@
       {% for name in champion_names %}<option value="{{ name }}">{% endfor %}
     </datalist>
   </label>
-  <label data-tooltip="N'a d'effet que combiné à un champion : filtre les trios où ce champion est précisément dans ce rôle." aria-label="N'a d'effet que combiné à un champion : filtre les trios où ce champion est précisément dans ce rôle.">Rôle
+  <label>Rôle
     <select name="role">
       <option value="" {{ 'selected' if not role }}>tous</option>
       {% for key, label in ROLE_LABELS.items() %}
