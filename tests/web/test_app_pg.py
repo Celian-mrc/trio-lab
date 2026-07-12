@@ -73,8 +73,10 @@ def _seed_scores(conn) -> None:
         )
     conn.execute(
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
-        " games_eff, wr, synergy, ci_low, ci_high, tier)"
-        " VALUES ('16.13', 'euw1', 'jgl_mid', 1, 2, 60, 60.0, 0.58, 0.03, 0.4, 0.7, 'moyen')"
+        " games_eff, wr, synergy, ci_low, ci_high, tier,"
+        " cc_theoretical_pct, cc_empirical_pct, cc_blended_pct)"
+        " VALUES ('16.13', 'euw1', 'jgl_mid', 1, 2, 60, 60.0, 0.58, 0.03, 0.4, 0.7, 'moyen',"
+        " 37.5, 45.0, 40.2)"
     )
     conn.execute(
         "INSERT INTO score_trio_vs_champion (window_label, platform, jgl_champion,"
@@ -176,6 +178,37 @@ def test_api_trio_detail_stats_and_counters(pg_sync, client):
     assert cc_scores["blended_pct"] == pytest.approx(43.7)
 
 
+def test_api_duo_detail_stats_and_best_trios(pg_sync, client):
+    _seed_scores(pg_sync)
+    _seed_matches(pg_sync)
+    for champ_id, cc_score in ((1, 3.0), (2, 4.5)):
+        pg_sync.execute(
+            "INSERT INTO champion_cc_theoretical (champion_id, score) VALUES (%s, %s)",
+            (champ_id, cc_score),
+        )
+    payload = client.get("/api/duos/jgl_mid/1/2").json()
+    assert payload["score"]["wr"] == pytest.approx(0.58)
+    assert payload["score"]["champ_a_name"] == "Lee Sin"
+    assert payload["score"]["champ_b_name"] == "Ahri"
+    # Stats du duo = celles du trio complet dans les parties où il apparaît,
+    # quel que soit le 3e membre (_seed_matches ne sème que le trio 1/2/3,
+    # qui contient bien le duo jgl_mid 1/2) — mêmes valeurs que la page trio.
+    stats = payload["stats"]
+    assert stats["games"] == 2
+    assert stats["gold_diff"]["10"] == pytest.approx(300.0)
+    # Le trio (1,2,3) contient le duo jgl_mid (1,2) : remonte en meilleur 3e membre.
+    best = payload["best_trios"][0]
+    assert (best["jgl_champion"], best["mid_champion"], best["sup_champion"]) == (1, 2, 3)
+    assert best["synergy"] == pytest.approx(0.05)
+    cc = payload["cc_theoretical"]
+    assert (cc["a"], cc["b"]) == (3.0, 4.5)
+    assert cc["duo"] == pytest.approx(7.5)
+    cc_scores = payload["cc_scores"]
+    assert cc_scores["theoretical_pct"] == pytest.approx(37.5)
+    assert cc_scores["empirical_pct"] == pytest.approx(45.0)
+    assert cc_scores["blended_pct"] == pytest.approx(40.2)
+
+
 def test_html_pages_render(pg_sync, client):
     _seed_scores(pg_sync)
     _seed_matches(pg_sync)
@@ -191,6 +224,10 @@ def test_html_pages_render(pg_sync, client):
     duos = client.get("/duos")
     assert duos.status_code == 200
     assert "Ahri" in duos.text
+    assert "/duo/jgl_mid/1/2" in duos.text  # lien vers la page détail duo
+    duo_detail = client.get("/duo/jgl_mid/1/2")
+    assert duo_detail.status_code == 200
+    assert "Meilleurs 3" in duo_detail.text
 
 
 def test_context_bar_shows_window_volume_and_freshness(pg_sync, client):

@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% set duo_role_keys = {'jgl_mid': ('jgl', 'mid'), 'jgl_sup': ('jgl', 'sup'), 'mid_sup': ('mid', 'sup')} %}
+{% set role_a, role_b = duo_role_keys[roles] %}
+{% set a = champ(score.champ_a) %}
+{% set b = champ(score.champ_b) %}
+{% block title %}{{ a.name }} / {{ b.name }} — Trio Lab{% endblock %}
+{% block content %}
+<h1 class="trio-title">
+  {% for c, label in ((a, ROLE_LABELS[role_a]), (b, ROLE_LABELS[role_b])) %}
+  <span class="champ big">
+    {% if c.icon_url %}<img src="{{ c.icon_url }}" alt="" width="48" height="48">{% endif %}
+    {{ c.name }} <small>{{ label }}</small>
+  </span>
+  {% endfor %}
+</h1>
+<p class="meta">Stats = parties de ce duo, quel que soit le 3e membre (jgl/mid/sup selon le rôle manquant).</p>
+
+<section class="cards">
+  <div class="card"><h3>Winrate</h3><p class="big-number">{{ score.wr | pct }}</p>
+    <p class="meta">{{ score.games }} games · IC {{ score.ci_low | pct(0) }} – {{ score.ci_high | pct(0) }}</p></div>
+  <div class="card"><h3>Synergie</h3>
+    <p class="big-number {{ 'pos' if score.synergy > 0 else 'neg' if score.synergy < 0 }}"
+       data-tooltip="Écart entre le winrate réel de ce duo et la moyenne des winrates individuels de ses 2 champions." aria-label="Écart entre le winrate réel de ce duo et la moyenne des winrates individuels de ses 2 champions.">{{ score.synergy | signed_pct }}</p>
+    <p class="meta">fiabilité <span class="tier tier-{{ score.tier }}">{{ score.tier }}</span></p></div>
+  <div class="card"><h3>Tempo</h3>
+    <p class="big-number">{{ stats.avg_duration_win_s | duration }} <small>win</small>
+       / {{ stats.avg_duration_loss_s | duration }} <small>loss</small></p>
+    <p class="meta">durée moyenne des parties</p></div>
+</section>
+
+<section>
+  <h2>Avantage gold du duo</h2>
+  <table class="narrow">
+    <thead><tr>{% for m in stats.gold_diff %}<th>{{ m }} min</th>{% endfor %}</tr></thead>
+    <tbody><tr>
+      {% for m, v in stats.gold_diff.items() %}
+      <td class="{{ 'pos' if v and v > 0 else 'neg' if v and v < 0 }}">{{ v | signed_int }}</td>
+      {% endfor %}
+    </tr></tbody>
+  </table>
+</section>
+
+<section class="columns">
+  <div>
+    <h2>Objectifs</h2>
+    <table class="narrow kv">
+      <tr><td>Grubs pris (moy.)</td><td>{{ stats.grubs_taken | num }}</td></tr>
+      <tr><td>Héraut</td><td>{{ stats.herald_taken | pct }}</td></tr>
+      <tr><td>Drakes (moy.)</td><td>{{ stats.drakes_taken | num }}</td></tr>
+      <tr><td>Âme obtenue</td><td>{{ stats.soul_taken | pct }}</td></tr>
+      <tr><td>WR sans l'âme</td><td>{{ stats.wr_without_soul | pct }}</td></tr>
+      <tr><td>Premier Nashor</td><td>{{ stats.nashor_first | pct }}</td></tr>
+      <tr><td>Timing 1er Nashor</td><td>{{ stats.nashor_first_s | duration }}</td></tr>
+      <tr><td>Première tour</td><td>{{ stats.first_tower | pct }}</td></tr>
+      <tr><td>Tours détruites (moy.)</td><td>{{ stats.towers_destroyed | num }}</td></tr>
+      <tr><td>Plaques (moy.)</td><td>{{ stats.plates_taken | num }}</td></tr>
+    </table>
+  </div>
+  <div>
+    <h2>Combat & vision</h2>
+    <table class="narrow kv">
+      <tr><td>First blood (trio)</td><td>{{ stats.first_blood_trio | pct }}</td></tr>
+      <tr><td>Kill participation &lt; 15 min</td><td>{{ stats.kill_participation_pre15 | pct }}</td></tr>
+      <tr><td>Part des dégâts de l'équipe</td><td>{{ stats.damage_share | pct }}</td></tr>
+      <tr><td>Score de vision (cumul trio)</td><td>{{ stats.vision_score | num }}</td></tr>
+      <tr><td>CC infligé, mesuré en jeu (Σ timeCCingOthers)</td><td>{{ stats.cc_time_s | num }} s</td></tr>
+    </table>
+    <h2>CC — empirique vs théorique <span class="meta">(0-100, les 3 valeurs sont comparables entre elles)</span></h2>
+    <p class="meta">L'empirique vient du chrono du jeu : le temps réel où ce duo (+ un 3e membre
+      quelconque) a gardé des ennemis sous contrôle sur les games déjà jouées. Le théorique est
+      calculé depuis les sorts des 2 champions du duo (durée des stuns, roots, etc.), sans regarder
+      aucune game jouée. Le mélangé combine les deux — c'est le score à retenir : il privilégie
+      l'empirique quand le duo est beaucoup joué, et le théorique quand il l'est peu.</p>
+    <table class="narrow kv">
+      <tr data-tooltip="Mesuré directement sur les games jouées (Σ timeCCingOthers du trio complet), plafonné à 240 s puis ramené sur 100." aria-label="Mesuré directement sur les games jouées (Σ timeCCingOthers du trio complet), plafonné à 240 s puis ramené sur 100.">
+        <td>Empirique</td><td>{{ cc_scores.empirical_pct | pct100 }}</td>
+      </tr>
+      <tr data-tooltip="Score de kit des 2 champions du duo (durées/zones/fiabilité des sorts, cf. détail ci-dessous) ramené sur 100 via un repère fixe : 2 × le score max d'un champion (plafond mathématique, jamais atteignable en pratique)." aria-label="Score de kit des 2 champions du duo (durées/zones/fiabilité des sorts, cf. détail ci-dessous) ramené sur 100 via un repère fixe : 2 × le score max d'un champion (plafond mathématique, jamais atteignable en pratique).">
+        <td>Théorique</td><td>{{ cc_scores.theoretical_pct | pct100 }}</td>
+      </tr>
+      <tr data-tooltip="Le score à retenir : combine les deux, en donnant plus de poids à l'empirique quand le duo est beaucoup joué." aria-label="Le score à retenir : combine les deux, en donnant plus de poids à l'empirique quand le duo est beaucoup joué.">
+        <td><strong>Mélangé (recommandé)</strong></td><td><strong>{{ cc_scores.blended_pct | pct100 }}</strong></td>
+      </tr>
+    </table>
+    <details>
+      <summary class="meta">Détail du calcul théorique (score de kit brut, avant normalisation sur 100)</summary>
+      <table class="narrow kv">
+        <tr><td>Total duo</td><td>{{ cc_theoretical.duo | num(2) }}</td></tr>
+        <tr><td>&nbsp;&nbsp;dont {{ a.name }} ({{ ROLE_LABELS[role_a] | lower }})</td><td>{{ cc_theoretical.a | num(2) }}</td></tr>
+        <tr><td>&nbsp;&nbsp;dont {{ b.name }} ({{ ROLE_LABELS[role_b] | lower }})</td><td>{{ cc_theoretical.b | num(2) }}</td></tr>
+      </table>
+    </details>
+  </div>
+</section>
+
+<section>
+  <h2>Meilleurs 3<sup>e</sup> membres</h2>
+  <p class="meta">Meilleurs trios formés à partir de ce duo, triés par synergie.</p>
+  <table class="narrow">
+    <thead><tr><th>Trio</th><th>Games</th><th>WR</th><th>Synergie</th><th>Fiabilité</th></tr></thead>
+    <tbody>
+      {% for t in best_trios %}
+      <tr>
+        <td class="col-combo">
+          <a class="combo" href="/trio/{{ t.jgl_champion }}/{{ t.mid_champion }}/{{ t.sup_champion }}?window={{ window }}&platform={{ platform }}">
+            {% for cid, rkey in ((t.jgl_champion, 'jgl'), (t.mid_champion, 'mid'), (t.sup_champion, 'sup')) %}
+            {% set c = champ(cid) %}
+            <span class="champ" title="{{ ROLE_LABELS[rkey] }}"><span class="role-badge role-{{ rkey }}">{{ rkey | upper }}</span>{% if c.icon_url %}<img src="{{ c.icon_url }}" alt="" width="22" height="22">{% endif %}{{ c.name }}</span>
+            {% endfor %}
+          </a>
+        </td>
+        <td>{{ t.games }}</td>
+        <td>{{ t.wr | pct }}</td>
+        <td class="{{ 'pos' if t.synergy > 0 else 'neg' if t.synergy < 0 }}">{{ t.synergy | signed_pct }}</td>
+        <td><span class="tier tier-{{ t.tier }}">{{ t.tier }}</span></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="empty">Aucun trio scoré pour ce duo.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<details class="legend">
+  <summary>Empirique, théorique, mélangé : comment ça se calcule ?</summary>
+  <p><strong>Empirique</strong> : le CC réellement infligé par le trio complet (le duo + un 3e
+  membre quelconque, <code>timeCCingOthers</code>, le chrono officiel de Riot), plafonné à
+  240 s (~p99 des trios) puis ramené sur 100 pour ne pas laisser quelques
+  valeurs extrêmes écraser l'échelle. <strong>Théorique</strong> : un score
+  de kit des 2 champions du duo (durée des stuns/roots/etc., zone d'effet, fiabilité des sorts —
+  cf. détail ci-dessus), ramené sur 100 via un repère fixe : 2× le score
+  max d'un champion (un plafond mathématique, jamais atteignable en
+  pratique). <strong>Mélangé</strong>
+  : combine les deux, pondéré par le volume de games du duo — c'est le
+  chiffre à retenir par défaut.</p>
+</details>
+{% endblock %}

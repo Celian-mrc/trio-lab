@@ -316,3 +316,90 @@ def trio_match_rows(
             """,
             {"patches": patches, "platform": platform, "jgl": jgl, "mid": mid, "sup": sup},
         ).fetchall()
+
+
+# roles (score_duo/match_trio_stats) → colonnes match_trio_stats des 2 rôles
+# fixés du duo (liste blanche, jamais interpolée depuis l'extérieur).
+_DUO_ROLE_COLUMNS = {
+    "jgl_mid": ("jgl_champion", "mid_champion"),
+    "jgl_sup": ("jgl_champion", "sup_champion"),
+    "mid_sup": ("mid_champion", "sup_champion"),
+}
+
+
+def duo_score(
+    conn: psycopg.Connection, window: str, platform: str, roles: str, champ_a: int, champ_b: int
+) -> dict | None:
+    """La ligne score_duo d'un duo, ou None si non scoré sur cette fenêtre."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            f"""
+            SELECT roles, champ_a, champ_b, games, games_eff, wr, synergy,
+                   ci_low, ci_high, tier, {_STAT_COLUMNS_SQL}
+            FROM score_duo
+            WHERE window_label = %s AND platform = %s AND roles = %s
+              AND champ_a = %s AND champ_b = %s
+            """,
+            (window, platform, roles, champ_a, champ_b),
+        ).fetchone()
+
+
+def duo_match_rows(
+    conn: psycopg.Connection,
+    patches: list[str],
+    platform: str | None,
+    roles: str,
+    champ_a: int,
+    champ_b: int,
+) -> list[dict]:
+    """Lignes match_trio_stats du duo (les 2 rôles fixés, le 3e libre — les
+    stats du duo sont les stats d'équipe des parties où il apparaît, quel que
+    soit le 3e membre, cf. `_DUO_SQL` d'aggregate.py)."""
+    if roles not in _DUO_ROLE_COLUMNS:
+        raise ValueError(f"roles inconnu : {roles!r}")
+    col_a, col_b = _DUO_ROLE_COLUMNS[roles]
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            f"""
+            SELECT m.patch, m.game_duration_s, t.*
+            FROM match_trio_stats t
+            JOIN matches m USING (match_id)
+            WHERE m.patch = ANY(%(patches)s)
+              AND (%(platform)s::text IS NULL OR m.platform = %(platform)s)
+              AND t.{col_a} = %(champ_a)s AND t.{col_b} = %(champ_b)s
+            """,
+            {"patches": patches, "platform": platform, "champ_a": champ_a, "champ_b": champ_b},
+        ).fetchall()
+
+
+def duo_best_trios(
+    conn: psycopg.Connection,
+    window: str,
+    platform: str,
+    roles: str,
+    champ_a: int,
+    champ_b: int,
+    limit: int,
+) -> list[dict]:
+    """Meilleurs trios formés à partir de ce duo (3e rôle libre), triés par synergie."""
+    if roles not in _DUO_ROLE_COLUMNS:
+        raise ValueError(f"roles inconnu : {roles!r}")
+    col_a, col_b = _DUO_ROLE_COLUMNS[roles]
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            f"""
+            SELECT jgl_champion, mid_champion, sup_champion, games, games_eff, wr, synergy, tier
+            FROM score_trio
+            WHERE window_label = %(window)s AND platform = %(platform)s
+              AND {col_a} = %(champ_a)s AND {col_b} = %(champ_b)s
+            ORDER BY synergy DESC, games DESC
+            LIMIT %(limit)s
+            """,
+            {
+                "window": window,
+                "platform": platform,
+                "champ_a": champ_a,
+                "champ_b": champ_b,
+                "limit": limit,
+            },
+        ).fetchall()

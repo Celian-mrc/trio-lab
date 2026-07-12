@@ -32,6 +32,7 @@ _HERE = Path(__file__).resolve().parent
 ROLE_LABELS = {"jgl": "Jungle", "mid": "Mid", "sup": "Support"}
 COUNTERS_SHOWN = 10  # pires et meilleurs matchups affichés sur la page détail
 ALLIES_SHOWN = 10  # meilleurs alliés Top/ADC affichés sur la page détail
+DUO_BEST_TRIOS_SHOWN = 10  # meilleurs 3e membres affichés sur la page détail duo
 
 
 def _fmt_pct(value: float | None, digits: int = 1) -> str:
@@ -169,6 +170,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
     _TRIO_SORT_PATTERN = f"^({'|'.join(queries.TRIO_SORTS)})$"
     _DUO_SORT_PATTERN = f"^({'|'.join(queries.DUO_SORTS)})$"
     _DIR_PATTERN = f"^({'|'.join(queries.SORT_DIRECTIONS)})$"
+    _DUO_ROLES_PATTERN = f"^({'|'.join(queries.DUO_ROLES)})$"
 
     @app.get("/", response_class=HTMLResponse)
     def tierlist_page(
@@ -220,7 +222,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         request: Request,
         window: str | None = None,
         platform: str | None = None,
-        roles: str = Query("jgl_mid", pattern="^(jgl_mid|jgl_sup|mid_sup)$"),
+        roles: str = Query("jgl_mid", pattern=_DUO_ROLES_PATTERN),
         min_games: int = Query(0, ge=0),
         min_tier: str = Query("faible", pattern="^(faible|moyen|eleve)$"),
         sort: str = Query("synergy", pattern=_DUO_SORT_PATTERN),
@@ -310,6 +312,63 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             window, platform, context = resolve_context(conn, window, platform)
             detail = _trio_detail(conn, window, platform, jgl, mid, sup)
         return templates.TemplateResponse(request, "trio.html", {**context, **detail})
+
+    def _duo_detail(
+        conn, window: str, platform: str, roles: str, champ_a: int, champ_b: int
+    ) -> dict:
+        score = queries.duo_score(conn, window, platform, roles, champ_a, champ_b)
+        if score is None:
+            raise HTTPException(404, "duo non scoré sur cette fenêtre/plateforme")
+        patch_window = make_window(window.split("+"))
+        weights = patch_window.weights_for((champ_a, champ_b))
+        rows = queries.duo_match_rows(
+            conn,
+            list(patch_window.patches),
+            None if platform == "all" else platform,  # 'all' = toutes régions
+            roles,
+            champ_a,
+            champ_b,
+        )
+        stats = summary.summarize(rows, weights)
+        cc_scores = queries.cc_theoretical_scores(conn)
+        a_cc, b_cc = cc_scores.get(champ_a), cc_scores.get(champ_b)
+        members_cc = (a_cc, b_cc)
+        # Total seulement si les 2 membres sont résolus (sinon somme partielle
+        # trompeuse — affichée comme « — » à la place).
+        duo_cc_raw = sum(members_cc) if None not in members_cc else None
+        return {
+            "score": score,
+            "stats": stats,
+            "best_trios": queries.duo_best_trios(
+                conn, window, platform, roles, champ_a, champ_b, DUO_BEST_TRIOS_SHOWN
+            ),
+            "cc_theoretical": {"a": a_cc, "b": b_cc, "duo": duo_cc_raw},
+            # Pourcentages 0-100 déjà matérialisés par synergy.compute (mêmes
+            # valeurs que la tier list, jamais recalculés ici — cf. `_trio_detail`.
+            "cc_scores": {
+                "theoretical_pct": score["cc_theoretical_pct"],
+                "empirical_pct": score["cc_empirical_pct"],
+                "blended_pct": score["cc_blended_pct"],
+            },
+        }
+
+    @app.get("/duo/{roles}/{champ_a}/{champ_b}", response_class=HTMLResponse)
+    def duo_page(
+        request: Request,
+        roles: str,
+        champ_a: int,
+        champ_b: int,
+        window: str | None = None,
+        platform: str | None = None,
+    ):
+        if roles not in queries.DUO_ROLES:
+            raise HTTPException(404, f"roles inconnu : {roles!r}")
+        with request.app.state.pool.connection() as conn:
+            window, platform, context = resolve_context(conn, window, platform)
+            detail = _duo_detail(conn, window, platform, roles, champ_a, champ_b)
+        return templates.TemplateResponse(
+            request, "duo.html", {**context, "roles": roles, **detail}
+        )
 
     # --- API JSON ---
 
@@ -405,7 +464,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         request: Request,
         window: str | None = None,
         platform: str | None = None,
-        roles: str = Query("jgl_mid", pattern="^(jgl_mid|jgl_sup|mid_sup)$"),
+        roles: str = Query("jgl_mid", pattern=_DUO_ROLES_PATTERN),
         min_games: int = Query(0, ge=0),
         min_tier: str = Query("faible", pattern="^(faible|moyen|eleve)$"),
         sort: str = Query("synergy", pattern=_DUO_SORT_PATTERN),
@@ -427,5 +486,23 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             )
         result["rows"] = [_named(r) for r in result["rows"]]
         return {"window": window, "platform": platform, "roles": roles, **result}
+
+    @app.get("/api/duos/{roles}/{champ_a}/{champ_b}")
+    def api_duo_detail(
+        request: Request,
+        roles: str,
+        champ_a: int,
+        champ_b: int,
+        window: str | None = None,
+        platform: str | None = None,
+    ):
+        if roles not in queries.DUO_ROLES:
+            raise HTTPException(404, f"roles inconnu : {roles!r}")
+        with request.app.state.pool.connection() as conn:
+            window, platform, _ = resolve_context(conn, window, platform)
+            detail = _duo_detail(conn, window, platform, roles, champ_a, champ_b)
+        detail["score"] = _named(detail["score"])
+        detail["best_trios"] = [_named(r) for r in detail["best_trios"]]
+        return {"window": window, "platform": platform, "roles": roles, **detail}
 
     return app

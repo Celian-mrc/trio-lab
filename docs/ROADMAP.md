@@ -113,6 +113,11 @@ Phase par phase : la phase N+1 ne démarre pas avant que la phase N soit verte
       internes, pires/meilleurs matchups), tier list duos
       (pas de filtre « rang » : la collecte est scopée Emerald+ et l'en-tête
       de l'interface l'affiche — décision du 2026-07-11)
+- [x] Page détail duo (2026-07-12) : mêmes stats que la page trio (`score_duo`
+      porte déjà les mêmes colonnes), filtrées sur les 2 rôles fixés du duo
+      quel que soit le 3e membre ; section « Meilleurs 3e membres » (top
+      `score_trio` contenant ce duo, aucune nouvelle table) ; liens depuis la
+      tier list des duos
 - [x] Choix du front validé le 2026-07-11 : Jinja2 + htmx (hx-boost, vendorisé
       dans static/), un seul service à déployer ; noms/icônes champions via
       Data Dragon (index paresseux injectable dans les tests)
