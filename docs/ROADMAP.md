@@ -67,6 +67,11 @@ Phase par phase : la phase N+1 ne démarre pas avant que la phase N soit verte
       `python -m trio_lab.ccref`, relire le diff du brouillon (les arbitrages
       de `cc_reference.overrides.csv` sont réappliqués automatiquement),
       puis `--freeze`
+- [x] Recalibrage fréquence/cooldown (2026-07-12) : cooldown extrait du wiki
+      (`|recharge=` pour les sorts à charges type Caitlyn W/Rumble E, sinon
+      `|cooldown=`), coef_frequence borné ×1.0-1.5 (médiane des cooldowns
+      extraits = 12 s), appliqué aux sorts de BASE uniquement (jamais les
+      ultimates) — corrige Ashe passif, Garen Q, Udyr E notamment
 
 ## Phase 3 — Scores de synergie
 
@@ -122,6 +127,17 @@ Phase par phase : la phase N+1 ne démarre pas avant que la phase N soit verte
       dans static/), un seul service à déployer ; noms/icônes champions via
       Data Dragon (index paresseux injectable dans les tests)
       — `python -m trio_lab.web`, port $PORT (défaut 8000)
+- [x] Score de scaling (2026-07-12) : pente WR/durée de game (tranches de
+      5 min, `agg_trio_duration`/`agg_duo_duration`, régression pondérée pure
+      Python) — mesuré uniquement, pas de mélange avec la trajectoire gold
+      (corrélation quasi nulle vérifiée empiriquement avant implémentation)
+- [x] WR individuels des membres affichés sur les pages trio/duo + « WR avec
+      l'âme » (2026-07-12)
+- [x] Page détail champion (2026-07-12) : `/champion/{role}/{id}` — WR
+      baseline, score CC théorique brut, meilleurs partenaires par rôle,
+      meilleurs trios ; liens depuis les en-têtes trio/duo
+- [x] CI GitHub Actions (2026-07-12) : ruff + pytest sur Postgres éphémère
+      (service container), indépendante du déploiement Railway
 
 ## Phase 6 — Déploiement Railway 24/24
 
