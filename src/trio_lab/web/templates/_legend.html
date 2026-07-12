@@ -19,10 +19,21 @@
       sur la fenêtre ; « — » quand la donnée n'existe pas (ex. gold @15 si
       toutes les parties finissent avant 15 min).</li>
     <li><strong>CC</strong> : CC empirique cumulé (secondes de contrôle
-      infligées, `timeCCingOthers`) — le score théorique de kit (Phase 2b)
-      n'est pas encore affiché dans l'interface.</li>
+      infligées, `timeCCingOthers`). <strong>CC lissé</strong> : mélange
+      l'empirique et un score théorique calculé depuis les sorts des
+      champions (durée, zone, fiabilité), pondéré par le volume de games —
+      c'est le chiffre à privilégier pour comparer. Détail du calcul et
+      valeurs empirique/théorique séparées sur la page de détail.</li>
+    <li><strong>Scaling</strong> : pente du winrate selon la durée de la
+      game (tranches de 5 min) — positif = gagne plus souvent en game
+      longue, négatif = en game courte. Mesuré uniquement sur les tranches
+      qui ont assez de games ; pas de valeur si trop peu de données.</li>
     <li><strong>Région « toutes régions »</strong> : agrégat exact des
       plateformes collectées (euw1/na1/kr), recalculé — pas une moyenne des
       scores régionaux.</li>
+    <li>La page de détail d'un trio ajoute aussi les <strong>meilleurs
+      matchups / pires matchups</strong> (contre un champion ennemi précis)
+      et les <strong>meilleurs alliés</strong> (top/ADC) à privilégier avec
+      ce trio.</li>
   </ul>
 </details>
