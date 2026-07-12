@@ -18,11 +18,11 @@
     <p class="meta">{{ score.games }} games · IC {{ score.ci_low | pct(0) }} – {{ score.ci_high | pct(0) }}</p></div>
   <div class="card"><h3>Synergie</h3>
     <p class="big-number {{ 'pos' if score.synergy > 0 else 'neg' if score.synergy < 0 }}"
-       title="Le score à retenir : mélange la synergie brute et la prédiction duos ci-dessous, en donnant plus de poids à la brute quand ce trio a beaucoup de games.">{{ score.synergy | signed_pct }}</p>
+       data-tooltip="Le score à retenir : mélange la synergie brute et la prédiction duos ci-dessous, en donnant plus de poids à la brute quand ce trio a beaucoup de games." aria-label="Le score à retenir : mélange la synergie brute et la prédiction duos ci-dessous, en donnant plus de poids à la brute quand ce trio a beaucoup de games.">{{ score.synergy | signed_pct }}</p>
     <p class="meta">
-      <span title="Écart entre le winrate réel de ce trio et la moyenne des winrates individuels de ses 3 champions, mesuré uniquement sur les games de ce trio.">brute {{ score.synergy_raw | signed_pct }}</span>
-      · <span title="Ce que la synergie de ce trio devrait valoir d'après ses 3 duos internes (jgl+mid, jgl+sup, mid+sup) — le repère utilisé quand le trio complet a encore peu de games.">prédiction duos {{ score.synergy_pred | signed_pct }}</span>
-      · <span title="Fiabilité du score selon le nombre de games de ce trio : faible = on se fie surtout à la prédiction duos, élevé = la synergie brute domine.">fiabilité <span class="tier tier-{{ score.tier }}">{{ score.tier }}</span></span>
+      <span data-tooltip="Écart entre le winrate réel de ce trio et la moyenne des winrates individuels de ses 3 champions, mesuré uniquement sur les games de ce trio." aria-label="Écart entre le winrate réel de ce trio et la moyenne des winrates individuels de ses 3 champions, mesuré uniquement sur les games de ce trio.">brute {{ score.synergy_raw | signed_pct }}</span>
+      · <span data-tooltip="Ce que la synergie de ce trio devrait valoir d'après ses 3 duos internes (jgl+mid, jgl+sup, mid+sup) — le repère utilisé quand le trio complet a encore peu de games." aria-label="Ce que la synergie de ce trio devrait valoir d'après ses 3 duos internes (jgl+mid, jgl+sup, mid+sup) — le repère utilisé quand le trio complet a encore peu de games.">prédiction duos {{ score.synergy_pred | signed_pct }}</span>
+      · <span data-tooltip="Fiabilité du score selon le nombre de games de ce trio : faible = on se fie surtout à la prédiction duos, élevé = la synergie brute domine." aria-label="Fiabilité du score selon le nombre de games de ce trio : faible = on se fie surtout à la prédiction duos, élevé = la synergie brute domine.">fiabilité <span class="tier tier-{{ score.tier }}">{{ score.tier }}</span></span>
     </p></div>
   <div class="card"><h3>Tempo</h3>
     <p class="big-number">{{ stats.avg_duration_win_s | duration }} <small>win</small>
@@ -75,13 +75,13 @@
       beaucoup joué, et le théorique quand il l'est peu (pas encore assez de games pour un chrono
       fiable).</p>
     <table class="narrow kv">
-      <tr title="Mesuré directement sur les games jouées (Σ timeCCingOthers du trio), plafonné à 240 s puis ramené sur 100.">
+      <tr data-tooltip="Mesuré directement sur les games jouées (Σ timeCCingOthers du trio), plafonné à 240 s puis ramené sur 100." aria-label="Mesuré directement sur les games jouées (Σ timeCCingOthers du trio), plafonné à 240 s puis ramené sur 100.">
         <td>Empirique</td><td>{{ cc_scores.empirical_pct | pct100 }}</td>
       </tr>
-      <tr title="Score de kit (durées/zones/fiabilité des sorts, cf. détail ci-dessous) ramené sur 100 via un repère fixe : 3 × le score max d'un champion (plafond mathématique, jamais atteignable en pratique).">
+      <tr data-tooltip="Score de kit (durées/zones/fiabilité des sorts, cf. détail ci-dessous) ramené sur 100 via un repère fixe : 3 × le score max d'un champion (plafond mathématique, jamais atteignable en pratique)." aria-label="Score de kit (durées/zones/fiabilité des sorts, cf. détail ci-dessous) ramené sur 100 via un repère fixe : 3 × le score max d'un champion (plafond mathématique, jamais atteignable en pratique).">
         <td>Théorique</td><td>{{ cc_scores.theoretical_pct | pct100 }}</td>
       </tr>
-      <tr title="Le score à retenir : combine les deux, en donnant plus de poids à l'empirique quand le trio est beaucoup joué.">
+      <tr data-tooltip="Le score à retenir : combine les deux, en donnant plus de poids à l'empirique quand le trio est beaucoup joué." aria-label="Le score à retenir : combine les deux, en donnant plus de poids à l'empirique quand le trio est beaucoup joué.">
         <td><strong>Mélangé (recommandé)</strong></td><td><strong>{{ cc_scores.blended_pct | pct100 }}</strong></td>
       </tr>
     </table>

@@ -48,21 +48,21 @@
     <tr>
       <th class="col-combo">Duo</th>
       <th>{{ sort_link('games', 'Games') }}</th>
-      <th title="Intervalle de Wilson à 95 % sous le winrate">{{ sort_link('wr', 'WR') }}</th>
+      <th data-tooltip="Intervalle de Wilson à 95 % sous le winrate" aria-label="Intervalle de Wilson à 95 % sous le winrate">{{ sort_link('wr', 'WR') }}</th>
       <th>{{ sort_link('synergy', 'Synergie') }}</th>
-      <th title="Avantage gold moyen du duo à 5 / 10 / 15 min">
+      <th data-tooltip="Avantage gold moyen du duo à 5 / 10 / 15 min" aria-label="Avantage gold moyen du duo à 5 / 10 / 15 min">
         <span class="gold-header">
           <span class="gold-label">Gold</span>
           <span class="gold-values">{{ sort_link('gold5', '@5') }}{{ sort_link('gold10', '@10') }}{{ sort_link('gold15', '@15') }}</span>
         </span>
       </th>
-      <th title="Score de vision cumulé du trio (moyenne)">{{ sort_link('vision', 'Vision') }}</th>
-      <th title="Drakes pris par l’équipe (moyenne)">{{ sort_link('drakes', 'Drakes') }}</th>
-      <th title="Taux d’obtention de l’âme">{{ sort_link('soul', 'Âme') }}</th>
-      <th title="Taux de prise du héraut">{{ sort_link('herald', 'Héraut') }}</th>
-      <th title="Taux de première tour">{{ sort_link('tower1', '1re tour') }}</th>
-      <th title="CC infligé mesuré en jeu, cumul équipe (Σ timeCCingOthers).">{{ sort_link('cc', 'CC') }}</th>
-      <th title="CC sur 100 : mélange le CC mesuré en jeu et un score calculé depuis les sorts des champions — le score à privilégier pour comparer.">{{ sort_link('cc_blend', 'CC lissé') }}</th>
+      <th data-tooltip="Score de vision cumulé du trio (moyenne)" aria-label="Score de vision cumulé du trio (moyenne)">{{ sort_link('vision', 'Vision') }}</th>
+      <th data-tooltip="Drakes pris par l’équipe (moyenne)" aria-label="Drakes pris par l’équipe (moyenne)">{{ sort_link('drakes', 'Drakes') }}</th>
+      <th data-tooltip="Taux d’obtention de l’âme" aria-label="Taux d’obtention de l’âme">{{ sort_link('soul', 'Âme') }}</th>
+      <th data-tooltip="Taux de prise du héraut" aria-label="Taux de prise du héraut">{{ sort_link('herald', 'Héraut') }}</th>
+      <th data-tooltip="Taux de première tour" aria-label="Taux de première tour">{{ sort_link('tower1', '1re tour') }}</th>
+      <th data-tooltip="CC infligé mesuré en jeu, cumul équipe (Σ timeCCingOthers)." aria-label="CC infligé mesuré en jeu, cumul équipe (Σ timeCCingOthers).">{{ sort_link('cc', 'CC') }}</th>
+      <th data-tooltip="CC sur 100 : mélange le CC mesuré en jeu et un score calculé depuis les sorts des champions — le score à privilégier pour comparer." aria-label="CC sur 100 : mélange le CC mesuré en jeu et un score calculé depuis les sorts des champions — le score à privilégier pour comparer.">{{ sort_link('cc_blend', 'CC lissé') }}</th>
       <th>Fiabilité</th>
     </tr>
   </thead>

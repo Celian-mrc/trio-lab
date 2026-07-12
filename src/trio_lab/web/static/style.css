@@ -145,15 +145,19 @@ a.combo:hover .champ { color: var(--accent); }
 .trio-cell a { color: var(--foreground); text-decoration: none; display: flex; gap: 0.9rem; }
 .trio-cell a:hover .champ { color: var(--accent); }
 
-/* --- Tooltips CSS-only (attribut `title`) ---
-   `title` reste dans le HTML pour l'accessibilité (lecteurs d'écran, appui
-   long tactile) ; on affiche par-dessus une infobulle personnalisée, plus
-   rapide (0.15s vs ~1s natif) et repérable (soulignement pointillé sur les
-   éléments de texte, curseur "aide" partout). */
-[title] { cursor: help; position: relative; }
-span[title], .big-number[title] { border-bottom: 1px dotted var(--muted-fg); }
-[title]::after {
-  content: attr(title);
+/* --- Tooltips CSS-only (attribut `data-tooltip`, PAS `title`) ---
+   `title` déclenche l'infobulle native du navigateur (~1s, invisible tant
+   qu'on ne survole pas assez longtemps) : les deux s'affichaient l'une sur
+   l'autre. `data-tooltip` évite ce doublon ; `aria-label` porte le même
+   texte pour l'accessibilité (lecteurs d'écran) sans déclencher de popup
+   native. Volontairement PAS appliqué aux badges de rôle (jgl/mid/sup) sur
+   chaque ligne des tier lists : gardés en `title` natif, sobre — un
+   soulignement pointillé sur chaque champion de chaque ligne serait un bruit
+   visuel constant plutôt qu'une aide ponctuelle. */
+[data-tooltip] { cursor: help; position: relative; }
+span[data-tooltip], .big-number[data-tooltip] { border-bottom: 1px dotted var(--muted-fg); }
+[data-tooltip]::after {
+  content: attr(data-tooltip);
   position: absolute; z-index: 20; top: 100%; left: 50%;
   transform: translateX(-50%); margin-top: 0.4rem;
   background: var(--foreground); color: var(--background);
@@ -165,7 +169,7 @@ span[title], .big-number[title] { border-bottom: 1px dotted var(--muted-fg); }
   opacity: 0; visibility: hidden; pointer-events: none;
   transition: opacity 0.1s ease 0.15s, visibility 0.1s ease 0.15s;
 }
-[title]:hover::after, [title]:focus-visible::after { opacity: 1; visibility: visible; }
+[data-tooltip]:hover::after, [data-tooltip]:focus-visible::after { opacity: 1; visibility: visible; }
 
 /* --- Légende --- */
 .legend {
