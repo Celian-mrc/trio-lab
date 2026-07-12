@@ -433,6 +433,34 @@ def trio_match_rows(
         ).fetchall()
 
 
+_CHAMPION_ROLE_COLUMNS = {"jgl": "jgl_champion", "mid": "mid_champion", "sup": "sup_champion"}
+
+
+def champion_match_rows(
+    conn: psycopg.Connection,
+    patches: list[str],
+    platform: str | None,
+    role: str,
+    champion_id: int,
+) -> list[dict]:
+    """Lignes match_trio_stats des games où ce champion occupe ce rôle, quels
+    que soient les 2 autres membres — mêmes stats d'équipe que la page duo,
+    filtrées sur un seul rôle au lieu de deux (cf. `duo_match_rows`)."""
+    col = _CHAMPION_ROLE_COLUMNS[role]
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            f"""
+            SELECT m.patch, m.game_duration_s, t.*
+            FROM match_trio_stats t
+            JOIN matches m USING (match_id)
+            WHERE m.patch = ANY(%(patches)s)
+              AND (%(platform)s::text IS NULL OR m.platform = %(platform)s)
+              AND t.{col} = %(champ)s
+            """,
+            {"patches": patches, "platform": platform, "champ": champion_id},
+        ).fetchall()
+
+
 # roles (score_duo/match_trio_stats) → colonnes match_trio_stats des 2 rôles
 # fixés du duo (liste blanche, jamais interpolée depuis l'extérieur).
 _DUO_ROLE_COLUMNS = {

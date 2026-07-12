@@ -417,10 +417,19 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             direction="desc",
         )["rows"][:CHAMPION_TRIOS_SHOWN]
         cc_theoretical = queries.cc_theoretical_scores(conn).get(champion_id)
+        match_rows = queries.champion_match_rows(
+            conn,
+            patches,
+            None if platform == "all" else platform,  # 'all' = toutes régions
+            role,
+            champion_id,
+        )
+        stats = summary.summarize(match_rows, weights)
         return {
             "role": role,
             "champion_id": champion_id,
             "baseline": baseline,
+            "stats": stats,
             "partners": partners,
             "best_trios": best_trios,
             "cc_theoretical": cc_theoretical,

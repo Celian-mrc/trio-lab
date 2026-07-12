@@ -272,6 +272,7 @@ def test_html_pages_render(pg_sync, client):
 
 def test_champion_page_shows_baseline_partners_and_trios(pg_sync, client):
     _seed_scores(pg_sync)  # score_trio (1,2,3) + score_duo jgl_mid (1,2), tier='faible'
+    _seed_matches(pg_sync)  # 2 matchs du trio (1,2,3) : champion 1 en jungle dans les 2
     # Fiabilité relevée à 'moyen' : `_seed_scores` sème du 'faible' (utilisé ailleurs
     # pour tester le filtre par défaut de la tier list), mais la page champion
     # exige 'moyen'+ pour ses listes "meilleurs" (cf. test dédié plus bas).
@@ -289,6 +290,9 @@ def test_champion_page_shows_baseline_partners_and_trios(pg_sync, client):
     assert "Meilleurs mids" in response.text
     assert "Ahri" in response.text  # meilleur mid via score_duo jgl_mid (1,2)
     assert "/trio/1/2/3" in response.text  # meilleurs trios
+    # Stats d'équipe (match_trio_stats) des games où ce champion est en jungle —
+    # mêmes valeurs que la page trio (1,2,3), cf. test_api_trio_detail_stats_and_counters.
+    assert "+300" in response.text  # gold_diff @10 moyen (1000 et -400 → 300)
 
 
 def test_champion_page_hides_low_reliability_partners_and_trios(pg_sync, client):
