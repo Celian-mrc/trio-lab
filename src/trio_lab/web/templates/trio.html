@@ -23,7 +23,9 @@
       <span data-tooltip="Écart entre le winrate réel de ce trio et la moyenne des winrates individuels de ses 3 champions, mesuré uniquement sur les games de ce trio." aria-label="Écart entre le winrate réel de ce trio et la moyenne des winrates individuels de ses 3 champions, mesuré uniquement sur les games de ce trio.">brute {{ score.synergy_raw | signed_pct }}</span>
       · <span data-tooltip="Ce que la synergie de ce trio devrait valoir d'après ses 3 duos internes (jgl+mid, jgl+sup, mid+sup) — le repère utilisé quand le trio complet a encore peu de games." aria-label="Ce que la synergie de ce trio devrait valoir d'après ses 3 duos internes (jgl+mid, jgl+sup, mid+sup) — le repère utilisé quand le trio complet a encore peu de games.">prédiction duos {{ score.synergy_pred | signed_pct }}</span>
       · <span data-tooltip="Fiabilité du score selon le nombre de games de ce trio : faible = on se fie surtout à la prédiction duos, élevé = la synergie brute domine." aria-label="Fiabilité du score selon le nombre de games de ce trio : faible = on se fie surtout à la prédiction duos, élevé = la synergie brute domine.">fiabilité <span class="tier tier-{{ score.tier }}">{{ score.tier }}</span></span>
-    </p></div>
+    </p>
+    <p class="meta" data-tooltip="Winrate individuel de chaque champion dans son rôle (toutes compositions confondues, même fenêtre) — la moyenne de ces 3 valeurs est la base soustraite au winrate du trio pour obtenir la synergie brute." aria-label="Winrate individuel de chaque champion dans son rôle (toutes compositions confondues, même fenêtre) — la moyenne de ces 3 valeurs est la base soustraite au winrate du trio pour obtenir la synergie brute.">WR individuels : {{ jgl.name }} {{ member_wr.jgl | pct(0) }} · {{ mid.name }} {{ member_wr.mid | pct(0) }} · {{ sup.name }} {{ member_wr.sup | pct(0) }}</p>
+  </div>
   <div class="card"><h3>Tempo</h3>
     <p class="big-number">{{ stats.avg_duration_win_s | duration }} <small>win</small>
        / {{ stats.avg_duration_loss_s | duration }} <small>loss</small></p>
@@ -50,6 +52,7 @@
       <tr><td>Héraut</td><td>{{ stats.herald_taken | pct }}</td></tr>
       <tr><td>Drakes (moy.)</td><td>{{ stats.drakes_taken | num }}</td></tr>
       <tr><td>Âme obtenue</td><td>{{ stats.soul_taken | pct }}</td></tr>
+      <tr><td>WR avec l'âme</td><td>{{ stats.wr_with_soul | pct }}</td></tr>
       <tr><td>WR sans l'âme</td><td>{{ stats.wr_without_soul | pct }}</td></tr>
       <tr><td>Premier Nashor</td><td>{{ stats.nashor_first | pct }}</td></tr>
       <tr><td>Timing 1er Nashor</td><td>{{ stats.nashor_first_s | duration }}</td></tr>

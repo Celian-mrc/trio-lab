@@ -22,6 +22,7 @@ from fastapi.templating import Jinja2Templates
 from psycopg_pool import ConnectionPool
 
 from trio_lab import db
+from trio_lab.synergy.compute import DUO_ROLES
 from trio_lab.synergy.windows import make_window
 from trio_lab.web import champions, queries, summary
 
@@ -279,9 +280,16 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         # Total seulement si les 3 membres sont résolus (sinon somme partielle
         # trompeuse — affichée comme « — » à la place).
         trio_cc_raw = sum(members_cc) if None not in members_cc else None
+        patches = list(patch_window.patches)
+        member_wr = {
+            "jgl": queries.member_wr(conn, patches, platform, "JUNGLE", jgl, weights),
+            "mid": queries.member_wr(conn, patches, platform, "MIDDLE", mid, weights),
+            "sup": queries.member_wr(conn, patches, platform, "UTILITY", sup, weights),
+        }
         return {
             "score": score,
             "stats": stats,
+            "member_wr": member_wr,
             "duos": queries.trio_duos(conn, window, platform, jgl, mid, sup),
             "counters_worst": counters[:COUNTERS_SHOWN],
             "counters_best": counters[::-1][:COUNTERS_SHOWN],
@@ -336,9 +344,19 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         # Total seulement si les 2 membres sont résolus (sinon somme partielle
         # trompeuse — affichée comme « — » à la place).
         duo_cc_raw = sum(members_cc) if None not in members_cc else None
+        role_a, role_b = DUO_ROLES[roles]
+        member_wr = {
+            "a": queries.member_wr(
+                conn, list(patch_window.patches), platform, role_a, champ_a, weights
+            ),
+            "b": queries.member_wr(
+                conn, list(patch_window.patches), platform, role_b, champ_b, weights
+            ),
+        }
         return {
             "score": score,
             "stats": stats,
+            "member_wr": member_wr,
             "best_trios": queries.duo_best_trios(
                 conn, window, platform, roles, champ_a, champ_b, DUO_BEST_TRIOS_SHOWN
             ),

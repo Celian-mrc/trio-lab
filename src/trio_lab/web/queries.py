@@ -11,6 +11,7 @@ from __future__ import annotations
 import psycopg
 from psycopg.rows import dict_row
 
+from trio_lab.synergy import scores
 from trio_lab.synergy.windows import patch_key
 
 # Tris autorisés → colonne SQL (liste blanche, jamais interpolée depuis
@@ -178,6 +179,35 @@ def trio_score(
             """,
             (window, platform, jgl, mid, sup),
         ).fetchone()
+
+
+def member_wr(
+    conn: psycopg.Connection,
+    patches: list[str],
+    platform: str,
+    role: str,
+    champion_id: int,
+    weights: dict[str, float],
+) -> float | None:
+    """WR individuel pondéré fenêtre d'un champion dans un rôle — la baseline
+    utilisée pour la synergie (WR(combo) − moyenne des WR individuels), mais
+    jamais matérialisée telle quelle : recalculée en lecture depuis agg_champion
+    (même mécanique que `synergy.compute.member_wr`, moins la matérialisation).
+    `platform='all'` agrège toutes les régions.
+    """
+    with conn.cursor() as cur:
+        rows = cur.execute(
+            """
+            SELECT patch, sum(games) AS games, sum(wins) AS wins
+            FROM agg_champion
+            WHERE patch = ANY(%(patches)s) AND role = %(role)s AND champion_id = %(champ)s
+              AND (%(platform)s = 'all' OR platform = %(platform)s)
+            GROUP BY patch
+            """,
+            {"patches": patches, "role": role, "champ": champion_id, "platform": platform},
+        ).fetchall()
+    result = scores.weighted_wr(rows, weights)
+    return result.wr if result else None
 
 
 def cc_theoretical_scores(conn: psycopg.Connection) -> dict[int, float]:

@@ -145,13 +145,30 @@ def test_api_trio_detail_stats_and_counters(pg_sync, client):
             "INSERT INTO champion_cc_theoretical (champion_id, score) VALUES (%s, %s)",
             (champ_id, cc_score),
         )
+    for role, champ_id, games, wins in (
+        ("JUNGLE", 1, 20, 11),
+        ("MIDDLE", 2, 20, 9),
+        ("UTILITY", 3, 20, 10),
+    ):
+        pg_sync.execute(
+            "INSERT INTO agg_champion (patch, platform, role, champion_id, games, wins)"
+            " VALUES ('16.13', 'euw1', %s, %s, %s, %s)",
+            (role, champ_id, games, wins),
+        )
     payload = client.get("/api/trios/1/2/3").json()
     assert payload["score"]["wr"] == pytest.approx(0.60)
+    # WR individuel baseline (agg_champion), utilisé pour la synergie brute
+    # mais jamais matérialisé — recalculé en lecture pour la page détail.
+    member_wr = payload["member_wr"]
+    assert member_wr["jgl"] == pytest.approx(0.55)
+    assert member_wr["mid"] == pytest.approx(0.45)
+    assert member_wr["sup"] == pytest.approx(0.50)
     stats = payload["stats"]
     assert stats["games"] == 2
     assert stats["wr"] == pytest.approx(0.5)
     assert stats["gold_diff"]["10"] == pytest.approx(300.0)  # (1000 − 400) / 2
     assert stats["herald_taken"] == pytest.approx(0.5)
+    assert stats["wr_with_soul"] is None  # aucune des 2 parties n'a l'âme
     assert stats["wr_without_soul"] == pytest.approx(0.5)  # les 2 parties sans âme
     assert stats["vision_score"] == pytest.approx(80.0)
     assert stats["avg_duration_win_s"] == pytest.approx(1500.0)
@@ -186,10 +203,18 @@ def test_api_duo_detail_stats_and_best_trios(pg_sync, client):
             "INSERT INTO champion_cc_theoretical (champion_id, score) VALUES (%s, %s)",
             (champ_id, cc_score),
         )
+    for role, champ_id, games, wins in (("JUNGLE", 1, 20, 11), ("MIDDLE", 2, 20, 9)):
+        pg_sync.execute(
+            "INSERT INTO agg_champion (patch, platform, role, champion_id, games, wins)"
+            " VALUES ('16.13', 'euw1', %s, %s, %s, %s)",
+            (role, champ_id, games, wins),
+        )
     payload = client.get("/api/duos/jgl_mid/1/2").json()
     assert payload["score"]["wr"] == pytest.approx(0.58)
     assert payload["score"]["champ_a_name"] == "Lee Sin"
     assert payload["score"]["champ_b_name"] == "Ahri"
+    assert payload["member_wr"]["a"] == pytest.approx(0.55)
+    assert payload["member_wr"]["b"] == pytest.approx(0.45)
     # Stats du duo = celles du trio complet dans les parties où il apparaît,
     # quel que soit le 3e membre (_seed_matches ne sème que le trio 1/2/3,
     # qui contient bien le duo jgl_mid 1/2) — mêmes valeurs que la page trio.

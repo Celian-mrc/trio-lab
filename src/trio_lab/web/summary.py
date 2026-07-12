@@ -66,8 +66,11 @@ def summarize(rows: list[dict], weights: dict[str, float]) -> dict:
             m: _weighted_mean(in_window, weights, f"gold_diff_{m}") for m in GOLD_MINUTES
         },
         **{key: _weighted_mean(in_window, weights, key) for key in _MEAN_KEYS},
-        # WR dans les parties où le trio n'a PAS l'âme (proxy « âme perdue » :
+        # WR selon l'obtention de l'âme (proxy « âme perdue » côté without :
         # on ne stocke pas si l'adversaire l'a prise).
+        "wr_with_soul": _weighted_mean(
+            [r for r in in_window if r.get("soul_taken") is True], weights, "win"
+        ),
         "wr_without_soul": _weighted_mean(
             [r for r in in_window if r.get("soul_taken") is False], weights, "win"
         ),

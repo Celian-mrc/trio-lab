@@ -60,6 +60,8 @@ def test_rates_and_wr():
     assert stats["soul_taken"] == pytest.approx(0.25)
     # WR sans l'âme : 1 win sur les 3 parties où soul_taken est False.
     assert stats["wr_without_soul"] == pytest.approx(1 / 3)
+    # WR avec l'âme : 1 win sur l'unique partie où soul_taken est True.
+    assert stats["wr_with_soul"] == pytest.approx(1.0)
 
 
 def test_tempo_split_wins_losses():
