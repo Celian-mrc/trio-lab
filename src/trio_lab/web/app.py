@@ -412,6 +412,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             platform,
             champion_id=champion_id,
             role=role,
+            min_tier="moyen",  # écarte les trios à 1-2 games (retour utilisateur, 2026-07-12)
             sort="synergy",
             direction="desc",
         )["rows"][:CHAMPION_TRIOS_SHOWN]

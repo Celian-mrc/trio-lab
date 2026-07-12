@@ -23,6 +23,8 @@
   {% for partner_role, rows in partners.items() %}
   <div>
     <h2>Meilleurs {{ {'jgl': 'junglers', 'mid': 'mids', 'sup': 'supports'}[partner_role] }}</h2>
+    <p class="meta">Fiabilité moyenne ou élevée uniquement (≥ 50 games pondérées) — un duo à 1-2
+      games n'apparaît pas ici même avec une synergie extrême.</p>
     <table class="narrow">
       <thead><tr><th>Champion</th><th>Games</th><th>WR</th><th>Synergie</th><th>Fiabilité</th></tr></thead>
       <tbody>

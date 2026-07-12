@@ -257,6 +257,8 @@ def champion_best_partners(
     fixed_role: str,
     champion_id: int,
     limit: int,
+    *,
+    min_tier: str = "moyen",
 ) -> list[dict]:
     """Meilleurs partenaires d'un champion (rôle fixé) dans l'autre rôle du
     couple `roles` — ex. `fixed_role='jgl'`, `roles='jgl_mid'` → meilleurs mids.
@@ -264,6 +266,9 @@ def champion_best_partners(
     `score_duo` porte des colonnes génériques `champ_a`/`champ_b` (pas de
     colonnes par rôle comme `score_trio`/`match_trio_stats`) : `champ_a`
     correspond toujours au premier rôle de `roles` (cf. `compute.DUO_ROLES`).
+    `min_tier` écarte les duos trop peu joués (défaut « moyen », ≥ 50
+    games_eff) : sans plancher, un duo à 1-2 games avec une synergie extrême
+    dominait le classement (retour utilisateur, 2026-07-12).
     """
     role_a, _role_b = roles.split("_")
     fixed_col, partner_col = (
@@ -275,7 +280,7 @@ def champion_best_partners(
             SELECT {partner_col} AS partner_champion, games, games_eff, wr, synergy, tier
             FROM score_duo
             WHERE window_label = %(window)s AND platform = %(platform)s AND roles = %(roles)s
-              AND {fixed_col} = %(champ)s
+              AND {fixed_col} = %(champ)s AND tier = ANY(%(tiers)s)
             ORDER BY synergy DESC, games DESC
             LIMIT %(limit)s
             """,
@@ -285,6 +290,7 @@ def champion_best_partners(
                 "roles": roles,
                 "champ": champion_id,
                 "limit": limit,
+                "tiers": list(_TIER_AT_LEAST[min_tier]),
             },
         ).fetchall()
 

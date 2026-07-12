@@ -271,14 +271,17 @@ def test_html_pages_render(pg_sync, client):
 
 
 def test_champion_page_shows_baseline_partners_and_trios(pg_sync, client):
-    _seed_scores(pg_sync)  # score_trio (1,2,3) + score_duo jgl_mid (1,2)
+    _seed_scores(pg_sync)  # score_trio (1,2,3) + score_duo jgl_mid (1,2), tier='faible'
+    # Fiabilité relevée à 'moyen' : `_seed_scores` sème du 'faible' (utilisé ailleurs
+    # pour tester le filtre par défaut de la tier list), mais la page champion
+    # exige 'moyen'+ pour ses listes "meilleurs" (cf. test dédié plus bas).
+    pg_sync.execute("UPDATE score_trio SET tier = 'moyen'")
+    pg_sync.execute("UPDATE score_duo SET tier = 'moyen'")
     pg_sync.execute(
         "INSERT INTO agg_champion (patch, platform, role, champion_id, games, wins)"
         " VALUES ('16.13', 'euw1', 'JUNGLE', 1, 20, 11)"
     )
-    pg_sync.execute(
-        "INSERT INTO champion_cc_theoretical (champion_id, score) VALUES (1, 3.0)"
-    )
+    pg_sync.execute("INSERT INTO champion_cc_theoretical (champion_id, score) VALUES (1, 3.0)")
     response = client.get("/champion/jgl/1")
     assert response.status_code == 200
     assert "Lee Sin" in response.text
@@ -286,6 +289,34 @@ def test_champion_page_shows_baseline_partners_and_trios(pg_sync, client):
     assert "Meilleurs mids" in response.text
     assert "Ahri" in response.text  # meilleur mid via score_duo jgl_mid (1,2)
     assert "/trio/1/2/3" in response.text  # meilleurs trios
+
+
+def test_champion_page_hides_low_reliability_partners_and_trios(pg_sync, client):
+    """Régression (retour utilisateur, 2026-07-12) : un duo/trio à 1-2 games
+    avec une synergie extrême ne doit pas squatter les listes "meilleurs"."""
+    pg_sync.execute(
+        "INSERT INTO agg_champion (patch, platform, role, champion_id, games, wins)"
+        " VALUES ('16.13', 'euw1', 'JUNGLE', 1, 20, 11)"
+    )
+    # Duo et trio à 1 game, synergie extrême, tier 'faible' — exactement le cas
+    # qui polluait le classement avant le plancher de fiabilité.
+    pg_sync.execute(
+        "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
+        " games_eff, wr, synergy, ci_low, ci_high, tier)"
+        " VALUES ('16.13', 'euw1', 'jgl_mid', 1, 2, 1, 1.0, 1.0, 0.9, 0.1, 1.0, 'faible')"
+    )
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier)"
+        " VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.9, 0.0, 0.9, 0.1, 1.0, 'faible')"
+    )
+    response = client.get("/champion/jgl/1")
+    assert response.status_code == 200
+    assert "Ahri" not in response.text  # duo jgl_mid (1,2) reste tier 'faible'
+    assert "/trio/1/2/3" not in response.text  # trio (1,2,3) reste tier 'faible'
+    assert "Aucun duo scoré" in response.text
+    assert "Aucun trio scoré" in response.text
 
 
 def test_champion_page_unknown_role_is_404(pg_sync, client):
