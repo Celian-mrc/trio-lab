@@ -181,7 +181,8 @@ def test_api_trio_detail_stats_and_counters(pg_sync, client):
     assert stats["herald_taken"] == pytest.approx(0.5)
     assert stats["wr_with_soul"] is None  # aucune des 2 parties n'a l'âme
     assert stats["wr_without_soul"] == pytest.approx(0.5)  # les 2 parties sans âme
-    assert stats["vision_score"] == pytest.approx(80.0)
+    # Par minute (2026-07-13), pas cumulé : (90/25 + 70/35) / 2 = 2.8.
+    assert stats["vision_score"] == pytest.approx(2.8)
     assert stats["avg_duration_win_s"] == pytest.approx(1500.0)
     assert stats["avg_duration_loss_s"] == pytest.approx(2100.0)
     assert payload["duos"][0]["champ_a_name"] == "Lee Sin"

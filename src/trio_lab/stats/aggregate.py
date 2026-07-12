@@ -32,11 +32,16 @@ _CHAMPION_SQL = """
 
 # Sommes de stats partagées trio/duo : les stats d'un duo sont les stats
 # d'équipe des parties où il apparaît, quel que soit le 3e membre.
+# vision_score : PAR MINUTE (vision_score / durée en minutes), pas cumulé —
+# le cumulé est mécaniquement gonflé par la durée de la partie (plus de temps
+# = plus de wards posés/détruits), corrélation mesurée +0.22 avec la durée
+# (retour utilisateur, 2026-07-13) ; le score par minute isole le contrôle de
+# vision de l'artefact de durée.
 _STAT_SUMS_SQL = """
            sum(t.gold_diff_5), count(t.gold_diff_5),
            sum(t.gold_diff_10), count(t.gold_diff_10),
            sum(t.gold_diff_15), count(t.gold_diff_15),
-           sum(t.vision_score), count(t.vision_score),
+           sum(t.vision_score / (m.game_duration_s / 60.0)), count(t.vision_score),
            sum(t.drakes_taken), count(t.drakes_taken),
            count(*) FILTER (WHERE t.soul_taken), count(t.soul_taken),
            count(*) FILTER (WHERE t.herald_taken), count(t.herald_taken),

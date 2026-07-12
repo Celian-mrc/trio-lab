@@ -75,6 +75,15 @@ def test_tempo_split_wins_losses():
     assert stats["avg_duration_loss_s"] == pytest.approx(2100.0)
 
 
+def test_vision_score_is_per_minute_not_cumulative():
+    rows = [
+        _row(duration=1500, vision_score=90),  # 90 / 25 min = 3.6 / min
+        _row(duration=2100, vision_score=70),  # 70 / 35 min = 2.0 / min
+    ]
+    stats = summary.summarize(rows, {"16.13": 1.0})
+    assert stats["vision_score"] == pytest.approx(2.8)  # (3.6 + 2.0) / 2
+
+
 def test_empty_rows_yield_none_everywhere():
     stats = summary.summarize([], {"16.13": 1.0})
     assert stats["games"] == 0

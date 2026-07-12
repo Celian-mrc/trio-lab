@@ -56,7 +56,7 @@
           <span class="gold-values">{{ sort_link('gold5', '@5') }}{{ sort_link('gold10', '@10') }}{{ sort_link('gold15', '@15') }}</span>
         </span>
       </th>
-      <th data-tooltip="Score de vision cumulé du trio (moyenne)" aria-label="Score de vision cumulé du trio (moyenne)">{{ sort_link('vision', 'Vision') }}</th>
+      <th data-tooltip="Score de vision du trio par minute de game (moyenne) — pas cumulé, pour ne pas favoriser les trios aux games plus longues" aria-label="Score de vision du trio par minute de game (moyenne) — pas cumulé, pour ne pas favoriser les trios aux games plus longues">{{ sort_link('vision', 'Vision/min') }}</th>
       <th data-tooltip="Drakes pris par l’équipe (moyenne)" aria-label="Drakes pris par l’équipe (moyenne)">{{ sort_link('drakes', 'Drakes') }}</th>
       <th data-tooltip="Taux d’obtention de l’âme" aria-label="Taux d’obtention de l’âme">{{ sort_link('soul', 'Âme') }}</th>
       <th data-tooltip="Taux de prise du héraut" aria-label="Taux de prise du héraut">{{ sort_link('herald', 'Héraut') }}</th>
@@ -91,7 +91,7 @@
           </span>
         </span>
       </td>
-      <td>{{ r.vision_score | num(0) }}</td>
+      <td>{{ r.vision_score | num(1) }}</td>
       <td>{{ r.drakes | num }}</td>
       <td>{{ r.soul_rate | pct(0) }}</td>
       <td>{{ r.herald_rate | pct(0) }}</td>
