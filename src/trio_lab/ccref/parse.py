@@ -60,7 +60,7 @@ _TIP_RE = re.compile(r"\{\{tip\|([^|}]+)(?:\|([^}]+))?\}\}")
 
 _FIELD_RES = {
     name: re.compile(rf"^\|\s*{name}\s*=\s*(.*?)\s*$", re.MULTILINE)
-    for name in ("skill", "targeting")
+    for name in ("skill", "targeting", "cooldown", "recharge")
 }
 # Les champs description peuvent s'étaler sur PLUSIEURS lignes/paragraphes
 # (constaté sur Fandom : le knockback conditionnel du E de Briar est un 2e
@@ -229,6 +229,12 @@ def parse_ability_fields(wikitext: str) -> dict[str, object]:
     `leveling` = liste `(nom de stat, expression)` extraite des champs
     `leveling`/`leveling2`/… — fallback des durées absentes de la prose
     (ex. « Disable Duration », « Slow Duration »).
+
+    `cooldown_s` : rang max du champ `|recharge =` si présent (sorts à
+    charges — Caitlyn W, Rumble E… : `|cooldown =` n'y vaut que le temps
+    entre deux charges déjà stockées, pas le vrai goulot d'étranglement),
+    sinon `|cooldown =`. Plus petite valeur du barème (cf. `_min_number`).
+    `None` si absent (passifs/on-hit sans cooldown chiffré).
     """
     fields = {}
     for name, pattern in _FIELD_RES.items():
@@ -247,6 +253,9 @@ def parse_ability_fields(wikitext: str) -> dict[str, object]:
         "targeting": fields.get("targeting", ""),
         "description": description,
         "leveling": leveling,
+        "cooldown_s": _min_number(fields["recharge" if "recharge" in fields else "cooldown"])
+        if ("recharge" in fields or "cooldown" in fields)
+        else None,
     }
 
 
@@ -274,6 +283,23 @@ def _mean_number(expr: str) -> float | None:
     Dans un segment « X to Y … », seules les bornes comptent (« 1.25 to 1.75
     for 3 » : le « for 3 » est un pas de niveaux, pas une valeur).
     """
+    values = _template_values(expr)
+    if not values:
+        return None
+    return round(sum(values) / len(values), 3)
+
+
+def _min_number(expr: str) -> float | None:
+    """Plus petite valeur d'une expression de barème (« 20 to 16 » → 16).
+
+    Utilisé pour le cooldown : le rang max (dernière valeur du barème, en
+    pratique la plus basse) est le cas pertinent une fois le sort maxé.
+    """
+    values = _template_values(expr)
+    return min(values) if values else None
+
+
+def _template_values(expr: str) -> list[float]:
     values: list[float] = []
     for part in _template_value_parts(expr):
         pair = _TO_PAIR_RE.search(part)
@@ -281,9 +307,7 @@ def _mean_number(expr: str) -> float | None:
             values.extend((float(pair.group(1)), float(pair.group(2))))
         else:
             values.extend(float(n) for n in _NUMBER_RE.findall(part))
-    if not values:
-        return None
-    return round(sum(values) / len(values), 3)
+    return values
 
 
 def extract_cc_properties(

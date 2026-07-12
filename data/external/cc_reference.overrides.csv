@@ -2,6 +2,8 @@
 # encodés depuis la colonne `mes_commentaires` de cc_reference.draft.relecture.csv.
 # Appliqués par `python -m trio_lab.ccref` APRÈS toutes les passes automatiques :
 # ils priment sur l'extraction. `action` ∈ {set, exclude} ; champs vides = non touchés.
+# cooldown_s (colonne ajoutée le 2026-07-12, coef_frequence du score CC) : cooldown
+# au rang max, vide si non pertinent (pas de nouvelle valeur pour les lignes déjà gelées).
 # En cas de lignes dupliquées (même champion/sort/type), les overrides s'appliquent
 # dans l'ordre du fichier, une ligne consommée par override.
 # Barèmes convertis en moyenne (règle du 2026-07-10). Zones : durée = 2 s
@@ -11,7 +13,7 @@
 # --- Valeurs corrigées / complétées ---
 # --- Zones (politique : durée = min(durée de zone, 2 s), validée le 2026-07-12) ---
 # --- Cas à trancher (gardés avec note) ---
-champion,sort,type_cc,action,duree_s,pct_slow,conditionnel,zone,fiabilite,note
+champion,sort,type_cc,action,duree_s,pct_slow,conditionnel,zone,fiabilite,note,cooldown_s
 Blitzcrank,W,slow,exclude,,,,,,se slow lui-même
 Galio,W,slow,exclude,,,,,,se slow lui-même
 Kalista,R,silence,exclude,,,,,,c'est l'allié qui est « silence »
@@ -36,7 +38,7 @@ Rell,E,stun,exclude,,,,,,pas de stun (fandom)
 Ivern,R,stun,exclude,,,,,,pas un stun : airborne (ligne airborne conservée)
 Thresh,Q,airborne,exclude,,,,,,tirs pendant le stun de 1.5 s : CC simultané déjà couvert
 Anivia,Q,slow,set,3.0,,,,,slow 3 s (fandom)
-Ashe,P,slow,set,2.0,,,,point_click,slow 2 s (fandom) ; relecture fiabilité : point_click
+Ashe,P,slow,set,2.0,,,,point_click,"slow 2 s (fandom) ; relecture fiabilité : point_click ; proxy cooldown_s=1.0 pour le coef_frequence : proc sur chaque attaque de base, pas de vrai cooldown chiffré côté wiki (politique cooldown 2026-07-12)",1.0
 Ashe,R,stun,set,2.25,,,,,1 à 3.5 s selon la distance — moyenne retenue
 Briar,R,slow,set,1.5,,,,,slow 1.5 s
 Cassiopeia,R,stun,set,2.0,,1,,,stun 2 s si l'ennemi fait face

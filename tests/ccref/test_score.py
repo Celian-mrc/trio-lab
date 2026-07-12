@@ -18,6 +18,7 @@ def _row(
     cond="0",
     champion="X",
     sort="Q",
+    cooldown="",
 ):
     return {
         "champion": champion,
@@ -30,6 +31,7 @@ def _row(
         "disponibilite": dispo,
         "repositionnement": repos,
         "conditionnel": cond,
+        "cooldown_s": cooldown,
         "note_relecture": "",
     }
 
@@ -56,6 +58,35 @@ def test_contribution_slow_scales_with_percentage():
 def test_contribution_missing_duration_or_pct_is_zero():
     assert score.row_contribution(_row("stun", duree="")) == 0.0
     assert score.row_contribution(_row("slow", duree="2.0", pct="")) == 0.0
+
+
+def test_contribution_frequency_bonus_for_short_cooldown_base_spell():
+    # cooldown 6 s ≤ référence 12 s → bonus = min(1.5, 12/6) = 1.5 (plafonné).
+    row = _row("stun", duree="1.0", dispo="base", cooldown="6")
+    assert score.row_contribution(row) == pytest.approx(0.9 * 1.5)
+
+
+def test_contribution_frequency_bonus_capped():
+    # cooldown très court (1 s) → ratio 12 largement > le plafond 1.5.
+    row = _row("stun", duree="1.0", dispo="base", cooldown="1")
+    assert score.row_contribution(row) == pytest.approx(0.9 * score.COEF_FREQUENCE_CAP)
+
+
+def test_contribution_no_frequency_bonus_above_reference_cooldown():
+    # cooldown 24 s (> référence 12 s) → coef borné à 1.0, pas de malus.
+    row = _row("stun", duree="1.0", dispo="base", cooldown="24")
+    assert score.row_contribution(row) == pytest.approx(0.9)
+
+
+def test_contribution_no_frequency_bonus_for_ultimate():
+    # même cooldown court, mais ultimate → jamais de bonus de fréquence.
+    row = _row("stun", duree="1.0", dispo="ultimate", cooldown="6")
+    assert score.row_contribution(row) == pytest.approx(0.9 * score.COEF_ULTIMATE)
+
+
+def test_contribution_no_frequency_bonus_without_cooldown_data():
+    row = _row("stun", duree="1.0", dispo="base", cooldown="")
+    assert score.row_contribution(row) == pytest.approx(0.9)
 
 
 # --- spell_score : CC durs simultanés non cumulés, slows additifs ---

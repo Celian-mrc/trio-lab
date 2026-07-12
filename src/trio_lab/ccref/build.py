@@ -41,6 +41,7 @@ CSV_COLUMNS = [
     "disponibilite",
     "repositionnement",
     "conditionnel",
+    "cooldown_s",
     "note_relecture",
 ]
 
@@ -61,6 +62,8 @@ _HEADER_COMMENT = """\
 # (le ciblage, indépendant de la condition), disponibilite ∈ {{base, ultimate}},
 # repositionnement ∈ {{0, 1}} (airborne déplaçant), conditionnel ∈ {{0, 1}} (CC sous
 # condition : collision terrain, charge complète — E de Poppy, Q de Bard).
+# cooldown_s : cooldown au rang max (champ `|cooldown =` du template), vide si le
+# wiki n'en donne pas (passifs/on-hit) — alimente le coef_frequence (score CC).
 # Les coefficients (poids par type, coef_zone, coef_conditionnel…) vivent dans la
 # config, pas ici.
 """
@@ -142,6 +145,7 @@ def build_rows() -> list[dict[str, object]]:
                     "disponibilite": "",
                     "repositionnement": int(entry.displaces),
                     "conditionnel": 0,
+                    "cooldown_s": "",
                     "note_relecture": " ; ".join(
                         ["page de données introuvable sur le wiki", *form_note]
                     ),
@@ -164,6 +168,7 @@ def build_rows() -> list[dict[str, object]]:
                 "disponibilite": parse.availability_of(fields["skill"]),
                 "repositionnement": int(entry.displaces),
                 "conditionnel": int(props.conditional),
+                "cooldown_s": ("" if fields["cooldown_s"] is None else fields["cooldown_s"]),
                 "note_relecture": " ; ".join(props.notes + form_note),
             }
         )
@@ -216,6 +221,11 @@ def apply_overrides(
                     "disponibilite": parse.availability_of(override["sort"]),
                     "repositionnement": 0,
                     "conditionnel": int(override["conditionnel"] or 0),
+                    "cooldown_s": (
+                        float(override["cooldown_s"])
+                        if (override.get("cooldown_s") or "").strip()
+                        else ""
+                    ),
                     "note_relecture": f"relecture (ajout) : {override['note']}",
                 }
             )
@@ -237,8 +247,8 @@ def apply_overrides(
             excluded.add(index)
             continue
         row = rows[index]
-        for field in ("duree_s", "pct_slow"):
-            if override.get(field, "").strip():
+        for field in ("duree_s", "pct_slow", "cooldown_s"):
+            if (override.get(field) or "").strip():
                 row[field] = float(override[field])
         if override.get("conditionnel", "").strip():
             row["conditionnel"] = int(override["conditionnel"])
@@ -335,6 +345,10 @@ _FROZEN_HEADER = """\
 # Colonnes : zone ∈ {{mono, multi}}, fiabilite ∈ {{point_click, skillshot}}
 # (point_click = non esquivable par déplacement), disponibilite ∈ {{base,
 # ultimate}}, repositionnement ∈ {{0, 1}}, conditionnel ∈ {{0, 1}}.
+# cooldown_s : cooldown au rang max (`|recharge=` si sort à charges, sinon
+# `|cooldown=`), vide si non chiffré côté wiki (passifs/on-hit) — alimente le
+# coef_frequence (bonus borné pour les CC de base réapplicables souvent,
+# jamais les ultimates — cf. score.py, calibré 2026-07-12).
 # Les poids et coefficients du score vivent dans trio_lab/ccref/score.py.
 """
 

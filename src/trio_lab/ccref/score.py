@@ -52,6 +52,18 @@ COEF_ULTIMATE = 0.5  # disponibilité réduite
 COEF_REPOSITIONNEMENT = 1.15  # airborne déplaçant la cible
 COEF_CONDITIONNEL = 0.7  # CC sous condition (collision, charge, marques…)
 
+# Coef_frequence : bonus pour les CC de base réapplicables souvent (Ashe P
+# on-hit, Garen Q, Udyr E…). Calibré le 2026-07-12 sur la médiane des cooldowns
+# extraits du wiki (429 sorts CC, médiane 12 s) : un cooldown ≤ la médiane
+# donne un bonus proportionnel, plafonné pour ne pas écraser le reste du
+# barème déjà validé contre l'empirique. Volontairement limité aux sorts de
+# BASE (jamais les ultimates : déjà pénalisées par COEF_ULTIMATE, et leur
+# cooldown extrait du wiki est plus sujet à erreur d'extraction — un sort à
+# charges (Caitlyn W, Rumble E…) utilise `|recharge=` plutôt que `|cooldown=`,
+# géré en amont dans `ccref.parse`).
+COOLDOWN_REFERENCE_S = 12.0
+COEF_FREQUENCE_CAP = 1.5
+
 # Types dont les contributions ne se cumulent PAS au sein d'un même sort.
 HARD_CC_TYPES = frozenset(WEIGHTS) - {"slow"}
 
@@ -88,6 +100,9 @@ def row_contribution(row: dict[str, str]) -> float:
         value *= COEF_REPOSITIONNEMENT
     if row["conditionnel"].strip() == "1":
         value *= COEF_CONDITIONNEL
+    cooldown = row.get("cooldown_s", "").strip()
+    if cooldown and row["disponibilite"] == "base":
+        value *= min(COEF_FREQUENCE_CAP, max(1.0, COOLDOWN_REFERENCE_S / float(cooldown)))
     return value
 
 
