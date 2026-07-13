@@ -32,21 +32,23 @@ _CHAMPION_SQL = """
 
 # Sommes de stats partagées trio/duo : les stats d'un duo sont les stats
 # d'équipe des parties où il apparaît, quel que soit le 3e membre.
-# vision_score : PAR MINUTE (vision_score / durée en minutes), pas cumulé —
-# le cumulé est mécaniquement gonflé par la durée de la partie (plus de temps
-# = plus de wards posés/détruits), corrélation mesurée +0.22 avec la durée
-# (retour utilisateur, 2026-07-13) ; le score par minute isole le contrôle de
-# vision de l'artefact de durée.
+# vision_score, drakes_taken, cc_time_s : PAR MINUTE (/ durée en minutes), pas
+# cumulés — le cumulé est mécaniquement gonflé par la durée de la partie (plus
+# de temps = plus de wards/drakes/CC possibles). Corrélations mesurées avec la
+# durée (retour utilisateur, 2026-07-13) : vision +0.22, drakes +0.41, CC +0.64
+# (le pire des trois) — le score par minute isole le vrai signal de l'artefact
+# de durée. Voir aussi `ccref/score.py` (EMPIRICAL_CEILING_S_PER_MIN, recalibré
+# pour l'échelle par minute).
 _STAT_SUMS_SQL = """
            sum(t.gold_diff_5), count(t.gold_diff_5),
            sum(t.gold_diff_10), count(t.gold_diff_10),
            sum(t.gold_diff_15), count(t.gold_diff_15),
            sum(t.vision_score / (m.game_duration_s / 60.0)), count(t.vision_score),
-           sum(t.drakes_taken), count(t.drakes_taken),
+           sum(t.drakes_taken / (m.game_duration_s / 60.0)), count(t.drakes_taken),
            count(*) FILTER (WHERE t.soul_taken), count(t.soul_taken),
            count(*) FILTER (WHERE t.herald_taken), count(t.herald_taken),
            count(*) FILTER (WHERE t.first_tower), count(t.first_tower),
-           sum(t.cc_time_s), count(t.cc_time_s)
+           sum(t.cc_time_s / (m.game_duration_s / 60.0)), count(t.cc_time_s)
 """
 _STAT_SUMS_COLUMNS = """
                           gold5_sum, gold5_n, gold10_sum, gold10_n, gold15_sum, gold15_n,
@@ -160,6 +162,10 @@ def refresh(patch: str, *, dsn: str | None = None) -> dict[str, int]:
     """Recalcule les agrégats d'un patch. Retourne le nombre de lignes par table."""
     counts: dict[str, int] = {}
     with psycopg.connect(db.require_dsn(dsn)) as conn, conn.transaction():
+        # Les sommes par minute (vision/drakes/CC, 2026-07-13) ajoutent une
+        # division par ligne à _DUO_SQL/_TRIO_SQL — au-delà du statement_timeout
+        # par défaut du rôle applicatif sur de gros volumes de matchs.
+        conn.execute("SET LOCAL statement_timeout = '10min'")
         for table, sql in _TABLES_SQL.items():
             conn.execute(
                 psycopg.sql.SQL("DELETE FROM {} WHERE patch = %(patch)s").format(

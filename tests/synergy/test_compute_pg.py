@@ -147,10 +147,10 @@ async def test_cc_pct_columns_materialized_for_duo_and_trio(pg_conn):
             (champ_id, cc_score),
         )
     await pg_conn.execute(
-        "UPDATE agg_trio SET cc_sum = 1200, cc_n = 10"  # moyenne 120 s
+        "UPDATE agg_trio SET cc_sum = 30, cc_n = 10"  # moyenne 3.0 s/min
     )
     await pg_conn.execute(
-        "UPDATE agg_duo SET cc_sum = 1200, cc_n = 40 WHERE roles = 'jgl_mid'"  # moyenne 30 s
+        "UPDATE agg_duo SET cc_sum = 30, cc_n = 40 WHERE roles = 'jgl_mid'"  # moyenne 0.75 s/min
     )
     compute.refresh(windows.make_window(["16.13"]), dsn=TEST_DSN)
 
@@ -159,7 +159,7 @@ async def test_cc_pct_columns_materialized_for_duo_and_trio(pg_conn):
         " WHERE platform = 'euw1'"
     )
     theo, emp, blend = await cur.fetchone()
-    # théorique trio : (6+1+2) / (3×7) × 100 = 42.857 % ; empirique : 120/240×100 = 50 %.
+    # théorique trio : (6+1+2) / (3×7) × 100 = 42.857 % ; empirique (s/min) : 3/6×100 = 50 %.
     assert theo == pytest.approx(900 / 21, rel=1e-4)
     assert emp == pytest.approx(50.0)
     # games_eff=10, k=200 : mélange = (10×50 + 200×42.857) / 210.
@@ -170,7 +170,8 @@ async def test_cc_pct_columns_materialized_for_duo_and_trio(pg_conn):
         " WHERE roles = 'jgl_mid' AND platform = 'euw1'"
     )
     theo_duo, emp_duo = await cur.fetchone()
-    # théorique duo (jgl+mid) : (6+1) / (2×7) × 100 = 50 % ; empirique : 30/240×100 = 12.5 %.
+    # théorique duo (jgl+mid) : (6+1) / (2×7) × 100 = 50 % ; empirique (s/min) :
+    # 0.75/6×100 = 12.5 %.
     assert theo_duo == pytest.approx(50.0, rel=1e-4)
     assert emp_duo == pytest.approx(12.5)
 

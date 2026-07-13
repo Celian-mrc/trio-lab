@@ -84,6 +84,16 @@ def test_vision_score_is_per_minute_not_cumulative():
     assert stats["vision_score"] == pytest.approx(2.8)  # (3.6 + 2.0) / 2
 
 
+def test_drakes_and_cc_time_s_are_per_minute_not_cumulative():
+    rows = [
+        _row(duration=1500, drakes_taken=2, cc_time_s=75),  # 25 min : 0.08/min, 3.0 s/min
+        _row(duration=2100, drakes_taken=3, cc_time_s=70),  # 35 min : 0.0857.../min, 2.0 s/min
+    ]
+    stats = summary.summarize(rows, {"16.13": 1.0})
+    assert stats["drakes_taken"] == pytest.approx((2 / 25 + 3 / 35) / 2)
+    assert stats["cc_time_s"] == pytest.approx((3.0 + 2.0) / 2)
+
+
 def test_empty_rows_yield_none_everywhere():
     stats = summary.summarize([], {"16.13": 1.0})
     assert stats["games"] == 0

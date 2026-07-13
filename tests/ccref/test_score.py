@@ -153,6 +153,13 @@ def test_theoretical_pct_zero_ceiling_is_safe():
 def test_empirical_pct_scales_and_caps_at_100():
     assert score.empirical_pct(120.0, ceiling=240.0) == pytest.approx(50.0)
     assert score.empirical_pct(482.0, ceiling=240.0) == 100.0  # outlier plafonné
+
+
+def test_empirical_pct_uses_per_minute_ceiling_by_default():
+    # Ceiling par défaut recalibré le 2026-07-13 pour un empirique PAR MINUTE
+    # (pas cumulé) : 6.0 s/min (~p99 mesuré sur 141 145 trios, patch 16.13).
+    assert score.empirical_pct(3.0) == pytest.approx(50.0)
+    assert score.empirical_pct(12.0) == 100.0  # outlier plafonné
     assert score.empirical_pct(None) is None
 
 

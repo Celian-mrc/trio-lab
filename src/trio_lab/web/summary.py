@@ -18,12 +18,12 @@ from collections.abc import Iterable
 GOLD_MINUTES = (5, 10, 15, 20, 25, 30, 35)
 
 # Colonnes moyennées telles quelles (les bools deviennent des taux 0-1).
-# vision_score est traité à part (par minute, cf. `_vision_per_min`) : le
-# cumulé brut est mécaniquement gonflé par la durée de la partie.
+# vision_score, drakes_taken, cc_time_s sont traités à part (par minute, cf.
+# `_per_minute`) : le cumulé brut est mécaniquement gonflé par la durée de la
+# partie (retour utilisateur, 2026-07-13).
 _MEAN_KEYS = (
     "grubs_taken",
     "herald_taken",
-    "drakes_taken",
     "soul_taken",
     "nashor_first",
     "nashor_first_s",
@@ -33,8 +33,8 @@ _MEAN_KEYS = (
     "first_blood_trio",
     "kill_participation_pre15",
     "damage_share",
-    "cc_time_s",
 )
+_PER_MINUTE_KEYS = ("vision_score", "drakes_taken", "cc_time_s")
 
 
 def _weighted_mean(rows: Iterable[dict], weights: dict[str, float], key: str) -> float | None:
@@ -57,12 +57,15 @@ def _weighted_mean_of(rows: Iterable[dict], weights: dict[str, float], value_of)
     return num / den if den > 0.0 else None
 
 
-def _vision_per_min(row: dict) -> float | None:
-    vision = row.get("vision_score")
-    duration = row.get("game_duration_s")
-    if vision is None or not duration:
-        return None
-    return vision / (duration / 60.0)
+def _per_minute(key: str):
+    def value_of(row: dict) -> float | None:
+        value = row.get(key)
+        duration = row.get("game_duration_s")
+        if value is None or not duration:
+            return None
+        return value / (duration / 60.0)
+
+    return value_of
 
 
 def summarize(rows: list[dict], weights: dict[str, float]) -> dict:
@@ -81,7 +84,9 @@ def summarize(rows: list[dict], weights: dict[str, float]) -> dict:
             m: _weighted_mean(in_window, weights, f"gold_diff_{m}") for m in GOLD_MINUTES
         },
         **{key: _weighted_mean(in_window, weights, key) for key in _MEAN_KEYS},
-        "vision_score": _weighted_mean_of(in_window, weights, _vision_per_min),
+        **{
+            key: _weighted_mean_of(in_window, weights, _per_minute(key)) for key in _PER_MINUTE_KEYS
+        },
         # WR selon l'obtention de l'âme (proxy « âme perdue » côté without :
         # on ne stocke pas si l'adversaire l'a prise).
         "wr_with_soul": _weighted_mean(

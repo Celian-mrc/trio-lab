@@ -16,9 +16,9 @@ def test_cc_pct_fields_empty_reference_returns_none():
 def test_cc_pct_fields_trio_computes_all_three():
     cc_scores = {1: 6.0, 2: 1.0, 3: 2.0, 99: 7.0}  # 99 = max global (hors trio)
     fields = compute._cc_pct_fields(
-        (1, 2, 3), cc_scores, empirical_cc_time_s=120.0, games_eff=0.0, k=200
+        (1, 2, 3), cc_scores, empirical_cc_time_s=3.0, games_eff=0.0, k=200
     )
-    # théorique : (6+1+2) / (3×7) × 100 = 42.857 % ; empirique : 120/240×100 = 50 %.
+    # théorique : (6+1+2) / (3×7) × 100 = 42.857 % ; empirique (s/min) : 3/6×100 = 50 %.
     assert fields["cc_theoretical_pct"] == pytest.approx(900 / 21)
     assert fields["cc_empirical_pct"] == pytest.approx(50.0)
     # games_eff=0 : mélangé = théorique pur.

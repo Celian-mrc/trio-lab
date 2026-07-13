@@ -63,11 +63,11 @@
         </span>
       </th>
       <th data-tooltip="Score de vision du trio par minute de game (moyenne) — pas cumulé, pour ne pas favoriser les trios aux games plus longues" aria-label="Score de vision du trio par minute de game (moyenne) — pas cumulé, pour ne pas favoriser les trios aux games plus longues">{{ sort_link('vision', 'Vision/min') }}</th>
-      <th data-tooltip="Drakes pris par l’équipe (moyenne)" aria-label="Drakes pris par l’équipe (moyenne)">{{ sort_link('drakes', 'Drakes') }}</th>
+      <th data-tooltip="Drakes pris par l’équipe, par minute de game (moyenne) — pas cumulé" aria-label="Drakes pris par l’équipe, par minute de game (moyenne) — pas cumulé">{{ sort_link('drakes', 'Drakes/min') }}</th>
       <th data-tooltip="Taux d’obtention de l’âme" aria-label="Taux d’obtention de l’âme">{{ sort_link('soul', 'Âme') }}</th>
       <th data-tooltip="Taux de prise du héraut" aria-label="Taux de prise du héraut">{{ sort_link('herald', 'Héraut') }}</th>
       <th data-tooltip="Taux de première tour" aria-label="Taux de première tour">{{ sort_link('tower1', '1re tour') }}</th>
-      <th data-tooltip="CC infligé mesuré en jeu, cumul trio (Σ timeCCingOthers)." aria-label="CC infligé mesuré en jeu, cumul trio (Σ timeCCingOthers).">{{ sort_link('cc', 'CC') }}</th>
+      <th data-tooltip="CC infligé mesuré en jeu, cumul trio (Σ timeCCingOthers), par minute de game." aria-label="CC infligé mesuré en jeu, cumul trio (Σ timeCCingOthers), par minute de game.">{{ sort_link('cc', 'CC/min') }}</th>
       <th data-tooltip="CC sur 100 : mélange le CC mesuré en jeu et un score calculé depuis les sorts des champions — le score à privilégier pour comparer les trios. Détail sur la page trio." aria-label="CC sur 100 : mélange le CC mesuré en jeu et un score calculé depuis les sorts des champions — le score à privilégier pour comparer les trios. Détail sur la page trio.">{{ sort_link('cc_blend', 'CC lissé') }}</th>
       <th data-tooltip="Pente du winrate selon la durée de la game (tranches de 5 min) : positif = ce trio gagne plus souvent en game longue, négatif = il gagne plus souvent en game courte. Mesuré uniquement (pas de prédiction si peu de games)." aria-label="Pente du winrate selon la durée de la game (tranches de 5 min) : positif = ce trio gagne plus souvent en game longue, négatif = il gagne plus souvent en game courte. Mesuré uniquement (pas de prédiction si peu de games).">{{ sort_link('scaling', 'Scaling') }}</th>
       <th>Fiabilité</th>
@@ -98,11 +98,11 @@
         </span>
       </td>
       <td>{{ r.vision_score | num(1) }}</td>
-      <td>{{ r.drakes | num }}</td>
+      <td>{{ r.drakes | num(2) }}</td>
       <td>{{ r.soul_rate | pct(0) }}</td>
       <td>{{ r.herald_rate | pct(0) }}</td>
       <td>{{ r.first_tower_rate | pct(0) }}</td>
-      <td>{{ r.cc_time_s | num(0) }}</td>
+      <td>{{ r.cc_time_s | num(2) }}</td>
       <td>{{ r.cc_blended_pct | pct100 }}</td>
       <td class="{{ 'pos' if r.scaling and r.scaling > 0 else 'neg' if r.scaling and r.scaling < 0 }}">{{ r.scaling | signed_pct(2) }}</td>
       <td><span class="tier tier-{{ r.tier }}">{{ r.tier }}</span></td>

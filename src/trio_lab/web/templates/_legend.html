@@ -17,15 +17,16 @@
       <span class="tier tier-eleve">eleve</span>.</li>
     <li><strong>Stats (gold, vision, objectifs)</strong> : moyennes pondérées
       sur la fenêtre ; « — » quand la donnée n'existe pas (ex. gold @15 si
-      toutes les parties finissent avant 15 min). <strong>Vision</strong> est
-      compté par minute de game (pas cumulé) pour ne pas favoriser les trios
-      aux games plus longues.</li>
-    <li><strong>CC</strong> : CC empirique cumulé (secondes de contrôle
-      infligées, `timeCCingOthers`). <strong>CC lissé</strong> : mélange
-      l'empirique et un score théorique calculé depuis les sorts des
-      champions (durée, zone, fiabilité), pondéré par le volume de games —
-      c'est le chiffre à privilégier pour comparer. Détail du calcul et
-      valeurs empirique/théorique séparées sur la page de détail.</li>
+      toutes les parties finissent avant 15 min). <strong>Vision et
+      drakes</strong> sont comptés par minute de game (pas cumulés) pour ne
+      pas favoriser les trios aux games plus longues.</li>
+    <li><strong>CC</strong> : CC empirique (secondes de contrôle infligées,
+      `timeCCingOthers`), par minute de game — pas cumulé, même raison que
+      vision/drakes. <strong>CC lissé</strong> : mélange l'empirique et un
+      score théorique calculé depuis les sorts des champions (durée, zone,
+      fiabilité), pondéré par le volume de games — c'est le chiffre à
+      privilégier pour comparer. Détail du calcul et valeurs
+      empirique/théorique séparées sur la page de détail.</li>
     <li><strong>Scaling</strong> : pente du winrate selon la durée de la
       game (tranches de 5 min) — positif = gagne plus souvent en game
       longue, négatif = en game courte. Mesuré uniquement sur les tranches

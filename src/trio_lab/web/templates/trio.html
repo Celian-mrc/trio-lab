@@ -54,7 +54,7 @@
     <table class="narrow kv">
       <tr><td>Grubs pris (moy.)</td><td>{{ stats.grubs_taken | num }}</td></tr>
       <tr><td>Héraut</td><td>{{ stats.herald_taken | pct }}</td></tr>
-      <tr><td>Drakes (moy.)</td><td>{{ stats.drakes_taken | num }}</td></tr>
+      <tr><td>Drakes / min</td><td>{{ stats.drakes_taken | num(2) }}</td></tr>
       <tr><td>Âme obtenue</td><td>{{ stats.soul_taken | pct }}</td></tr>
       <tr><td>WR avec l'âme</td><td>{{ stats.wr_with_soul | pct }}</td></tr>
       <tr><td>WR sans l'âme</td><td>{{ stats.wr_without_soul | pct }}</td></tr>
@@ -72,17 +72,18 @@
       <tr><td>Kill participation &lt; 15 min</td><td>{{ stats.kill_participation_pre15 | pct }}</td></tr>
       <tr><td>Part des dégâts de l'équipe</td><td>{{ stats.damage_share | pct }}</td></tr>
       <tr><td>Score de vision (trio, par minute)</td><td>{{ stats.vision_score | num(2) }}</td></tr>
-      <tr><td>CC infligé, mesuré en jeu (Σ timeCCingOthers)</td><td>{{ stats.cc_time_s | num }} s</td></tr>
+      <tr><td>CC infligé, mesuré en jeu (Σ timeCCingOthers, par minute)</td><td>{{ stats.cc_time_s | num(2) }} s/min</td></tr>
     </table>
     <h2>CC — empirique vs théorique <span class="meta">(0-100, les 3 valeurs sont comparables entre elles)</span></h2>
     <p class="meta">L'empirique vient du chrono du jeu : le temps réel où ce trio a gardé des
-      ennemis sous contrôle sur les games déjà jouées. Le théorique est calculé depuis les sorts
+      ennemis sous contrôle sur les games déjà jouées, rapporté à la minute (pour ne pas favoriser
+      les trios aux games plus longues). Le théorique est calculé depuis les sorts
       des champions (durée des stuns, roots, etc.), sans regarder aucune game jouée. Le mélangé
       combine les deux — c'est le score à retenir : il privilégie l'empirique quand le trio est
       beaucoup joué, et le théorique quand il l'est peu (pas encore assez de games pour un chrono
       fiable).</p>
     <table class="narrow kv">
-      <tr data-tooltip="Mesuré directement sur les games jouées (Σ timeCCingOthers du trio), plafonné à 240 s puis ramené sur 100." aria-label="Mesuré directement sur les games jouées (Σ timeCCingOthers du trio), plafonné à 240 s puis ramené sur 100.">
+      <tr data-tooltip="Mesuré directement sur les games jouées (Σ timeCCingOthers du trio, par minute), plafonné à 6 s/min puis ramené sur 100." aria-label="Mesuré directement sur les games jouées (Σ timeCCingOthers du trio, par minute), plafonné à 6 s/min puis ramené sur 100.">
         <td>Empirique</td><td>{{ cc_scores.empirical_pct | pct100 }}</td>
       </tr>
       <tr data-tooltip="Score de kit (durées/zones/fiabilité des sorts, cf. détail ci-dessous) ramené sur 100 via un repère fixe : 3 × le score max d'un champion (plafond mathématique, jamais atteignable en pratique)." aria-label="Score de kit (durées/zones/fiabilité des sorts, cf. détail ci-dessous) ramené sur 100 via un repère fixe : 3 × le score max d'un champion (plafond mathématique, jamais atteignable en pratique).">
@@ -171,9 +172,10 @@
 <details class="legend">
   <summary>Empirique, théorique, mélangé : comment ça se calcule ?</summary>
   <p><strong>Empirique</strong> : le CC réellement infligé par ce trio
-  (<code>timeCCingOthers</code>, le chrono officiel de Riot), plafonné à
-  240 s (~p99 des trios) puis ramené sur 100 pour ne pas laisser quelques
-  valeurs extrêmes écraser l'échelle. <strong>Théorique</strong> : un score
+  (<code>timeCCingOthers</code>, le chrono officiel de Riot), rapporté à la
+  minute de game puis plafonné à 6 s/min (~p99 des trios) et ramené sur 100
+  pour ne pas laisser quelques valeurs extrêmes écraser l'échelle.
+  <strong>Théorique</strong> : un score
   de kit (durée des stuns/roots/etc., zone d'effet, fiabilité des sorts —
   cf. détail ci-dessus), ramené sur 100 via un repère fixe : 3× le score
   max d'un champion (un plafond mathématique, jamais atteignable en

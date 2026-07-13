@@ -40,12 +40,12 @@
 <section>
     <h2>CC — empirique vs théorique <span class="meta">(0-100, les 3 valeurs sont comparables entre elles)</span></h2>
     <p class="meta">L'empirique vient du chrono du jeu : le temps réel où ce duo (+ un 3e membre
-      quelconque) a gardé des ennemis sous contrôle sur les games déjà jouées. Le théorique est
-      calculé depuis les sorts des 2 champions du duo (durée des stuns, roots, etc.), sans regarder
-      aucune game jouée. Le mélangé combine les deux — c'est le score à retenir : il privilégie
-      l'empirique quand le duo est beaucoup joué, et le théorique quand il l'est peu.</p>
+      quelconque) a gardé des ennemis sous contrôle sur les games déjà jouées, rapporté à la minute.
+      Le théorique est calculé depuis les sorts des 2 champions du duo (durée des stuns, roots, etc.),
+      sans regarder aucune game jouée. Le mélangé combine les deux — c'est le score à retenir : il
+      privilégie l'empirique quand le duo est beaucoup joué, et le théorique quand il l'est peu.</p>
     <table class="narrow kv">
-      <tr data-tooltip="Mesuré directement sur les games jouées (Σ timeCCingOthers du trio complet), plafonné à 240 s puis ramené sur 100." aria-label="Mesuré directement sur les games jouées (Σ timeCCingOthers du trio complet), plafonné à 240 s puis ramené sur 100.">
+      <tr data-tooltip="Mesuré directement sur les games jouées (Σ timeCCingOthers du trio complet, par minute), plafonné à 6 s/min puis ramené sur 100." aria-label="Mesuré directement sur les games jouées (Σ timeCCingOthers du trio complet, par minute), plafonné à 6 s/min puis ramené sur 100.">
         <td>Empirique</td><td>{{ cc_scores.empirical_pct | pct100 }}</td>
       </tr>
       <tr data-tooltip="Score de kit des 2 champions du duo (durées/zones/fiabilité des sorts, cf. détail ci-dessous) ramené sur 100 via un repère fixe : 2 × le score max d'un champion (plafond mathématique, jamais atteignable en pratique)." aria-label="Score de kit des 2 champions du duo (durées/zones/fiabilité des sorts, cf. détail ci-dessous) ramené sur 100 via un repère fixe : 2 × le score max d'un champion (plafond mathématique, jamais atteignable en pratique).">
@@ -97,9 +97,10 @@
 <details class="legend">
   <summary>Empirique, théorique, mélangé : comment ça se calcule ?</summary>
   <p><strong>Empirique</strong> : le CC réellement infligé par le trio complet (le duo + un 3e
-  membre quelconque, <code>timeCCingOthers</code>, le chrono officiel de Riot), plafonné à
-  240 s (~p99 des trios) puis ramené sur 100 pour ne pas laisser quelques
-  valeurs extrêmes écraser l'échelle. <strong>Théorique</strong> : un score
+  membre quelconque, <code>timeCCingOthers</code>, le chrono officiel de Riot), rapporté à la
+  minute de game puis plafonné à 6 s/min (~p99 des trios) et ramené sur 100
+  pour ne pas laisser quelques valeurs extrêmes écraser l'échelle.
+  <strong>Théorique</strong> : un score
   de kit des 2 champions du duo (durée des stuns/roots/etc., zone d'effet, fiabilité des sorts —
   cf. détail ci-dessus), ramené sur 100 via un repère fixe : 2× le score
   max d'un champion (un plafond mathématique, jamais atteignable en

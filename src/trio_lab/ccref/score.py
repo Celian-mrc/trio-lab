@@ -145,12 +145,17 @@ def trio_score(champions: tuple[str, str, str], scores: dict[str, float] | None 
 # Calibré sur les données du 11/07/2026 (76 325 trios scorés, patch 16.13) :
 # - plafond théorique = 3 × le score max d'un champion (Taliyah, 7.30) — aucun
 #   trio réel ne peut l'atteindre (3 rôles distincts), c'est un repère fixe ;
-# - plafond empirique = ~p99 des trios scorés (240 s) — au-delà, les valeurs
-#   sont surtout des artefacts de mesure Riot (cas Nocturne, cf.
-#   memory phase2b-relecture-workflow) et sont plafonnées à 100 plutôt que de
-#   laisser l'échelle entière se caler sur l'outlier maximal (482 s).
+# - plafond empirique = ~p99 des trios scorés — au-delà, les valeurs sont
+#   surtout des artefacts de mesure Riot (cas Nocturne, cf. memory
+#   phase2b-relecture-workflow) et sont plafonnées à 100 plutôt que de laisser
+#   l'échelle entière se caler sur l'outlier maximal.
+# Recalibré le 13/07/2026 : l'empirique (Σ timeCCingOthers) était cumulé sur
+# toute la partie, donc mécaniquement gonflé par sa durée (Pearson +0.64 avec
+# la durée, retour utilisateur) — passé en PAR MINUTE (cf. stats/aggregate.py)
+# ; nouveau p99 ≈ 5,48 s/min sur 141 145 trios (patch 16.13), plafond arrondi
+# à 6,0.
 # À recalibrer si la distribution empirique dérive significativement.
-EMPIRICAL_CEILING_S = 240.0
+EMPIRICAL_CEILING_S_PER_MIN = 6.0
 BLEND_PRIOR_K = 200.0  # même force de lissage que la synergie (synergy.scores)
 
 
@@ -166,12 +171,15 @@ def theoretical_pct(
     return 100 * raw_score / ceiling if ceiling > 0 else 0.0
 
 
-def empirical_pct(cc_time_s: float | None, ceiling: float = EMPIRICAL_CEILING_S) -> float | None:
-    """CC empirique (Σ `timeCCingOthers` du trio), normalisé sur 100 et
-    plafonné : les valeurs extrêmes n'écrasent pas le reste de l'échelle."""
-    if cc_time_s is None:
+def empirical_pct(
+    cc_time_s_per_min: float | None, ceiling: float = EMPIRICAL_CEILING_S_PER_MIN
+) -> float | None:
+    """CC empirique (Σ `timeCCingOthers` du trio, PAR MINUTE de game), normalisé
+    sur 100 et plafonné : les valeurs extrêmes n'écrasent pas le reste de
+    l'échelle."""
+    if cc_time_s_per_min is None:
         return None
-    return min(100 * cc_time_s / ceiling, 100.0)
+    return min(100 * cc_time_s_per_min / ceiling, 100.0)
 
 
 def blended_pct(
