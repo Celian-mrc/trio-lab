@@ -4,14 +4,20 @@
 // ajoute (ou, si déjà présente, inverse) cette colonne comme critère de tri
 // suivant, sans perdre les critères déjà choisis.
 //
-// Capture phase (3e argument `true`) : s'exécute avant le handler de clic
-// d'htmx (bubble phase), pour que le boost AJAX parte déjà sur l'URL à jour.
+// preventDefault + stopPropagation, en capture phase : on coupe l'événement
+// avant qu'htmx (délégué en bubble phase sur <body hx-boost>) ne le voie —
+// simplement réécrire le href ne suffisait pas (htmx semblait partir sur son
+// URL d'origine, avant la réécriture). On navigue nous-mêmes en plein
+// rechargement pour ce cas précis : pas de boost AJAX sur le Maj-clic, mais
+// un comportement garanti, indépendant des détails internes d'htmx.
 document.addEventListener(
   "click",
   function (event) {
     if (!event.shiftKey) return;
     var link = event.target.closest("a[data-sort-key]");
     if (!link) return;
+    event.preventDefault();
+    event.stopPropagation();
 
     var MAX_SORT_LEVELS = 4;
     var params = new URLSearchParams(window.location.search);
@@ -31,7 +37,7 @@ document.addEventListener(
     params.set("sort", sorts.join(","));
     params.set("dir", dirs.join(","));
     params.delete("page"); // repartir de la page 1 sur un nouveau tri
-    link.setAttribute("href", link.pathname + "?" + params.toString());
+    window.location.href = link.pathname + "?" + params.toString();
   },
   true
 );
