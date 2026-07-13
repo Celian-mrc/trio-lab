@@ -433,6 +433,57 @@ def test_multi_sort_rejects_too_many_levels(pg_sync, client):
     assert response.status_code == 404
 
 
+def _seed_threshold_trios(conn) -> None:
+    """3 trios dont WR/CC/gold@15 varient indépendamment, pour tester les
+    filtres par seuil combinés (retour utilisateur, 2026-07-13) : trouver les
+    combos bons sur plusieurs axes à la fois, ce qu'un tri seul ne permet pas
+    quand la 1re colonne triée est presque toujours unique."""
+    rows = (
+        (401, 0.60, 5.0, 800),  # haut sur les 3 axes
+        (402, 0.60, 1.0, 800),  # même WR/gold, CC trop bas
+        (403, 0.40, 5.0, 800),  # même CC/gold, WR trop bas
+    )
+    for jgl, wr, cc, gold15 in rows:
+        conn.execute(
+            "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+            " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+            " ci_low, ci_high, tier, cc_time_s, gold_diff_15)"
+            " VALUES ('16.13', 'euw1', %s, 900, 901, 50, 50.0, %s, 0.0, 0.0, 0.0,"
+            " 0.3, 0.7, 'moyen', %s, %s)",
+            (jgl, wr, cc, gold15),
+        )
+
+
+def test_min_value_filters_combine_on_multiple_columns(pg_sync, client):
+    _seed_threshold_trios(pg_sync)
+    payload = client.get("/api/trios", params={"min_wr": "55", "min_cc": "3"}).json()
+    assert [r["jgl_champion"] for r in payload["rows"]] == [401]
+
+
+def test_min_value_filters_default_to_no_filtering(pg_sync, client):
+    _seed_threshold_trios(pg_sync)
+    payload = client.get("/api/trios").json()
+    assert sorted(r["jgl_champion"] for r in payload["rows"]) == [401, 402, 403]
+
+
+def test_min_value_filters_accept_empty_string_not_422(pg_sync, client):
+    """Un champ numérique vidé dans le formulaire envoie `min_wr=` (chaîne
+    vide) : doit être traité comme absent, pas une 422 (même piège que `role`,
+    cf. test_empty_role_param_is_accepted)."""
+    _seed_threshold_trios(pg_sync)
+    response = client.get("/api/trios", params={"min_wr": "", "min_cc": "", "min_gold15": ""})
+    assert response.status_code == 200
+    assert len(response.json()["rows"]) == 3
+    assert client.get("/", params={"min_wr": "", "min_cc": ""}).status_code == 200
+
+
+def test_min_value_filters_reject_out_of_range_or_invalid(pg_sync, client):
+    _seed_scores(pg_sync)
+    assert client.get("/api/trios", params={"min_wr": "150"}).status_code == 404
+    assert client.get("/api/trios", params={"min_wr": "-5"}).status_code == 404
+    assert client.get("/api/trios", params={"min_cc": "abc"}).status_code == 404
+
+
 def test_api_status_reports_collection(pg_sync, client):
     _seed_scores(pg_sync)
     _seed_matches(pg_sync)

@@ -81,6 +81,22 @@ def _order_by_clause(
     return ", ".join(parts)
 
 
+def _min_value_clauses(
+    min_values: dict[str, float] | None, sort_map: dict[str, str], params: dict
+) -> list[str]:
+    """Clauses `colonne >= seuil` (filtre "au moins X", ex. WR min., CC min.),
+    mêmes clés que le tri (whitelist `sort_map`, jamais interpolées brutes) —
+    trouver les combos bons sur plusieurs axes à la fois (retour utilisateur,
+    2026-07-13) : un tri multi-colonnes ne suffit pas quand la 1re colonne est
+    presque toujours unique (ex. synergie), un filtre par seuils si."""
+    where = []
+    for key, value in (min_values or {}).items():
+        param_name = f"min_{key}"
+        params[param_name] = value
+        where.append(f"{sort_map[key]} >= %({param_name})s")
+    return where
+
+
 def trio_tierlist(
     conn: psycopg.Connection,
     window: str,
@@ -90,6 +106,7 @@ def trio_tierlist(
     role: str | None = None,  # 'jgl' | 'mid' | 'sup' | None = les trois
     min_games: int = 0,
     min_tier: str = "faible",
+    min_values: dict[str, float] | None = None,  # ex. {"wr": .52, "cc": 4.0}
     sort: Sequence[str] = ("synergy",),
     direction: Sequence[str] = ("desc",),
     page: int = 1,
@@ -106,6 +123,7 @@ def trio_tierlist(
         "per_page": PER_PAGE,
     }
     where.append("tier = ANY(%(tiers)s)")
+    where.extend(_min_value_clauses(min_values, TRIO_SORTS, params))
     if champion_id is not None:
         params["champ"] = champion_id
         if role in ("jgl", "mid", "sup"):
@@ -142,6 +160,7 @@ def duo_tierlist(
     *,
     min_games: int = 0,
     min_tier: str = "faible",
+    min_values: dict[str, float] | None = None,  # ex. {"wr": .52, "cc": 4.0}
     sort: Sequence[str] = ("synergy",),
     direction: Sequence[str] = ("desc",),
     page: int = 1,
@@ -150,6 +169,23 @@ def duo_tierlist(
     if roles not in DUO_ROLES:
         raise ValueError(f"roles inconnu : {roles!r}")
     order_clause = _order_by_clause(sort, direction, DUO_SORTS)
+    where = [
+        "window_label = %(window)s",
+        "platform = %(platform)s",
+        "roles = %(roles)s",
+        "games >= %(min_games)s",
+        "tier = ANY(%(tiers)s)",
+    ]
+    params: dict = {
+        "window": window,
+        "platform": platform,
+        "roles": roles,
+        "min_games": min_games,
+        "tiers": list(_TIER_AT_LEAST[min_tier]),
+        "offset": (max(page, 1) - 1) * PER_PAGE,
+        "per_page": PER_PAGE,
+    }
+    where.extend(_min_value_clauses(min_values, DUO_SORTS, params))
     with conn.cursor(row_factory=dict_row) as cur:
         rows = cur.execute(
             f"""
@@ -157,20 +193,11 @@ def duo_tierlist(
                    ci_low, ci_high, tier, {_STAT_COLUMNS_SQL},
                    count(*) OVER () AS total
             FROM score_duo
-            WHERE window_label = %(window)s AND platform = %(platform)s
-              AND roles = %(roles)s AND games >= %(min_games)s AND tier = ANY(%(tiers)s)
+            WHERE {" AND ".join(where)}
             ORDER BY {order_clause}, games DESC, champ_a, champ_b
             OFFSET %(offset)s LIMIT %(per_page)s
             """,
-            {
-                "window": window,
-                "platform": platform,
-                "roles": roles,
-                "min_games": min_games,
-                "tiers": list(_TIER_AT_LEAST[min_tier]),
-                "offset": (max(page, 1) - 1) * PER_PAGE,
-                "per_page": PER_PAGE,
-            },
+            params,
         ).fetchall()
     total = rows[0].pop("total") if rows else 0
     for row in rows:
