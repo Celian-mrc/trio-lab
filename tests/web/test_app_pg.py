@@ -484,6 +484,49 @@ def test_min_value_filters_reject_out_of_range_or_invalid(pg_sync, client):
     assert client.get("/api/trios", params={"min_cc": "abc"}).status_code == 404
 
 
+def _seed_generic_threshold_trios(conn) -> None:
+    """Trios variant sur synergie et scaling (pas WR/CC/gold15) pour prouver
+    que le filtre par seuil fonctionne sur n'importe quelle colonne triable,
+    pas seulement les 3 d'origine (retour utilisateur, 2026-07-13)."""
+    rows = (
+        (411, 0.10, 0.02),  # synergie et scaling hauts
+        (412, -0.05, 0.02),  # synergie basse
+        (413, 0.10, -0.01),  # scaling bas
+    )
+    for jgl, synergy, scaling in rows:
+        conn.execute(
+            "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+            " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+            " ci_low, ci_high, tier, scaling)"
+            " VALUES ('16.13', 'euw1', %s, 910, 911, 50, 50.0, 0.5, 0.0, 0.0, %s,"
+            " 0.3, 0.7, 'moyen', %s)",
+            (jgl, synergy, scaling),
+        )
+
+
+def test_min_value_filters_work_on_any_sortable_column(pg_sync, client):
+    """Pas seulement WR/CC/Gold@15 : n'importe quelle colonne de TRIO_SORTS,
+    y compris négative (synergie, scaling — un seuil négatif doit rester
+    acceptable, contrairement à WR qui est borné à [0, 100])."""
+    _seed_generic_threshold_trios(pg_sync)
+    payload = client.get("/api/trios", params={"min_synergy": "0", "min_scaling": "0"}).json()
+    assert [r["jgl_champion"] for r in payload["rows"]] == [411]
+    payload = client.get("/api/trios", params={"min_synergy": "-10"}).json()
+    assert sorted(r["jgl_champion"] for r in payload["rows"]) == [411, 412, 413]
+
+
+def test_threshold_filter_tooltip_on_span_not_label(pg_sync, client):
+    """L'icône ⓘ (CSS ::after) se place après le DERNIER enfant de l'élément
+    portant `data-tooltip` : sur un <label> contenant aussi l'<input>, elle
+    apparaissait après le champ au lieu du texte (retour utilisateur,
+    2026-07-13). Le tooltip doit être porté par un <span> autour du seul
+    texte du label, pas le <label> entier."""
+    _seed_scores(pg_sync)
+    html = client.get("/").text
+    assert "<label data-tooltip=" not in html
+    assert 'span data-tooltip="Ne montre que les combos avec au moins ce WR' in html
+
+
 def test_api_status_reports_collection(pg_sync, client):
     _seed_scores(pg_sync)
     _seed_matches(pg_sync)

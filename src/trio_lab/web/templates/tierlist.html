@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_threshold_filters.html" import threshold_fields %}
 {% block title %}Tier list des trios — Trio Lab{% endblock %}
 {% block content %}
 <h1>Tier list des trios jungle / mid / support</h1>
@@ -36,13 +37,10 @@
       {% endfor %}
     </select>
   </label>
-  <label data-tooltip="Ne montre que les trios avec au moins ce WR — combinable avec les autres seuils min. pour trouver les combos bons sur plusieurs axes à la fois (le tri seul ne suffit pas si la 1re colonne triée est presque toujours unique)." aria-label="Ne montre que les trios avec au moins ce WR — combinable avec les autres seuils min. pour trouver les combos bons sur plusieurs axes à la fois.">WR min. (%)
-    <input type="number" name="min_wr" value="{{ min_wr if min_wr is not none else '' }}" min="0" max="100" step="0.1">
-  </label>
-  <label data-tooltip="Ne montre que les trios avec au moins ce CC/min (empirique, pas lissé)." aria-label="Ne montre que les trios avec au moins ce CC/min (empirique, pas lissé).">CC/min min.
-    <input type="number" name="min_cc" value="{{ min_cc if min_cc is not none else '' }}" min="0" step="0.1">
-  </label>
-  <label>Gold@15 min. <input type="number" name="min_gold15" value="{{ min_gold15 if min_gold15 is not none else '' }}" step="1"></label>
+  <details>
+    <summary>Filtres par seuils (toutes colonnes)</summary>
+    {{ threshold_fields(min_values) }}
+  </details>
   <input type="hidden" name="sort" value="{{ sort }}">
   <input type="hidden" name="dir" value="{{ direction }}">
   <button type="submit">Filtrer</button>
@@ -50,7 +48,6 @@
 
 <p class="meta">{{ total }} trios — page {{ page }} / {{ ((total - 1) // per_page) + 1 if total else 1 }} — cliquer un en-tête pour trier, re-cliquer pour inverser, Maj-clic pour ajouter un critère de tri supplémentaire (comme Excel/Sheets)</p>
 
-{% set filters_qs = "window=" ~ window ~ "&platform=" ~ platform ~ "&champion=" ~ (champion | urlencode) ~ "&role=" ~ role ~ "&min_games=" ~ min_games ~ "&min_tier=" ~ min_tier ~ "&min_wr=" ~ (min_wr if min_wr is not none else '') ~ "&min_cc=" ~ (min_cc if min_cc is not none else '') ~ "&min_gold15=" ~ (min_gold15 if min_gold15 is not none else '') %}
 {% macro sort_link(key, label) %}
 {% set idx = sorts.index(key) if key in sorts else -1 %}
 {% set next_dir = 'asc' if idx >= 0 and directions[idx] == 'desc' else 'desc' %}

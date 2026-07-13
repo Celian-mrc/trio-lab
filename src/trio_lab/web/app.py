@@ -14,6 +14,7 @@ import logging
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import urlencode
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
@@ -182,25 +183,54 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             raise HTTPException(404, f"valeur trop haute : {value!r}")
         return parsed
 
-    def min_values(
-        min_wr: str | None, min_cc: str | None, min_gold15: str | None
-    ) -> dict[str, float]:
-        """Filtres « au moins X » combinables (WR/CC/Gold@15 min.) — trouver
-        les combos bons sur plusieurs axes à la fois, ce que le tri seul ne
-        permet pas quand la 1re colonne triée est presque toujours unique
-        (retour utilisateur, 2026-07-13). `min_wr` en % dans le formulaire
-        (0-100), converti ici en proportion (0-1) comme la colonne `wr`."""
+    # Filtres par seuil "au moins X", une entrée par colonne triable sauf
+    # `games` (son propre champ dédié `min_games` existait déjà) — whitelist
+    # identique à TRIO_SORTS/DUO_SORTS (mêmes colonnes des deux côtés,
+    # cf. queries.py). Certaines colonnes sont stockées en fraction 0-1 mais
+    # affichées en % (is_percent) : saisies en % dans le formulaire, converties
+    # ici comme `wr` déjà l'était avant que le filtre ne s'étende à toutes les
+    # colonnes (retour utilisateur, 2026-07-13).
+    _THRESHOLD_SPECS: dict[str, tuple[bool, float | None, float | None]] = {
+        "wr": (True, 0, 100),
+        "synergy": (True, -100, 100),
+        "gold5": (False, None, None),
+        "gold10": (False, None, None),
+        "gold15": (False, None, None),
+        "vision": (False, 0, None),
+        "drakes": (False, 0, None),
+        "soul": (True, 0, 100),
+        "herald": (True, 0, 100),
+        "tower1": (True, 0, 100),
+        "cc": (False, 0, None),
+        "cc_blend": (False, 0, 100),
+        "scaling": (True, -100, 100),
+    }
+
+    def threshold_raw(request: Request) -> dict[str, str]:
+        """Valeurs brutes des filtres de seuil (chaînes telles que soumises,
+        `""` si absent) — repeuplent les champs du formulaire après filtrage."""
+        return {key: request.query_params.get(f"min_{key}", "") for key in _THRESHOLD_SPECS}
+
+    def min_values(raw: dict[str, str]) -> dict[str, float]:
+        """Filtres « au moins X » combinables, sur toutes les colonnes triables
+        — trouver les combos bons sur plusieurs axes à la fois, ce que le tri
+        seul ne permet pas quand la 1re colonne triée est presque toujours
+        unique (retour utilisateur, 2026-07-13)."""
         values: dict[str, float] = {}
-        wr = _parse_optional_float(min_wr, ge=0, le=100)
-        if wr is not None:
-            values["wr"] = wr / 100.0
-        cc = _parse_optional_float(min_cc, ge=0)
-        if cc is not None:
-            values["cc"] = cc
-        gold15 = _parse_optional_float(min_gold15)
-        if gold15 is not None:
-            values["gold15"] = gold15
+        for key, (is_percent, ge, le) in _THRESHOLD_SPECS.items():
+            parsed = _parse_optional_float(raw.get(key), ge=ge, le=le)
+            if parsed is not None:
+                values[key] = parsed / 100.0 if is_percent else parsed
         return values
+
+    def filters_qs(thresholds_raw: dict[str, str], **base: object) -> str:
+        """Querystring des filtres actifs (calculée côté Python, pas en Jinja
+        `{% set %}` dans une boucle : la variable ne survivrait pas à la
+        boucle) — réutilisée par la pagination et les liens de tri pour ne
+        jamais perdre un filtre en changeant de page ou de tri."""
+        params = dict(base)
+        params.update({f"min_{k}": v for k, v in thresholds_raw.items()})
+        return urlencode(params)
 
     def resolve_context(conn, window: str | None, platform: str | None) -> tuple[str, str, dict]:
         """(fenêtre, plateforme) validées + le contexte commun des templates."""
@@ -246,16 +276,14 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         role: str | None = Query(None, pattern=_ROLE_PATTERN),
         min_games: int = Query(0, ge=0),
         min_tier: str = Query("faible", pattern="^(faible|moyen|eleve)$"),
-        min_wr: str | None = None,
-        min_cc: str | None = None,
-        min_gold15: str | None = None,
         sort: str = "synergy",
         direction: str = Query("desc", alias="dir"),
         page: int = Query(1, ge=1),
     ):
         role = role or None
         sorts, dirs = parse_sort(sort, direction, queries.TRIO_SORTS)
-        thresholds = min_values(min_wr, min_cc, min_gold15)
+        thresholds_raw = threshold_raw(request)
+        thresholds = min_values(thresholds_raw)
         with request.app.state.pool.connection() as conn:
             window, platform, context = resolve_context(conn, window, platform)
             champion_id = resolve_champion(champion)
@@ -282,9 +310,16 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 "role": role or "",
                 "min_games": min_games,
                 "min_tier": min_tier,
-                "min_wr": min_wr,
-                "min_cc": min_cc,
-                "min_gold15": min_gold15,
+                "min_values": thresholds_raw,
+                "filters_qs": filters_qs(
+                    thresholds_raw,
+                    window=window,
+                    platform=platform,
+                    champion=champion or "",
+                    role=role or "",
+                    min_games=min_games,
+                    min_tier=min_tier,
+                ),
                 "sort": sort,
                 "direction": direction,
                 "sorts": sorts,
@@ -301,15 +336,13 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         roles: str = Query("jgl_mid", pattern=_DUO_ROLES_PATTERN),
         min_games: int = Query(0, ge=0),
         min_tier: str = Query("faible", pattern="^(faible|moyen|eleve)$"),
-        min_wr: str | None = None,
-        min_cc: str | None = None,
-        min_gold15: str | None = None,
         sort: str = "synergy",
         direction: str = Query("desc", alias="dir"),
         page: int = Query(1, ge=1),
     ):
         sorts, dirs = parse_sort(sort, direction, queries.DUO_SORTS)
-        thresholds = min_values(min_wr, min_cc, min_gold15)
+        thresholds_raw = threshold_raw(request)
+        thresholds = min_values(thresholds_raw)
         with request.app.state.pool.connection() as conn:
             window, platform, context = resolve_context(conn, window, platform)
             result = queries.duo_tierlist(
@@ -333,9 +366,15 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 "roles": roles,
                 "min_games": min_games,
                 "min_tier": min_tier,
-                "min_wr": min_wr,
-                "min_cc": min_cc,
-                "min_gold15": min_gold15,
+                "min_values": thresholds_raw,
+                "filters_qs": filters_qs(
+                    thresholds_raw,
+                    window=window,
+                    platform=platform,
+                    roles=roles,
+                    min_games=min_games,
+                    min_tier=min_tier,
+                ),
                 "sort": sort,
                 "direction": direction,
                 "sorts": sorts,
@@ -582,9 +621,6 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         role: str | None = Query(None, pattern=_ROLE_PATTERN),
         min_games: int = Query(0, ge=0),
         min_tier: str = Query("faible", pattern="^(faible|moyen|eleve)$"),
-        min_wr: str | None = None,
-        min_cc: str | None = None,
-        min_gold15: str | None = None,
         sort: str = "synergy",
         direction: str = Query("desc", alias="dir"),
         page: int = Query(1, ge=1),
@@ -600,7 +636,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 role=role or None,
                 min_games=min_games,
                 min_tier=min_tier,
-                min_values=min_values(min_wr, min_cc, min_gold15),
+                min_values=min_values(threshold_raw(request)),
                 sort=sorts,
                 direction=dirs,
                 page=page,
@@ -635,9 +671,6 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         roles: str = Query("jgl_mid", pattern=_DUO_ROLES_PATTERN),
         min_games: int = Query(0, ge=0),
         min_tier: str = Query("faible", pattern="^(faible|moyen|eleve)$"),
-        min_wr: str | None = None,
-        min_cc: str | None = None,
-        min_gold15: str | None = None,
         sort: str = "synergy",
         direction: str = Query("desc", alias="dir"),
         page: int = Query(1, ge=1),
@@ -652,7 +685,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 roles,
                 min_games=min_games,
                 min_tier=min_tier,
-                min_values=min_values(min_wr, min_cc, min_gold15),
+                min_values=min_values(threshold_raw(request)),
                 sort=sorts,
                 direction=dirs,
                 page=page,
