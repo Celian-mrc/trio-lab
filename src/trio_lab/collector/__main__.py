@@ -1,6 +1,6 @@
 """CLI du collector.
 
-    python -m trio_lab.collector --patch 16.13 [--platforms na1,euw1,kr]
+    python -m trio_lab.collector --patch 16.13 [--platforms na1,euw1,kr,eun1,br1]
                                  [--target N] [--max-pages 5] [--max-attempts 3]
     python -m trio_lab.collector --service [--target 5000]
 
@@ -33,8 +33,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--platforms",
-        default="na1,euw1,kr",
-        help="plateformes séparées par des virgules (défaut : na1,euw1,kr)",
+        default="na1,euw1,kr,eun1,br1",
+        help="plateformes séparées par des virgules (défaut : na1,euw1,kr,eun1,br1)",
     )
     parser.add_argument(
         "--target",

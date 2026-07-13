@@ -141,7 +141,10 @@ Phase par phase : la phase N+1 ne démarre pas avant que la phase N soit verte
 
 ## Phase 6 — Déploiement Railway 24/24
 
-- [x] Collector en service Railway permanent (les 3 régions)
+- [x] Collector en service Railway permanent (na1/euw1/kr, +eun1/br1 depuis
+      le 2026-07-13 — chaque région a son propre budget de rate limit Riot,
+      collecte concurrente via `asyncio.gather`, donc ajout ~gratuit tant que
+      les régions ajoutées ont un volume Emerald+ suffisant)
       (`python -m trio_lab.collector --service` : patch courant auto via
       Data Dragon avec bornes de repli si PATCH_DATES incomplet, cycles
       batch → refresh agrégats/scores/counters, archives timeline
