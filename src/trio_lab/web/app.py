@@ -101,6 +101,16 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
     app = FastAPI(title="Trio Lab", lifespan=lifespan)
     app.mount("/static", StaticFiles(directory=_HERE / "static"), name="static")
     templates = Jinja2Templates(directory=_HERE / "templates")
+
+    def static_version(filename: str) -> int:
+        """Cache-busting (`?v=mtime`) pour les fichiers statiques : `StaticFiles`
+        n'envoie pas de `Cache-Control`, donc le navigateur peut garder un CSS/JS
+        périmé après un déploiement sans revalider (vécu — CSS servi correctement
+        par le serveur mais mise en page cassée côté navigateur, retour
+        utilisateur 2026-07-13)."""
+        return int((_HERE / "static" / filename).stat().st_mtime)
+
+    templates.env.globals["static_version"] = static_version
     templates.env.filters.update(
         pct=_fmt_pct,
         pct100=_fmt_pct100,
