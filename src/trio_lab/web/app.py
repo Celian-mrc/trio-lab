@@ -141,6 +141,28 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             raise HTTPException(404, f"champion inconnu : {text}")
         return found
 
+    _MAX_SORT_LEVELS = 4
+
+    def parse_sort(
+        sort_param: str, dir_param: str, valid: dict[str, str]
+    ) -> tuple[list[str], list[str]]:
+        """Tri façon tableur : `sort`/`dir` sont des listes séparées par des
+        virgules (ex. `sort=cc,wr&dir=desc,desc`), appliquées dans l'ordre —
+        clic simple sur une colonne (1 seul élément) ou Maj-clic pour ajouter
+        un niveau (JS, cf. static/sort.js). Chaque élément est validé contre
+        une whitelist avant d'atteindre le SQL (jamais interpolé brut)."""
+        sorts = [s for s in sort_param.split(",") if s]
+        dirs = [d for d in dir_param.split(",") if d]
+        if not sorts or len(sorts) != len(dirs) or len(sorts) > _MAX_SORT_LEVELS:
+            raise HTTPException(404, f"tri invalide : sort={sort_param!r} dir={dir_param!r}")
+        for s in sorts:
+            if s not in valid:
+                raise HTTPException(404, f"tri inconnu : {s!r}")
+        for d in dirs:
+            if d not in queries.SORT_DIRECTIONS:
+                raise HTTPException(404, f"sens de tri inconnu : {d!r}")
+        return sorts, dirs
+
     def resolve_context(conn, window: str | None, platform: str | None) -> tuple[str, str, dict]:
         """(fenêtre, plateforme) validées + le contexte commun des templates."""
         known = queries.available_windows(conn)
@@ -170,10 +192,10 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
 
     # Un <select> vide envoie `role=` : accepter la chaîne vide (sinon 422 que
     # hx-boost avale silencieusement — bouton « Filtrer » qui ne fait rien).
+    # sort/dir : listes séparées par des virgules (tri multi-colonnes façon
+    # tableur), validées à la main par `parse_sort` — pas de pattern Query
+    # unique, la forme n'est plus une simple valeur whitelistée.
     _ROLE_PATTERN = "^(jgl|mid|sup)?$"
-    _TRIO_SORT_PATTERN = f"^({'|'.join(queries.TRIO_SORTS)})$"
-    _DUO_SORT_PATTERN = f"^({'|'.join(queries.DUO_SORTS)})$"
-    _DIR_PATTERN = f"^({'|'.join(queries.SORT_DIRECTIONS)})$"
     _DUO_ROLES_PATTERN = f"^({'|'.join(queries.DUO_ROLES)})$"
 
     @app.get("/", response_class=HTMLResponse)
@@ -185,11 +207,12 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         role: str | None = Query(None, pattern=_ROLE_PATTERN),
         min_games: int = Query(0, ge=0),
         min_tier: str = Query("faible", pattern="^(faible|moyen|eleve)$"),
-        sort: str = Query("synergy", pattern=_TRIO_SORT_PATTERN),
-        direction: str = Query("desc", pattern=_DIR_PATTERN, alias="dir"),
+        sort: str = "synergy",
+        direction: str = Query("desc", alias="dir"),
         page: int = Query(1, ge=1),
     ):
         role = role or None
+        sorts, dirs = parse_sort(sort, direction, queries.TRIO_SORTS)
         with request.app.state.pool.connection() as conn:
             window, platform, context = resolve_context(conn, window, platform)
             champion_id = resolve_champion(champion)
@@ -201,8 +224,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 role=role,
                 min_games=min_games,
                 min_tier=min_tier,
-                sort=sort,
-                direction=direction,
+                sort=sorts,
+                direction=dirs,
                 page=page,
             )
         return templates.TemplateResponse(
@@ -217,6 +240,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 "min_tier": min_tier,
                 "sort": sort,
                 "direction": direction,
+                "sorts": sorts,
+                "directions": dirs,
                 "champion_names": sorted(c.name for c in champ_index().values()),
             },
         )
@@ -229,10 +254,11 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         roles: str = Query("jgl_mid", pattern=_DUO_ROLES_PATTERN),
         min_games: int = Query(0, ge=0),
         min_tier: str = Query("faible", pattern="^(faible|moyen|eleve)$"),
-        sort: str = Query("synergy", pattern=_DUO_SORT_PATTERN),
-        direction: str = Query("desc", pattern=_DIR_PATTERN, alias="dir"),
+        sort: str = "synergy",
+        direction: str = Query("desc", alias="dir"),
         page: int = Query(1, ge=1),
     ):
+        sorts, dirs = parse_sort(sort, direction, queries.DUO_SORTS)
         with request.app.state.pool.connection() as conn:
             window, platform, context = resolve_context(conn, window, platform)
             result = queries.duo_tierlist(
@@ -242,8 +268,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 roles,
                 min_games=min_games,
                 min_tier=min_tier,
-                sort=sort,
-                direction=direction,
+                sort=sorts,
+                direction=dirs,
                 page=page,
             )
         return templates.TemplateResponse(
@@ -257,6 +283,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 "min_tier": min_tier,
                 "sort": sort,
                 "direction": direction,
+                "sorts": sorts,
+                "directions": dirs,
             },
         )
 
@@ -413,8 +441,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             champion_id=champion_id,
             role=role,
             min_tier="moyen",  # écarte les trios à 1-2 games (retour utilisateur, 2026-07-12)
-            sort="synergy",
-            direction="desc",
+            sort=["synergy"],
+            direction=["desc"],
         )["rows"][:CHAMPION_TRIOS_SHOWN]
         cc_theoretical = queries.cc_theoretical_scores(conn).get(champion_id)
         match_rows = queries.champion_match_rows(
@@ -499,10 +527,11 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         role: str | None = Query(None, pattern=_ROLE_PATTERN),
         min_games: int = Query(0, ge=0),
         min_tier: str = Query("faible", pattern="^(faible|moyen|eleve)$"),
-        sort: str = Query("synergy", pattern=_TRIO_SORT_PATTERN),
-        direction: str = Query("desc", pattern=_DIR_PATTERN, alias="dir"),
+        sort: str = "synergy",
+        direction: str = Query("desc", alias="dir"),
         page: int = Query(1, ge=1),
     ):
+        sorts, dirs = parse_sort(sort, direction, queries.TRIO_SORTS)
         with request.app.state.pool.connection() as conn:
             window, platform, _ = resolve_context(conn, window, platform)
             result = queries.trio_tierlist(
@@ -513,8 +542,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 role=role or None,
                 min_games=min_games,
                 min_tier=min_tier,
-                sort=sort,
-                direction=direction,
+                sort=sorts,
+                direction=dirs,
                 page=page,
             )
         result["rows"] = [_named(r) for r in result["rows"]]
@@ -547,10 +576,11 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         roles: str = Query("jgl_mid", pattern=_DUO_ROLES_PATTERN),
         min_games: int = Query(0, ge=0),
         min_tier: str = Query("faible", pattern="^(faible|moyen|eleve)$"),
-        sort: str = Query("synergy", pattern=_DUO_SORT_PATTERN),
-        direction: str = Query("desc", pattern=_DIR_PATTERN, alias="dir"),
+        sort: str = "synergy",
+        direction: str = Query("desc", alias="dir"),
         page: int = Query(1, ge=1),
     ):
+        sorts, dirs = parse_sort(sort, direction, queries.DUO_SORTS)
         with request.app.state.pool.connection() as conn:
             window, platform, _ = resolve_context(conn, window, platform)
             result = queries.duo_tierlist(
@@ -560,8 +590,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 roles,
                 min_games=min_games,
                 min_tier=min_tier,
-                sort=sort,
-                direction=direction,
+                sort=sorts,
+                direction=dirs,
                 page=page,
             )
         result["rows"] = [_named(r) for r in result["rows"]]

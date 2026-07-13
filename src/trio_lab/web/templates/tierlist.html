@@ -41,12 +41,13 @@
   <button type="submit">Filtrer</button>
 </form>
 
-<p class="meta">{{ total }} trios — page {{ page }} / {{ ((total - 1) // per_page) + 1 if total else 1 }} — cliquer un en-tête pour trier, re-cliquer pour inverser</p>
+<p class="meta">{{ total }} trios — page {{ page }} / {{ ((total - 1) // per_page) + 1 if total else 1 }} — cliquer un en-tête pour trier, re-cliquer pour inverser, Maj-clic pour ajouter un critère de tri supplémentaire (comme Excel/Sheets)</p>
 
 {% set filters_qs = "window=" ~ window ~ "&platform=" ~ platform ~ "&champion=" ~ (champion | urlencode) ~ "&role=" ~ role ~ "&min_games=" ~ min_games ~ "&min_tier=" ~ min_tier %}
 {% macro sort_link(key, label) %}
-{% set next_dir = 'asc' if sort == key and direction == 'desc' else 'desc' %}
-<a href="/?{{ filters_qs }}&sort={{ key }}&dir={{ next_dir }}" class="{{ 'active' if sort == key }}">{{ label }}{% if sort == key %}{{ ' ▲' if direction == 'asc' else ' ▼' }}{% endif %}</a>
+{% set idx = sorts.index(key) if key in sorts else -1 %}
+{% set next_dir = 'asc' if idx >= 0 and directions[idx] == 'desc' else 'desc' %}
+<a href="/?{{ filters_qs }}&sort={{ key }}&dir={{ next_dir }}" data-sort-key="{{ key }}" class="{{ 'active' if idx >= 0 }}">{{ label }}{% if idx >= 0 %}{% if sorts | length > 1 %}<sup>{{ idx + 1 }}</sup>{% endif %}{{ ' ▲' if directions[idx] == 'asc' else ' ▼' }}{% endif %}</a>
 {% endmacro %}
 
 <table class="data">

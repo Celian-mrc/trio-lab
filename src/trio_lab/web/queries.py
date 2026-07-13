@@ -8,6 +8,8 @@ les champions sont des paramètres de filtre, jamais des branches de code.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import psycopg
 from psycopg.rows import dict_row
 
@@ -66,6 +68,19 @@ def available_platforms(conn: psycopg.Connection, window: str) -> list[str]:
     return [r[0] for r in rows]
 
 
+def _order_by_clause(
+    sort: Sequence[str], direction: Sequence[str], sort_map: dict[str, str]
+) -> str:
+    """Clause ORDER BY multi-colonnes (tri façon tableur : plusieurs critères
+    dans l'ordre donné). `sort`/`direction` déjà validés par l'appelant
+    (whitelist `sort_map`/`SORT_DIRECTIONS`, jamais interpolés bruts)."""
+    parts = [
+        f"{sort_map[s]} {SORT_DIRECTIONS[d]} NULLS LAST"
+        for s, d in zip(sort, direction, strict=True)
+    ]
+    return ", ".join(parts)
+
+
 def trio_tierlist(
     conn: psycopg.Connection,
     window: str,
@@ -75,12 +90,12 @@ def trio_tierlist(
     role: str | None = None,  # 'jgl' | 'mid' | 'sup' | None = les trois
     min_games: int = 0,
     min_tier: str = "faible",
-    sort: str = "synergy",
-    direction: str = "desc",
+    sort: Sequence[str] = ("synergy",),
+    direction: Sequence[str] = ("desc",),
     page: int = 1,
 ) -> dict:
     """Une page de tier list des trios + le total pour la pagination."""
-    order_dir = SORT_DIRECTIONS[direction]
+    order_clause = _order_by_clause(sort, direction, TRIO_SORTS)
     where = ["window_label = %(window)s", "platform = %(platform)s", "games >= %(min_games)s"]
     params: dict = {
         "window": window,
@@ -108,8 +123,7 @@ def trio_tierlist(
                    count(*) OVER () AS total
             FROM score_trio
             WHERE {" AND ".join(where)}
-            ORDER BY {TRIO_SORTS[sort]} {order_dir} NULLS LAST,
-                     games DESC, jgl_champion, mid_champion, sup_champion
+            ORDER BY {order_clause}, games DESC, jgl_champion, mid_champion, sup_champion
             OFFSET %(offset)s LIMIT %(per_page)s
             """,
             params,
@@ -128,14 +142,14 @@ def duo_tierlist(
     *,
     min_games: int = 0,
     min_tier: str = "faible",
-    sort: str = "synergy",
-    direction: str = "desc",
+    sort: Sequence[str] = ("synergy",),
+    direction: Sequence[str] = ("desc",),
     page: int = 1,
 ) -> dict:
     """Une page de tier list des duos d'un couple de rôles."""
     if roles not in DUO_ROLES:
         raise ValueError(f"roles inconnu : {roles!r}")
-    order_dir = SORT_DIRECTIONS[direction]
+    order_clause = _order_by_clause(sort, direction, DUO_SORTS)
     with conn.cursor(row_factory=dict_row) as cur:
         rows = cur.execute(
             f"""
@@ -145,7 +159,7 @@ def duo_tierlist(
             FROM score_duo
             WHERE window_label = %(window)s AND platform = %(platform)s
               AND roles = %(roles)s AND games >= %(min_games)s AND tier = ANY(%(tiers)s)
-            ORDER BY {DUO_SORTS[sort]} {order_dir} NULLS LAST, games DESC, champ_a, champ_b
+            ORDER BY {order_clause}, games DESC, champ_a, champ_b
             OFFSET %(offset)s LIMIT %(per_page)s
             """,
             {

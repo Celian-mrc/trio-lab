@@ -373,6 +373,66 @@ def test_empty_role_param_is_accepted(pg_sync, client):
     assert payload["rows"] == []
 
 
+def _seed_tied_wr_trios(conn) -> None:
+    """3 trios, même WR (0.5) et mêmes games (50) : un tri sur wr seul retombe
+    sur le tie-break par défaut (jgl_champion croissant, cf. queries.py), qui
+    donne l'ordre 301/302/303. Les synergies sont choisies dans l'ordre
+    INVERSE (301 = pire, 303 = meilleure) pour que trier ensuite sur
+    `wr,synergy` produise un ordre manifestement différent — la preuve que le
+    2e critère est bien appliqué, pas juste le tie-break par défaut."""
+    for jgl, synergy in ((301, -0.05), (302, 0.05), (303, 0.10)):
+        conn.execute(
+            "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+            " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+            " ci_low, ci_high, tier)"
+            " VALUES ('16.13', 'euw1', %s, 900, 901, 50, 50.0, 0.5, %s, 0.0, %s,"
+            " 0.3, 0.7, 'moyen')",
+            (jgl, synergy, synergy),
+        )
+
+
+def test_multi_sort_applies_second_criterion_not_just_default_tiebreak(pg_sync, client):
+    _seed_tied_wr_trios(pg_sync)
+    # Tri sur wr seul : tous à égalité -> tie-break par défaut (jgl croissant).
+    single = client.get("/api/trios", params={"sort": "wr", "dir": "desc"}).json()
+    assert [r["jgl_champion"] for r in single["rows"]] == [301, 302, 303]
+    # Tri wr puis synergy (les deux décroissants) : la synergie décide, ordre inversé.
+    multi = client.get("/api/trios", params={"sort": "wr,synergy", "dir": "desc,desc"}).json()
+    assert [r["jgl_champion"] for r in multi["rows"]] == [303, 302, 301]
+
+
+def test_multi_sort_html_page_shows_priority_numbers(pg_sync, client):
+    _seed_tied_wr_trios(pg_sync)
+    response = client.get("/", params={"sort": "wr,synergy", "dir": "desc,desc"})
+    assert response.status_code == 200
+    assert 'data-sort-key="wr"' in response.text
+    assert 'data-sort-key="synergy"' in response.text
+    # Numéros de priorité affichés uniquement à partir de 2 critères actifs.
+    assert "<sup>1</sup>" in response.text
+    assert "<sup>2</sup>" in response.text
+
+
+def test_multi_sort_rejects_mismatched_lengths(pg_sync, client):
+    _seed_scores(pg_sync)
+    assert client.get("/api/trios", params={"sort": "wr,synergy", "dir": "desc"}).status_code == 404
+
+
+def test_multi_sort_rejects_unknown_column(pg_sync, client):
+    _seed_scores(pg_sync)
+    assert (
+        client.get("/api/trios", params={"sort": "wr,bogus", "dir": "desc,desc"}).status_code == 404
+    )
+
+
+def test_multi_sort_rejects_too_many_levels(pg_sync, client):
+    _seed_scores(pg_sync)
+    response = client.get(
+        "/api/trios",
+        params={"sort": "wr,synergy,games,gold10,cc", "dir": "desc,desc,desc,desc,desc"},
+    )
+    assert response.status_code == 404
+
+
 def test_api_status_reports_collection(pg_sync, client):
     _seed_scores(pg_sync)
     _seed_matches(pg_sync)
