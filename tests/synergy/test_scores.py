@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from trio_lab.synergy import scores
@@ -57,6 +59,34 @@ def test_wilson_interval_widens_for_small_n():
 
 def test_wilson_interval_degenerate_n():
     assert scores.wilson_interval(0.5, 0) == (0.0, 1.0)
+
+
+def test_normal_interval_centers_on_p():
+    lo, hi = scores.normal_interval(0.5, se=0.02)
+    assert lo == pytest.approx(0.5 - 1.96 * 0.02, abs=1e-3)
+    assert hi == pytest.approx(0.5 + 1.96 * 0.02, abs=1e-3)
+
+
+def test_normal_interval_clamped_to_0_1():
+    lo, hi = scores.normal_interval(0.99, se=1.0)
+    assert lo == 0.0
+    assert hi == 1.0
+
+
+def test_newcombe_interval_zero_when_identical_intervals():
+    # p1 == p2 avec les mêmes bornes : la différence est 0, l'IC est symétrique
+    # (combinaison en racine de la somme des carrés des 2 marges, pas une
+    # simple addition — cf. formule de Newcombe).
+    lo, hi = scores.newcombe_interval(0.5, 0.4, 0.6, 0.5, 0.4, 0.6)
+    assert lo == pytest.approx(-math.sqrt(0.02))
+    assert hi == pytest.approx(math.sqrt(0.02))
+
+
+def test_newcombe_interval_excludes_zero_for_clear_gap():
+    # p1 nettement au-dessus de p2, IC étroits des deux côtés : la différence
+    # (~0.30) doit rester positive même à la borne basse de l'IC combiné.
+    lo, hi = scores.newcombe_interval(0.60, 0.58, 0.62, 0.30, 0.28, 0.32)
+    assert lo > 0.0
 
 
 # --- tiers / synergie / lissage ---
@@ -118,30 +148,52 @@ def test_add_combined_platform_is_idempotent():
     assert mapping[("all", 1)] == [("16.13", 10, 5)]
 
 
-# --- weighted_slope ---
+# --- weighted_slope_ci ---
 
 
-def test_weighted_slope_perfect_line():
-    # y = 2x + 1, poids égaux : pente exacte.
+def test_weighted_slope_ci_perfect_line():
+    # y = 2x + 1, poids égaux, pile sur la droite : pente exacte, aucun résidu
+    # donc IC de largeur nulle.
     points = [(0.0, 1.0, 10.0), (1.0, 3.0, 10.0), (2.0, 5.0, 10.0)]
-    assert scores.weighted_slope(points) == pytest.approx(2.0)
+    result = scores.weighted_slope_ci(points)
+    assert result.slope == pytest.approx(2.0)
+    assert result.ci_low == pytest.approx(2.0)
+    assert result.ci_high == pytest.approx(2.0)
 
 
-def test_weighted_slope_weights_favor_higher_confidence_points():
+def test_weighted_slope_ci_weights_favor_higher_confidence_points():
     # Point (2, 100) quasi ignoré (poids infime) : la pente colle aux 2 premiers.
     points = [(0.0, 0.0, 100.0), (1.0, 1.0, 100.0), (2.0, 100.0, 0.001)]
-    assert scores.weighted_slope(points) == pytest.approx(1.0, abs=0.01)
+    assert scores.weighted_slope_ci(points).slope == pytest.approx(1.0, abs=0.01)
 
 
-def test_weighted_slope_needs_at_least_two_points():
-    assert scores.weighted_slope([]) is None
-    assert scores.weighted_slope([(0.0, 1.0, 10.0)]) is None
+def test_weighted_slope_ci_widens_around_noisy_points():
+    # Même pente moyenne que le cas parfait, mais un point hors de la droite :
+    # l'IC doit s'élargir (résidu non nul) sans forcément changer la pente.
+    points = [(0.0, 1.0, 10.0), (1.0, 3.5, 10.0), (2.0, 4.5, 10.0)]
+    result = scores.weighted_slope_ci(points)
+    assert result.ci_high - result.ci_low > 0.0
 
 
-def test_weighted_slope_none_when_all_weights_zero():
-    assert scores.weighted_slope([(0.0, 1.0, 0.0), (1.0, 2.0, 0.0)]) is None
+def test_weighted_slope_ci_needs_at_least_three_points():
+    assert scores.weighted_slope_ci([]) is None
+    assert scores.weighted_slope_ci([(0.0, 1.0, 10.0)]) is None
+    assert scores.weighted_slope_ci([(0.0, 1.0, 10.0), (1.0, 2.0, 10.0)]) is None
 
 
-def test_weighted_slope_none_when_x_constant():
+def test_weighted_slope_ci_none_when_all_weights_zero():
+    points = [(0.0, 1.0, 0.0), (1.0, 2.0, 0.0), (2.0, 3.0, 0.0)]
+    assert scores.weighted_slope_ci(points) is None
+
+
+def test_weighted_slope_ci_none_when_x_constant():
     # Variance nulle en x : pente indéfinie (dénominateur nul).
-    assert scores.weighted_slope([(5.0, 1.0, 10.0), (5.0, 2.0, 10.0)]) is None
+    points = [(5.0, 1.0, 10.0), (5.0, 2.0, 10.0), (5.0, 3.0, 10.0)]
+    assert scores.weighted_slope_ci(points) is None
+
+
+def test_weighted_slope_ci_none_beyond_t_table_range():
+    # 9 points -> df=7, hors de la table de Student embarquée (jusqu'à df=6,
+    # cf. borne des tranches de durée 5-40 min) : None plutôt qu'un crash.
+    points = [(float(i), float(i), 10.0) for i in range(9)]
+    assert scores.weighted_slope_ci(points) is None

@@ -9,7 +9,11 @@
     <li><strong>IC 95 %</strong> : intervalle de confiance de Wilson à 95 %
       sur le winrate — la fourchette dans laquelle le « vrai » WR se trouve
       avec 95 % de confiance. Plus il y a de games, plus elle est étroite ;
-      sur 10 games, un WR de 70 % ne veut presque rien dire (IC ≈ 39-90 %).</li>
+      sur 10 games, un WR de 70 % ne veut presque rien dire (IC ≈ 39-90 %).
+      Un IC est aussi affiché sur la synergie (méthode de Newcombe) et le
+      scaling (erreur-type de la pente) des pages de détail : s'il contient
+      0, le score pourrait n'être que du bruit statistique — c'est fréquent
+      tant que le volume de games reste modeste.</li>
     <li><strong>Fiabilité</strong> : volume de games effectifs (pondérés par
       les poids de la fenêtre multi-patchs 1.0/0.6/0.35) —
       <span class="tier tier-faible">faible</span> &lt; 50 ≤

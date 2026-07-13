@@ -68,6 +68,30 @@ def wilson_interval(wr: float, n: float, z: float = Z_95) -> tuple[float, float]
     return max(0.0, center - margin), min(1.0, center + margin)
 
 
+def normal_interval(p: float, se: float, z: float = Z_95) -> tuple[float, float]:
+    """IC normal simple (approximation), borné [0, 1].
+
+    Utilisé pour la baseline individuelle d'une synergie (moyenne de 2 ou 3 WR
+    de champion, pas un comptage direct de victoires → Wilson ne s'applique
+    pas tel quel) : le volume individuel d'un champion est presque toujours
+    bien plus grand que celui du combo, l'approximation normale y est fiable.
+    """
+    margin = z * se
+    return max(0.0, p - margin), min(1.0, p + margin)
+
+
+def newcombe_interval(
+    p1: float, l1: float, u1: float, p2: float, l2: float, u2: float
+) -> tuple[float, float]:
+    """IC de Newcombe (1998) pour une différence p1 − p2, à partir de 2 IC déjà
+    calculés séparément pour p1 et p2 (méthode standard pour comparer 2
+    proportions sans recalculer une variance jointe)."""
+    diff = p1 - p2
+    lo = diff - math.sqrt((p1 - l1) ** 2 + (u2 - p2) ** 2)
+    hi = diff + math.sqrt((u1 - p1) ** 2 + (p2 - l2) ** 2)
+    return lo, hi
+
+
 def reliability_tier(
     games_eff: float, thresholds: tuple[float, float] = DEFAULT_TIER_THRESHOLDS
 ) -> str:
@@ -137,15 +161,44 @@ def smooth(raw: float, games_eff: float, prediction: float, k: float = DEFAULT_P
     return (games_eff * raw + k * prediction) / (games_eff + k)
 
 
-def weighted_slope(points: Iterable[tuple[float, float, float]]) -> float | None:
-    """Pente d'une régression linéaire pondérée y ~ x (moindres carrés).
+# t de Student critique à 95 % bilatéral, par degré de liberté (nb de points
+# − 2). Table embarquée plutôt qu'une dépendance (scipy) : les tranches de
+# durée vont de 3 (SCALING_MIN_BUCKETS) à 8 au maximum (5 à 40 min par pas de
+# 5), donc df ∈ [1, 6] toujours.
+_SLOPE_T_CRITICAL: dict[int, float] = {
+    1: 12.706,
+    2: 4.303,
+    3: 3.182,
+    4: 2.776,
+    5: 2.571,
+    6: 2.447,
+}
+
+
+@dataclass(frozen=True)
+class WeightedSlope:
+    """Pente d'une régression linéaire pondérée + IC à 95 % sur cette pente."""
+
+    slope: float
+    ci_low: float
+    ci_high: float
+
+
+def weighted_slope_ci(points: Iterable[tuple[float, float, float]]) -> WeightedSlope | None:
+    """Pente d'une régression linéaire pondérée y ~ x (moindres carrés) + IC.
 
     `points` = (x, y, poids). Utilisé pour le score de scaling (WR ~ tranche
     de durée) : pas de dépendance lourde (numpy/scipy, CLAUDE.md), la formule
-    fermée suffit pour une régression à une variable.
+    fermée suffit pour une régression à une variable. L'IC vient de
+    l'erreur-type de la pente (variance résiduelle pondérée / dispersion des
+    x), loi de Student vu le peu de points — jamais l'approximation normale.
+    `None` si < 3 points, poids nuls, x constant, ou plus de degrés de liberté
+    que la table `_SLOPE_T_CRITICAL` n'en couvre (ne devrait pas arriver, cf.
+    borne des tranches ci-dessus).
     """
     pts = list(points)
-    if len(pts) < 2:
+    n = len(pts)
+    if n < 3:
         return None
     w_sum = sum(w for _, _, w in pts)
     if w_sum <= 0.0:
@@ -154,4 +207,14 @@ def weighted_slope(points: Iterable[tuple[float, float, float]]) -> float | None
     y_mean = sum(w * y for _, y, w in pts) / w_sum
     num = sum(w * (x - x_mean) * (y - y_mean) for x, y, w in pts)
     den = sum(w * (x - x_mean) ** 2 for x, _, w in pts)
-    return num / den if den > 0.0 else None
+    if den <= 0.0:
+        return None
+    slope = num / den
+    t = _SLOPE_T_CRITICAL.get(n - 2)
+    if t is None:
+        return None
+    intercept = y_mean - slope * x_mean
+    rss = sum(w * (y - (intercept + slope * x)) ** 2 for x, y, w in pts)
+    se = math.sqrt(rss / (n - 2) / den)
+    margin = t * se
+    return WeightedSlope(slope, slope - margin, slope + margin)

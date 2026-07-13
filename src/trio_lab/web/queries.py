@@ -172,8 +172,10 @@ def trio_score(
         return cur.execute(
             """
             SELECT jgl_champion, mid_champion, sup_champion, games, games_eff, wr,
-                   synergy_raw, synergy_pred, synergy, ci_low, ci_high, tier,
-                   cc_theoretical_pct, cc_empirical_pct, cc_blended_pct, scaling
+                   synergy_raw, synergy_pred, synergy, synergy_ci_low, synergy_ci_high,
+                   ci_low, ci_high, tier,
+                   cc_theoretical_pct, cc_empirical_pct, cc_blended_pct,
+                   scaling, scaling_ci_low, scaling_ci_high
             FROM score_trio
             WHERE window_label = %s AND platform = %s
               AND jgl_champion = %s AND mid_champion = %s AND sup_champion = %s
@@ -478,7 +480,8 @@ def duo_score(
         return cur.execute(
             f"""
             SELECT roles, champ_a, champ_b, games, games_eff, wr, synergy,
-                   ci_low, ci_high, tier, {_STAT_COLUMNS_SQL}
+                   synergy_ci_low, synergy_ci_high, ci_low, ci_high, tier,
+                   scaling_ci_low, scaling_ci_high, {_STAT_COLUMNS_SQL}
             FROM score_duo
             WHERE window_label = %s AND platform = %s AND roles = %s
               AND champ_a = %s AND champ_b = %s

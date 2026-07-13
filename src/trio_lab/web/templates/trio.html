@@ -24,6 +24,7 @@
       · <span data-tooltip="Ce que la synergie de ce trio devrait valoir d'après ses 3 duos internes (jgl+mid, jgl+sup, mid+sup) — le repère utilisé quand le trio complet a encore peu de games." aria-label="Ce que la synergie de ce trio devrait valoir d'après ses 3 duos internes (jgl+mid, jgl+sup, mid+sup) — le repère utilisé quand le trio complet a encore peu de games.">prédiction duos {{ score.synergy_pred | signed_pct }}</span>
       · <span data-tooltip="Fiabilité du score selon le nombre de games de ce trio : faible = on se fie surtout à la prédiction duos, élevé = la synergie brute domine." aria-label="Fiabilité du score selon le nombre de games de ce trio : faible = on se fie surtout à la prédiction duos, élevé = la synergie brute domine.">fiabilité <span class="tier tier-{{ score.tier }}">{{ score.tier }}</span></span>
     </p>
+    <p class="meta" data-tooltip="Intervalle de confiance à 95 % sur la synergie brute (méthode de Newcombe, même principe que le Wilson du winrate mais pour un écart entre 2 proportions) : si l'intervalle contient 0, ce trio pourrait n'avoir aucune synergie réelle." aria-label="Intervalle de confiance à 95 % sur la synergie brute (méthode de Newcombe, même principe que le Wilson du winrate mais pour un écart entre 2 proportions) : si l'intervalle contient 0, ce trio pourrait n'avoir aucune synergie réelle.">IC synergie brute {{ score.synergy_ci_low | signed_pct }} – {{ score.synergy_ci_high | signed_pct }}</p>
     <p class="meta" data-tooltip="Winrate individuel de chaque champion dans son rôle (toutes compositions confondues, même fenêtre) — la moyenne de ces 3 valeurs est la base soustraite au winrate du trio pour obtenir la synergie brute." aria-label="Winrate individuel de chaque champion dans son rôle (toutes compositions confondues, même fenêtre) — la moyenne de ces 3 valeurs est la base soustraite au winrate du trio pour obtenir la synergie brute.">WR individuels : {{ jgl.name }} {{ member_wr.jgl | pct }} · {{ mid.name }} {{ member_wr.mid | pct }} · {{ sup.name }} {{ member_wr.sup | pct }}</p>
   </div>
   <div class="card"><h3>Tempo</h3>
@@ -33,7 +34,8 @@
   <div class="card"><h3>Scaling</h3>
     <p class="big-number {{ 'pos' if score.scaling and score.scaling > 0 else 'neg' if score.scaling and score.scaling < 0 }}"
        data-tooltip="Pente du winrate selon la durée de la game (tranches de 5 min), mesurée uniquement (pas de prédiction si peu de games) : positif = ce trio gagne plus souvent en game longue, négatif = il gagne plus souvent en game courte." aria-label="Pente du winrate selon la durée de la game (tranches de 5 min), mesurée uniquement (pas de prédiction si peu de games) : positif = ce trio gagne plus souvent en game longue, négatif = il gagne plus souvent en game courte.">{{ score.scaling | signed_pct(2) }}</p>
-    <p class="meta">points de WR par tranche de 5 min</p></div>
+    <p class="meta">points de WR par tranche de 5 min</p>
+    <p class="meta" data-tooltip="Intervalle de confiance à 95 % sur la pente (erreur-type de la régression) : si l'intervalle contient 0, ce trio pourrait n'avoir aucune tendance réelle selon la durée." aria-label="Intervalle de confiance à 95 % sur la pente (erreur-type de la régression) : si l'intervalle contient 0, ce trio pourrait n'avoir aucune tendance réelle selon la durée.">IC {{ score.scaling_ci_low | signed_pct(2) }} – {{ score.scaling_ci_high | signed_pct(2) }}</p></div>
 </section>
 
 <section>

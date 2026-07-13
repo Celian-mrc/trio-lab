@@ -13,7 +13,9 @@ différence, ses deux termes doivent couvrir la même fenêtre (PROJECT.md).
 from __future__ import annotations
 
 import logging
+import math
 from collections import defaultdict
+from collections.abc import Iterable
 
 import psycopg
 
@@ -200,8 +202,8 @@ def _load_duration_buckets(
 
 def _scaling_slope(
     by_bucket: dict[int, _PerPatch] | None, weights: dict[str, float]
-) -> float | None:
-    """Pente WR ~ tranche de durée (points de WR par tranche de 5 min).
+) -> scores.WeightedSlope | None:
+    """Pente WR ~ tranche de durée (points de WR par tranche de 5 min) + IC 95 %.
 
     `None` tant que le volume ne permet pas au moins `SCALING_MIN_BUCKETS`
     tranches avec chacune au moins `SCALING_MIN_BUCKET_GAMES` games bruts —
@@ -219,7 +221,35 @@ def _scaling_slope(
         points.append((bucket / 5.0, wr.wr, wr.games_eff))
     if len(points) < SCALING_MIN_BUCKETS:
         return None
-    return scores.weighted_slope(points)
+    return scores.weighted_slope_ci(points)
+
+
+def _scaling_fields(slope: scores.WeightedSlope | None) -> dict[str, float | None]:
+    if slope is None:
+        return {"scaling": None, "scaling_ci_low": None, "scaling_ci_high": None}
+    return {
+        "scaling": slope.slope,
+        "scaling_ci_low": slope.ci_low,
+        "scaling_ci_high": slope.ci_high,
+    }
+
+
+def _synergy_ci(
+    combo: scores.WeightedWR,
+    combo_ci: tuple[float, float],
+    members: Iterable[scores.WeightedWR],
+) -> tuple[float, float]:
+    """IC de Newcombe (1998) pour la synergie BRUTE (combo.wr − moyenne des WR
+    membres) : combine l'IC de Wilson du combo avec un IC normal sur la
+    baseline (moyenne de 2 ou 3 WR de champion — le volume individuel de
+    chacun est presque toujours bien plus grand que celui du combo)."""
+    member_list = list(members)
+    n = len(member_list)
+    baseline = sum(m.wr for m in member_list) / n
+    var_baseline = sum(m.wr * (1.0 - m.wr) / m.games_eff for m in member_list) / (n * n)
+    l2, u2 = scores.normal_interval(baseline, math.sqrt(var_baseline))
+    l1, u1 = combo_ci
+    return scores.newcombe_interval(combo.wr, l1, u1, baseline, l2, u2)
 
 
 def refresh(
@@ -261,6 +291,7 @@ def refresh(
                 continue  # baseline incalculable sur la fenêtre (rework)
             syn = scores.synergy(combo.wr, (wr_a.wr, wr_b.wr))
             ci_low, ci_high = scores.wilson_interval(combo.wr, combo.games_eff)
+            syn_ci_low, syn_ci_high = _synergy_ci(combo, (ci_low, ci_high), (wr_a, wr_b))
             # Le prior du trio utilise la synergie de duo RÉTRÉCIE vers 0 (prior
             # neutre) : un duo peu joué provient des mêmes matchs que le trio et
             # reproduirait son extrême — à volume réel le rétrécissement devient
@@ -278,10 +309,14 @@ def refresh(
                     "games_eff": combo.games_eff,
                     "wr": combo.wr,
                     "synergy": syn,
+                    "synergy_ci_low": syn_ci_low,
+                    "synergy_ci_high": syn_ci_high,
                     "ci_low": ci_low,
                     "ci_high": ci_high,
                     "tier": scores.reliability_tier(combo.games_eff, thresholds),
-                    "scaling": _scaling_slope(duo_durations.get((platform, roles, a, b)), weights),
+                    **_scaling_fields(
+                        _scaling_slope(duo_durations.get((platform, roles, a, b)), weights)
+                    ),
                     **stats,
                     **_cc_pct_fields(
                         (a, b), cc_theo_scores, stats["cc_time_s"], combo.games_eff, k
@@ -314,6 +349,7 @@ def refresh(
             )
             smoothed = scores.smooth(raw, combo.games_eff, pred, k)
             ci_low, ci_high = scores.wilson_interval(combo.wr, combo.games_eff)
+            syn_ci_low, syn_ci_high = _synergy_ci(combo, (ci_low, ci_high), members)
             stats = _weighted_stats(agg_rows, weights)
             trio_rows.append(
                 {
@@ -328,11 +364,13 @@ def refresh(
                     "synergy_raw": raw,
                     "synergy_pred": pred,
                     "synergy": smoothed,
+                    "synergy_ci_low": syn_ci_low,
+                    "synergy_ci_high": syn_ci_high,
                     "ci_low": ci_low,
                     "ci_high": ci_high,
                     "tier": scores.reliability_tier(combo.games_eff, thresholds),
-                    "scaling": _scaling_slope(
-                        trio_durations.get((platform, jgl, mid, sup)), weights
+                    **_scaling_fields(
+                        _scaling_slope(trio_durations.get((platform, jgl, mid, sup)), weights)
                     ),
                     **stats,
                     **_cc_pct_fields(
@@ -349,11 +387,13 @@ def refresh(
                     cur.executemany(
                         f"""
                         INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b,
-                                               games, games_eff, wr, synergy, ci_low, ci_high, tier,
-                                               scaling, {_SCORE_STAT_SQL})
+                                               games, games_eff, wr, synergy, synergy_ci_low,
+                                               synergy_ci_high, ci_low, ci_high, tier, scaling,
+                                               scaling_ci_low, scaling_ci_high, {_SCORE_STAT_SQL})
                         VALUES (%(window_label)s, %(platform)s, %(roles)s, %(champ_a)s, %(champ_b)s,
-                                %(games)s, %(games_eff)s, %(wr)s, %(synergy)s, %(ci_low)s,
-                                %(ci_high)s, %(tier)s, %(scaling)s, {_SCORE_STAT_PLACEHOLDERS})
+                                %(games)s, %(games_eff)s, %(wr)s, %(synergy)s, %(synergy_ci_low)s,
+                                %(synergy_ci_high)s, %(ci_low)s, %(ci_high)s, %(tier)s, %(scaling)s,
+                                %(scaling_ci_low)s, %(scaling_ci_high)s, {_SCORE_STAT_PLACEHOLDERS})
                         """,
                         duo_rows,
                     )
@@ -362,12 +402,14 @@ def refresh(
                         f"""
                         INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,
                                                 sup_champion, games, games_eff, wr, synergy_raw,
-                                                synergy_pred, synergy, ci_low, ci_high, tier,
-                                                scaling, {_SCORE_STAT_SQL})
+                                                synergy_pred, synergy, synergy_ci_low,
+                                                synergy_ci_high, ci_low, ci_high, tier, scaling,
+                                                scaling_ci_low, scaling_ci_high, {_SCORE_STAT_SQL})
                         VALUES (%(window_label)s, %(platform)s, %(jgl_champion)s, %(mid_champion)s,
                                 %(sup_champion)s, %(games)s, %(games_eff)s, %(wr)s, %(synergy_raw)s,
-                                %(synergy_pred)s, %(synergy)s, %(ci_low)s, %(ci_high)s, %(tier)s,
-                                %(scaling)s, {_SCORE_STAT_PLACEHOLDERS})
+                                %(synergy_pred)s, %(synergy)s, %(synergy_ci_low)s,
+                                %(synergy_ci_high)s, %(ci_low)s, %(ci_high)s, %(tier)s, %(scaling)s,
+                                %(scaling_ci_low)s, %(scaling_ci_high)s, {_SCORE_STAT_PLACEHOLDERS})
                         """,
                         trio_rows,
                     )

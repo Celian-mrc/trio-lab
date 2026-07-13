@@ -64,18 +64,32 @@ async def test_refresh_computes_expected_scores(pg_conn):
     assert counts == {"score_duo": 6, "score_trio": 2}
 
     cur = await pg_conn.execute(
-        "SELECT wr, synergy, tier FROM score_duo WHERE roles = 'jgl_mid' AND platform = 'euw1'"
+        "SELECT wr, synergy, synergy_ci_low, synergy_ci_high, tier"
+        " FROM score_duo WHERE roles = 'jgl_mid' AND platform = 'euw1'"
     )
-    wr, synergy, tier = await cur.fetchone()
+    wr, synergy, syn_ci_low, syn_ci_high, tier = await cur.fetchone()
     assert wr == pytest.approx(0.6)
     assert synergy == pytest.approx(0.05)  # .60 − (.60+.50)/2
     assert tier == "faible"  # 40 games < 50
+    # IC de Newcombe : contient la synergie mesurée, peu de games donc large.
+    assert syn_ci_low < synergy < syn_ci_high
 
     cur = await pg_conn.execute(
-        "SELECT games, games_eff, wr, synergy_raw, synergy_pred, synergy, ci_low, ci_high"
-        " FROM score_trio WHERE platform = 'euw1'"
+        "SELECT games, games_eff, wr, synergy_raw, synergy_pred, synergy, synergy_ci_low,"
+        " synergy_ci_high, ci_low, ci_high FROM score_trio WHERE platform = 'euw1'"
     )
-    games, games_eff, wr, raw, pred, smoothed, ci_low, ci_high = await cur.fetchone()
+    (
+        games,
+        games_eff,
+        wr,
+        raw,
+        pred,
+        smoothed,
+        syn_ci_low,
+        syn_ci_high,
+        ci_low,
+        ci_high,
+    ) = await cur.fetchone()
     assert (games, games_eff) == (10, pytest.approx(10.0))
     assert wr == pytest.approx(0.7)
     assert raw == pytest.approx(0.2)  # .70 − moyenne(.60, .50, .40)
@@ -83,20 +97,26 @@ async def test_refresh_computes_expected_scores(pg_conn):
     assert pred == pytest.approx(shrunk_jgl_mid / 3)
     assert smoothed == pytest.approx((10 * 0.2 + 200 * shrunk_jgl_mid / 3) / 210)
     assert 0.0 <= ci_low < 0.7 < ci_high <= 1.0
+    # L'IC de synergie porte sur la BRUTE (raw), pas la valeur lissée.
+    assert syn_ci_low < raw < syn_ci_high
 
-    # Pas de agg_trio_duration/agg_duo_duration semées : scaling reste NULL
-    # (pas de lissage vers un prior, cf. migration 015).
-    cur = await pg_conn.execute("SELECT scaling FROM score_trio WHERE platform = 'euw1'")
-    assert (await cur.fetchone())[0] is None
+    # Pas de agg_trio_duration/agg_duo_duration semées : scaling (et son IC)
+    # reste NULL (pas de lissage vers un prior, cf. migration 015).
     cur = await pg_conn.execute(
-        "SELECT scaling FROM score_duo WHERE roles = 'jgl_mid' AND platform = 'euw1'"
+        "SELECT scaling, scaling_ci_low, scaling_ci_high FROM score_trio WHERE platform = 'euw1'"
     )
-    assert (await cur.fetchone())[0] is None
+    assert (await cur.fetchone()) == (None, None, None)
+    cur = await pg_conn.execute(
+        "SELECT scaling, scaling_ci_low, scaling_ci_high FROM score_duo"
+        " WHERE roles = 'jgl_mid' AND platform = 'euw1'"
+    )
+    assert (await cur.fetchone()) == (None, None, None)
 
 
 async def test_scaling_slope_materialized_with_enough_buckets(pg_conn):
     """4 tranches de durée, WR parfaitement linéaire (.3/.5/.7/.9 sur
-    15/20/25/30 min) : pente exacte = 0.2 point de WR par tranche de 5 min."""
+    15/20/25/30 min) : pente exacte = 0.2 point de WR par tranche de 5 min,
+    et IC de largeur nulle (aucun résidu, la droite est parfaite)."""
     await _seed(pg_conn)
     buckets = [(15, 10, 3), (20, 10, 5), (25, 10, 7), (30, 10, 9)]
     for bucket, games, wins in buckets:
@@ -113,16 +133,26 @@ async def test_scaling_slope_materialized_with_enough_buckets(pg_conn):
         )
     compute.refresh(windows.make_window(["16.13"]), dsn=TEST_DSN, k=200.0)
 
-    cur = await pg_conn.execute("SELECT scaling FROM score_trio WHERE platform = 'euw1'")
-    assert (await cur.fetchone())[0] == pytest.approx(0.2)
     cur = await pg_conn.execute(
-        "SELECT scaling FROM score_duo WHERE roles = 'jgl_mid' AND platform = 'euw1'"
+        "SELECT scaling, scaling_ci_low, scaling_ci_high FROM score_trio WHERE platform = 'euw1'"
     )
-    assert (await cur.fetchone())[0] == pytest.approx(0.2)
+    scaling, ci_low, ci_high = await cur.fetchone()
+    assert scaling == pytest.approx(0.2)
+    assert ci_low == pytest.approx(0.2)
+    assert ci_high == pytest.approx(0.2)
+    cur = await pg_conn.execute(
+        "SELECT scaling, scaling_ci_low, scaling_ci_high FROM score_duo"
+        " WHERE roles = 'jgl_mid' AND platform = 'euw1'"
+    )
+    scaling, ci_low, ci_high = await cur.fetchone()
+    assert scaling == pytest.approx(0.2)
+    assert ci_low == pytest.approx(0.2)
+    assert ci_high == pytest.approx(0.2)
 
 
 async def test_scaling_null_below_bucket_threshold(pg_conn):
-    """2 tranches seulement (< SCALING_MIN_BUCKETS = 3) : scaling reste NULL."""
+    """2 tranches seulement (< SCALING_MIN_BUCKETS = 3) : scaling et son IC
+    restent NULL."""
     await _seed(pg_conn)
     for bucket, games, wins in ((15, 10, 3), (20, 10, 5)):
         await pg_conn.execute(
@@ -132,8 +162,10 @@ async def test_scaling_null_below_bucket_threshold(pg_conn):
             (bucket, games, wins),
         )
     compute.refresh(windows.make_window(["16.13"]), dsn=TEST_DSN, k=200.0)
-    cur = await pg_conn.execute("SELECT scaling FROM score_trio WHERE platform = 'euw1'")
-    assert (await cur.fetchone())[0] is None
+    cur = await pg_conn.execute(
+        "SELECT scaling, scaling_ci_low, scaling_ci_high FROM score_trio WHERE platform = 'euw1'"
+    )
+    assert (await cur.fetchone()) == (None, None, None)
 
 
 async def test_cc_pct_columns_materialized_for_duo_and_trio(pg_conn):
