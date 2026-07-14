@@ -1,9 +1,19 @@
 """Matérialisation des scores de synergie : agg_* → score_duo / score_trio.
 
-Idempotent par fenêtre (DELETE + INSERT dans une transaction, comme
-`stats.aggregate`). Tout tient en mémoire : les agrégats sont déjà compactés
-par (patch, platform, combinaison) — à re-profiler quand le volume de trios
-distincts explosera (des millions de lignes possibles à ~1M matchs/patch).
+Idempotent par fenêtre via UPSERT (`INSERT ... ON CONFLICT DO UPDATE`), pas
+DELETE+INSERT : à `window_label` fixe, `games_eff` d'une combinaison ne peut
+que croître d'un cycle à l'autre (jamais de matchs retirés de la fenêtre
+avant son rollover, purgé à part par `maintenance.purge_stale_scores`) donc
+l'ensemble des clés ne fait que grossir — aucune ligne existante n'a besoin
+d'être supprimée en cours de fenêtre. Un DELETE+INSERT complet à chaque
+cycle générait des tuples morts sur la totalité de la fenêtre (~500k lignes
+pour score_trio) même quand la ligne était inchangée ; l'UPSERT, guardé par
+`games IS DISTINCT FROM EXCLUDED.games`, ne touche que les combinaisons
+réellement mises à jour par les nouveaux matchs du cycle (cf. mémoire
+`supabase-disk-growth`, bloat constaté le 14/07/2026). Tout tient en
+mémoire : les agrégats sont déjà compactés par (patch, platform,
+combinaison) — à re-profiler quand le volume de trios distincts explosera
+(des millions de lignes possibles à ~1M matchs/patch).
 
 La baseline individuelle d'un combo est pondérée avec les MÊMES poids de
 fenêtre que le combo (coupure de rework incluse) : la synergie est une
@@ -65,6 +75,44 @@ _CC_PCT_COLUMNS = ("cc_theoretical_pct", "cc_empirical_pct", "cc_blended_pct")
 _SCORE_COLUMNS = (*STAT_PAIRS, *_CC_PCT_COLUMNS)
 _SCORE_STAT_SQL = ", ".join(_SCORE_COLUMNS)
 _SCORE_STAT_PLACEHOLDERS = ", ".join(f"%({name})s" for name in _SCORE_COLUMNS)
+
+_DUO_PK = ("window_label", "platform", "roles", "champ_a", "champ_b")
+_DUO_UPDATE_COLUMNS = (
+    "games",
+    "games_eff",
+    "wr",
+    "synergy",
+    "synergy_ci_low",
+    "synergy_ci_high",
+    "ci_low",
+    "ci_high",
+    "tier",
+    "scaling",
+    "scaling_ci_low",
+    "scaling_ci_high",
+    *_SCORE_COLUMNS,
+)
+_DUO_UPDATE_SQL = ", ".join(f"{c} = EXCLUDED.{c}" for c in _DUO_UPDATE_COLUMNS)
+
+_TRIO_PK = ("window_label", "platform", "jgl_champion", "mid_champion", "sup_champion")
+_TRIO_UPDATE_COLUMNS = (
+    "games",
+    "games_eff",
+    "wr",
+    "synergy_raw",
+    "synergy_pred",
+    "synergy",
+    "synergy_ci_low",
+    "synergy_ci_high",
+    "ci_low",
+    "ci_high",
+    "tier",
+    "scaling",
+    "scaling_ci_low",
+    "scaling_ci_high",
+    *_SCORE_COLUMNS,
+)
+_TRIO_UPDATE_SQL = ", ".join(f"{c} = EXCLUDED.{c}" for c in _TRIO_UPDATE_COLUMNS)
 
 
 def _weighted_stats(rows: list[dict], weights: dict[str, float]) -> dict[str, float | None]:
@@ -379,40 +427,41 @@ def refresh(
                 }
             )
 
-        with conn.transaction():
-            conn.execute("DELETE FROM score_duo WHERE window_label = %s", (window.label,))
-            conn.execute("DELETE FROM score_trio WHERE window_label = %s", (window.label,))
-            with conn.cursor() as cur:
-                if duo_rows:
-                    cur.executemany(
-                        f"""
-                        INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b,
-                                               games, games_eff, wr, synergy, synergy_ci_low,
-                                               synergy_ci_high, ci_low, ci_high, tier, scaling,
-                                               scaling_ci_low, scaling_ci_high, {_SCORE_STAT_SQL})
-                        VALUES (%(window_label)s, %(platform)s, %(roles)s, %(champ_a)s, %(champ_b)s,
-                                %(games)s, %(games_eff)s, %(wr)s, %(synergy)s, %(synergy_ci_low)s,
-                                %(synergy_ci_high)s, %(ci_low)s, %(ci_high)s, %(tier)s, %(scaling)s,
-                                %(scaling_ci_low)s, %(scaling_ci_high)s, {_SCORE_STAT_PLACEHOLDERS})
-                        """,
-                        duo_rows,
-                    )
-                if trio_rows:
-                    cur.executemany(
-                        f"""
-                        INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,
-                                                sup_champion, games, games_eff, wr, synergy_raw,
-                                                synergy_pred, synergy, synergy_ci_low,
-                                                synergy_ci_high, ci_low, ci_high, tier, scaling,
-                                                scaling_ci_low, scaling_ci_high, {_SCORE_STAT_SQL})
-                        VALUES (%(window_label)s, %(platform)s, %(jgl_champion)s, %(mid_champion)s,
-                                %(sup_champion)s, %(games)s, %(games_eff)s, %(wr)s, %(synergy_raw)s,
-                                %(synergy_pred)s, %(synergy)s, %(synergy_ci_low)s,
-                                %(synergy_ci_high)s, %(ci_low)s, %(ci_high)s, %(tier)s, %(scaling)s,
-                                %(scaling_ci_low)s, %(scaling_ci_high)s, {_SCORE_STAT_PLACEHOLDERS})
-                        """,
-                        trio_rows,
-                    )
+        with conn.transaction(), conn.cursor() as cur:
+            if duo_rows:
+                cur.executemany(
+                    f"""
+                    INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b,
+                                           games, games_eff, wr, synergy, synergy_ci_low,
+                                           synergy_ci_high, ci_low, ci_high, tier, scaling,
+                                           scaling_ci_low, scaling_ci_high, {_SCORE_STAT_SQL})
+                    VALUES (%(window_label)s, %(platform)s, %(roles)s, %(champ_a)s, %(champ_b)s,
+                            %(games)s, %(games_eff)s, %(wr)s, %(synergy)s, %(synergy_ci_low)s,
+                            %(synergy_ci_high)s, %(ci_low)s, %(ci_high)s, %(tier)s, %(scaling)s,
+                            %(scaling_ci_low)s, %(scaling_ci_high)s, {_SCORE_STAT_PLACEHOLDERS})
+                    ON CONFLICT ({", ".join(_DUO_PK)}) DO UPDATE SET {_DUO_UPDATE_SQL}
+                    WHERE score_duo.games IS DISTINCT FROM EXCLUDED.games
+                    """,
+                    duo_rows,
+                )
+            if trio_rows:
+                cur.executemany(
+                    f"""
+                    INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,
+                                            sup_champion, games, games_eff, wr, synergy_raw,
+                                            synergy_pred, synergy, synergy_ci_low,
+                                            synergy_ci_high, ci_low, ci_high, tier, scaling,
+                                            scaling_ci_low, scaling_ci_high, {_SCORE_STAT_SQL})
+                    VALUES (%(window_label)s, %(platform)s, %(jgl_champion)s, %(mid_champion)s,
+                            %(sup_champion)s, %(games)s, %(games_eff)s, %(wr)s, %(synergy_raw)s,
+                            %(synergy_pred)s, %(synergy)s, %(synergy_ci_low)s,
+                            %(synergy_ci_high)s, %(ci_low)s, %(ci_high)s, %(tier)s, %(scaling)s,
+                            %(scaling_ci_low)s, %(scaling_ci_high)s, {_SCORE_STAT_PLACEHOLDERS})
+                    ON CONFLICT ({", ".join(_TRIO_PK)}) DO UPDATE SET {_TRIO_UPDATE_SQL}
+                    WHERE score_trio.games IS DISTINCT FROM EXCLUDED.games
+                    """,
+                    trio_rows,
+                )
     counts = {"score_duo": len(duo_rows), "score_trio": len(trio_rows)}
     logger.info("scores fenêtre %s rafraîchis : %s", window.label, counts)
     return counts

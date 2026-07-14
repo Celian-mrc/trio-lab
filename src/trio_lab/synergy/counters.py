@@ -10,6 +10,10 @@ Le delta publié est rétréci vers 0 (prior neutre : pas d'effet counter tant
 que le volume ne le prouve pas) : `delta = n·delta_raw / (n + k)`, même
 mécanique et même k que le lissage des synergies. Jamais de counters trio vs
 trio (CLAUDE.md) : le grain ennemi est un champion dans un rôle.
+
+Idempotent par fenêtre via UPSERT, pas DELETE+INSERT (mêmes raisons que
+`synergy/compute.py` — l'ensemble des clés d'une fenêtre ne fait que
+grossir d'un cycle à l'autre, cf. mémoire `supabase-disk-growth`).
 """
 
 from __future__ import annotations
@@ -26,6 +30,18 @@ from trio_lab.synergy.windows import PatchWindow
 logger = logging.getLogger(__name__)
 
 _PerPatch = list[tuple[str, int, int]]  # (patch, games, wins)
+
+_PK = (
+    "window_label",
+    "platform",
+    "jgl_champion",
+    "mid_champion",
+    "sup_champion",
+    "enemy_role",
+    "enemy_champion",
+)
+_UPDATE_COLUMNS = ("games", "games_eff", "wr", "delta_raw", "delta", "ci_low", "ci_high", "tier")
+_UPDATE_SQL = ", ".join(f"{c} = EXCLUDED.{c}" for c in _UPDATE_COLUMNS)
 
 
 def _load(conn: psycopg.Connection, window: PatchWindow):
@@ -99,25 +115,23 @@ def refresh(
                 }
             )
 
-        with conn.transaction():
-            conn.execute(
-                "DELETE FROM score_trio_vs_champion WHERE window_label = %s", (window.label,)
-            )
-            if rows:
-                with conn.cursor() as cur:
-                    cur.executemany(
-                        """
-                        INSERT INTO score_trio_vs_champion (
-                            window_label, platform, jgl_champion, mid_champion, sup_champion,
-                            enemy_role, enemy_champion, games, games_eff, wr, delta_raw, delta,
-                            ci_low, ci_high, tier)
-                        VALUES (%(window_label)s, %(platform)s, %(jgl_champion)s,
-                                %(mid_champion)s, %(sup_champion)s, %(enemy_role)s,
-                                %(enemy_champion)s, %(games)s, %(games_eff)s, %(wr)s,
-                                %(delta_raw)s, %(delta)s, %(ci_low)s, %(ci_high)s, %(tier)s)
-                        """,
-                        rows,
-                    )
+        if rows:
+            with conn.transaction(), conn.cursor() as cur:
+                cur.executemany(
+                    f"""
+                    INSERT INTO score_trio_vs_champion (
+                        window_label, platform, jgl_champion, mid_champion, sup_champion,
+                        enemy_role, enemy_champion, games, games_eff, wr, delta_raw, delta,
+                        ci_low, ci_high, tier)
+                    VALUES (%(window_label)s, %(platform)s, %(jgl_champion)s,
+                            %(mid_champion)s, %(sup_champion)s, %(enemy_role)s,
+                            %(enemy_champion)s, %(games)s, %(games_eff)s, %(wr)s,
+                            %(delta_raw)s, %(delta)s, %(ci_low)s, %(ci_high)s, %(tier)s)
+                    ON CONFLICT ({", ".join(_PK)}) DO UPDATE SET {_UPDATE_SQL}
+                    WHERE score_trio_vs_champion.games IS DISTINCT FROM EXCLUDED.games
+                    """,
+                    rows,
+                )
     counts = {"score_trio_vs_champion": len(rows)}
     logger.info("counters fenêtre %s rafraîchis : %s", window.label, counts)
     return counts
