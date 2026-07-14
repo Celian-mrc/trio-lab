@@ -527,6 +527,21 @@ def test_threshold_filter_tooltip_on_span_not_label(pg_sync, client):
     assert 'span data-tooltip="Ne montre que les combos avec au moins ce WR' in html
 
 
+def test_threshold_filter_only_active_fields_visible_by_default(pg_sync, client):
+    """Montrer les 13 champs vides d'un coup était illisible (retour
+    utilisateur, 2026-07-14) : seul un filtre actif (valeur dans l'URL) doit
+    être visible au chargement, les autres restent masqués (`[hidden]`,
+    ajout/retrait ensuite géré côté client par static/thresholds.js — non
+    testable en pytest). L'option correspondante disparaît du sélecteur
+    "+ ajouter" pour ne pas pouvoir l'ajouter deux fois."""
+    _seed_scores(pg_sync)
+    html = client.get("/", params={"min_wr": "55"}).text
+    assert '<label class="threshold-field" data-key="wr" >' in html
+    assert '<label class="threshold-field" data-key="synergy" hidden>' in html
+    assert '<option value="wr" hidden>' in html
+    assert '<option value="synergy" >' in html
+
+
 def test_api_status_reports_collection(pg_sync, client):
     _seed_scores(pg_sync)
     _seed_matches(pg_sync)

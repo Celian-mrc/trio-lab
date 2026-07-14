@@ -1,11 +1,19 @@
 {# Filtres par seuil "au moins X", une entrée par colonne triable (sauf
    `games`, qui a son propre champ dédié) — whitelist identique côté serveur
    à `app._THRESHOLD_SPECS`/`queries.TRIO_SORTS`. Partagé entre tierlist.html
-   et duos.html pour ne pas dupliquer les 13 champs deux fois. Le tooltip est
-   porté par un <span> autour du seul texte du label (pas le <label> entier,
-   qui contient aussi l'<input> : l'icône ⓘ se place après le DERNIER enfant
-   de l'élément data-tooltip, donc après l'input si elle était sur le label —
-   retour utilisateur, 2026-07-13). #}
+   et duos.html pour ne pas dupliquer les 13 champs deux fois.
+
+   Un seul champ actif est visible par défaut (repliés, cf. static/thresholds.js
+   pour l'ajout/retrait) : les montrer tous vides d'un coup était illisible
+   (retour utilisateur, 2026-07-14). Le sélecteur "+ ajouter" révèle le champ
+   demandé ; "✕" le vide et le cache — les 13 `<input name="min_*">` restent
+   dans le DOM (juste masqués), la soumission du formulaire n'envoie donc que
+   des valeurs vides pour les filtres inactifs, sans changement côté serveur.
+
+   Le tooltip est porté par un <span> autour du seul texte du label (pas le
+   <label> entier, qui contient aussi l'<input> : l'icône ⓘ se place après le
+   DERNIER enfant de l'élément data-tooltip, donc après l'input si elle était
+   sur le label — retour utilisateur, 2026-07-13). #}
 {% macro threshold_fields(min_values) %}
 {% set fields = [
   ("wr", "WR min. (%)", "au moins ce WR", {"min": 0, "max": 100, "step": 0.1}),
@@ -22,15 +30,23 @@
   ("cc_blend", "CC lissé min.", "au moins ce CC lissé sur 100", {"min": 0, "max": 100, "step": 1}),
   ("scaling", "Scaling min. (%)", "au moins cette pente de scaling (peut être négatif)", {"step": 0.1}),
 ] %}
-<div class="thresholds">
-  {% for key, label, what, attrs in fields %}
-  <label>
-    <span data-tooltip="Ne montre que les combos avec {{ what }} — combinable avec les autres seuils min. pour trouver les combos bons sur plusieurs axes à la fois (le tri seul ne suffit pas si la 1re colonne triée est presque toujours unique)." aria-label="Ne montre que les combos avec {{ what }}.">{{ label }}</span>
-    <input type="number" name="min_{{ key }}" value="{{ min_values[key] }}"
-      {% if 'min' in attrs %}min="{{ attrs.min }}"{% endif %}
-      {% if 'max' in attrs %}max="{{ attrs.max }}"{% endif %}
-      step="{{ attrs.step }}">
-  </label>
-  {% endfor %}
-</div>
+{% for key, label, what, attrs in fields %}
+<label class="threshold-field" data-key="{{ key }}" {% if not min_values[key] %}hidden{% endif %}>
+  <span data-tooltip="Ne montre que les combos avec {{ what }} — combinable avec les autres seuils min. pour trouver les combos bons sur plusieurs axes à la fois (le tri seul ne suffit pas si la 1re colonne triée est presque toujours unique)." aria-label="Ne montre que les combos avec {{ what }}.">{{ label }}</span>
+  <input type="number" name="min_{{ key }}" value="{{ min_values[key] }}"
+    {% if 'min' in attrs %}min="{{ attrs.min }}"{% endif %}
+    {% if 'max' in attrs %}max="{{ attrs.max }}"{% endif %}
+    step="{{ attrs.step }}">
+  <button type="button" class="remove-threshold" data-key="{{ key }}" aria-label="Retirer le filtre {{ label }}">✕</button>
+</label>
+{% endfor %}
+<label class="threshold-add">
+  <span>Filtre par seuil</span>
+  <select data-add-threshold>
+    <option value="">+ ajouter une colonne…</option>
+    {% for key, label, what, attrs in fields %}
+    <option value="{{ key }}" {% if min_values[key] %}hidden{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+</label>
 {% endmacro %}

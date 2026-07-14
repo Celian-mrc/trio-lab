@@ -37,10 +37,7 @@
       {% endfor %}
     </select>
   </label>
-  <details>
-    <summary>Filtres par seuils (toutes colonnes)</summary>
-    {{ threshold_fields(min_values) }}
-  </details>
+  {{ threshold_fields(min_values) }}
   <input type="hidden" name="sort" value="{{ sort }}">
   <input type="hidden" name="dir" value="{{ direction }}">
   <button type="submit">Filtrer</button>

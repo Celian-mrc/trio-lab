@@ -71,13 +71,22 @@ h2 { font-size: 1rem; letter-spacing: -0.01em; margin-top: 1.75rem; }
   cursor: pointer; min-height: 2.15rem;
 }
 .filters button:hover { opacity: 0.9; }
-/* Filtres par seuil, une entrée par colonne : repliés par défaut (13 champs
-   serait trop pour la barre de filtres principale), même style d'input que
-   le reste via les sélecteurs `.filters label`/`.filters input` ci-dessus
-   (descendants, peu importe l'imbrication dans <details>). */
-.filters details { flex-basis: 100%; }
-.filters details summary { cursor: pointer; color: var(--foreground); font-weight: 500; font-size: 0.8rem; padding: 0.2rem 0; }
-.filters details .thresholds { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.6rem; }
+/* Filtres par seuil : chips ajoutées/retirées via static/thresholds.js, un
+   <label class="threshold-field"> par colonne existe déjà dans le DOM (rendu
+   par _threshold_filters.html) mais masqué par [hidden] tant qu'il est
+   inactif — l'UA stylesheet met [hidden] à `display:none`, mais avec une
+   spécificité plus faible que `.filters label` ci-dessus qui le repasse en
+   `display:flex` : sans l'override suivant, [hidden] serait ignoré. */
+.filters .threshold-field[hidden] { display: none; }
+.filters .threshold-field { position: relative; padding-right: 0.2rem; }
+.filters .remove-threshold {
+  position: absolute; top: -0.4rem; right: -0.4rem;
+  width: 1.1rem; height: 1.1rem; min-height: 0; padding: 0;
+  background: var(--muted); color: var(--muted-fg); border: 1px solid var(--border);
+  border-radius: 50%; font-size: 0.6rem; line-height: 1; cursor: pointer;
+}
+.filters .remove-threshold:hover { background: var(--neg); color: var(--background); border-color: var(--neg); }
+.filters .threshold-add select { min-width: 10.5rem; }
 
 /* --- Tables (Table shadcn : lignes délimitées, header muted, hover) --- */
 table { width: 100%; border-collapse: collapse; }
