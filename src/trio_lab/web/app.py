@@ -17,7 +17,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from psycopg_pool import ConnectionPool
@@ -38,6 +38,9 @@ ALLIES_SHOWN = 10  # meilleurs alliés Top/ADC affichés sur la page détail
 DUO_BEST_TRIOS_SHOWN = 10  # meilleurs 3e membres affichés sur la page détail duo
 CHAMPION_PARTNERS_SHOWN = 5  # meilleurs partenaires par rôle affichés sur la page champion
 CHAMPION_TRIOS_SHOWN = 10  # meilleurs trios affichés sur la page champion
+
+# Vérification du portail développeur Riot (candidature clé production, 15/07/2026).
+RIOT_VERIFICATION_CODE = "67b069e5-75a1-4f5c-bdb5-dac5c8b2efb6"
 
 
 def _fmt_pct(value: float | None, digits: int = 1) -> str:
@@ -101,6 +104,12 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
     app = FastAPI(title="Trio Lab", lifespan=lifespan)
     app.mount("/static", StaticFiles(directory=_HERE / "static"), name="static")
     templates = Jinja2Templates(directory=_HERE / "templates")
+
+    @app.get("/riot.txt", response_class=PlainTextResponse)
+    def riot_verification() -> str:
+        """Vérification de l'URL produit pour la candidature clé de production
+        (portail développeur Riot, 15/07/2026)."""
+        return RIOT_VERIFICATION_CODE
 
     def static_version(filename: str) -> int:
         """Cache-busting (`?v=mtime`) pour les fichiers statiques : `StaticFiles`
