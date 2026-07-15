@@ -40,7 +40,7 @@ CHAMPION_PARTNERS_SHOWN = 5  # meilleurs partenaires par rôle affichés sur la 
 CHAMPION_TRIOS_SHOWN = 10  # meilleurs trios affichés sur la page champion
 
 # Vérification du portail développeur Riot (candidature clé production, 15/07/2026).
-RIOT_VERIFICATION_CODE = "67b069e5-75a1-4f5c-bdb5-dac5c8b2efb6"
+RIOT_VERIFICATION_CODE = "6f6a29a2-2392-40c8-b1ef-81a20af4858e"
 
 
 def _fmt_pct(value: float | None, digits: int = 1) -> str:
