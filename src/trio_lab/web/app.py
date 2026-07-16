@@ -10,19 +10,22 @@ un index fixe (aucun appel Data Dragon).
 
 from __future__ import annotations
 
+import json
 import logging
+import secrets
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlencode
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from psycopg_pool import ConnectionPool
 
-from trio_lab import db
+from trio_lab import config, db
 from trio_lab.synergy.compute import DUO_ROLES
 from trio_lab.synergy.windows import make_window
 from trio_lab.web import champions, queries, summary
@@ -41,6 +44,29 @@ CHAMPION_TRIOS_SHOWN = 10  # meilleurs trios affichés sur la page champion
 
 # Vérification du portail développeur Riot (candidature clé production, 15/07/2026).
 RIOT_VERIFICATION_CODE = "6f6a29a2-2392-40c8-b1ef-81a20af4858e"
+
+_admin_security = HTTPBasic()
+
+
+def require_admin(credentials: HTTPBasicCredentials = Depends(_admin_security)) -> str:
+    """Protège `/admin` (HTTP Basic Auth, identifiants dans ADMIN_USER/ADMIN_PASSWORD).
+
+    Comparaison à temps constant (`secrets.compare_digest`) pour éviter une
+    fuite d'information par timing. ADMIN_USER/ADMIN_PASSWORD absents (pas
+    configurés) : accès refusé plutôt qu'ouvert par défaut."""
+    expected_user = config.ADMIN_USER
+    expected_password = config.ADMIN_PASSWORD
+    valid = (
+        expected_user is not None
+        and expected_password is not None
+        and secrets.compare_digest(credentials.username, expected_user)
+        and secrets.compare_digest(credentials.password, expected_password)
+    )
+    if not valid:
+        raise HTTPException(
+            status_code=401, detail="Non autorisé", headers={"WWW-Authenticate": "Basic"}
+        )
+    return credentials.username
 
 
 def _fmt_pct(value: float | None, digits: int = 1) -> str:
@@ -69,6 +95,17 @@ def _fmt_duration(value: float | None) -> str:
         return "—"
     minutes, seconds = divmod(int(value), 60)
     return f"{minutes}:{seconds:02d}"
+
+
+def _fmt_bytes(value: int | None) -> str:
+    if value is None:
+        return "—"
+    size = float(value)
+    for unit in ("o", "Ko", "Mo", "Go"):
+        if size < 1024 or unit == "Go":
+            return f"{size:.0f} {unit}" if unit == "o" else f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} Go"
 
 
 def _fmt_since(value: datetime | None) -> str:
@@ -128,6 +165,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         num=_fmt_num,
         duration=_fmt_duration,
         since=_fmt_since,
+        bytes=_fmt_bytes,
     )
     state = {"champions": champion_index}
 
@@ -613,6 +651,48 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
     def api_status(request: Request):
         with request.app.state.pool.connection() as conn:
             return queries.collection_status(conn)
+
+    @app.get("/admin", response_class=HTMLResponse)
+    def admin_page(request: Request, _admin: str = Depends(require_admin)):
+        with request.app.state.pool.connection() as conn:
+            window, platform, context = resolve_context(conn, None, None)
+            status = queries.collection_status(conn)
+            gaps = queries.collector_gaps(conn)
+            sizes = queries.table_sizes(conn)
+
+        by_day: dict[str, dict[str, int]] = {}
+        platforms_seen: list[str] = []
+        for row in status["matches_per_day"]:
+            day, platform_row, matches = row["day"], row["platform"], row["matches"]
+            by_day.setdefault(day, {})[platform_row] = matches
+            if platform_row not in platforms_seen:
+                platforms_seen.append(platform_row)
+        days_sorted = sorted(by_day)
+        platforms_seen.sort()
+        per_day_chart = {
+            "days": days_sorted,
+            "platforms": platforms_seen,
+            "series": {p: [by_day[d].get(p, 0) for d in days_sorted] for p in platforms_seen},
+        }
+        sizes_chart = {
+            "labels": [row["table_name"] for row in sizes],
+            "bytes": [row["bytes"] for row in sizes],
+        }
+
+        return templates.TemplateResponse(
+            request,
+            "admin.html",
+            {
+                **context,
+                "total_matches": status["total_matches"],
+                "last_collected_at": status["last_collected_at"],
+                "journal": status["journal"],
+                "gaps": gaps,
+                "table_sizes": sizes,
+                "per_day_chart_json": json.dumps(per_day_chart),
+                "sizes_chart_json": json.dumps(sizes_chart),
+            },
+        )
 
     @app.get("/api/windows")
     def api_windows(request: Request):

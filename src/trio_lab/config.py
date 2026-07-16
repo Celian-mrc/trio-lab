@@ -30,6 +30,10 @@ RIOT_API_KEY: str | None = _get("RIOT_API_KEY")
 # --- Postgres ---
 DATABASE_URL: str | None = _get("DATABASE_URL")
 
+# --- Admin (dashboard /admin, HTTP Basic Auth) ---
+ADMIN_USER: str | None = _get("ADMIN_USER")
+ADMIN_PASSWORD: str | None = _get("ADMIN_PASSWORD")
+
 # --- Divers ---
 LOG_LEVEL: str = _get("LOG_LEVEL", "INFO")
 DATA_DIR: Path = Path(_get("DATA_DIR", str(PROJECT_ROOT / "data")))

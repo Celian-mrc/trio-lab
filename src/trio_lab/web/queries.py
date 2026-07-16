@@ -447,6 +447,53 @@ def collection_status(conn: psycopg.Connection) -> dict:
     }
 
 
+def collector_gaps(
+    conn: psycopg.Connection, *, lookback_hours: int = 48, threshold_minutes: int = 3
+) -> list[dict]:
+    """Trous de collecte détectés sur `matches.collected_at` (dashboard `/admin`).
+
+    Un trou > `threshold_minutes` entre deux matchs consécutifs, tous plateformes
+    confondues, indique un arrêt du collecteur (crash, redéploiement, incident
+    réseau) — les pauses normales entre plateformes font ~60-90s (constaté en
+    session le 16/07/2026)."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            """
+            WITH ordered AS (
+                SELECT collected_at, LAG(collected_at) OVER (ORDER BY collected_at) AS prev
+                FROM matches WHERE collected_at > now() - (%s || ' hours')::interval
+            )
+            SELECT prev AS gap_start, collected_at AS gap_end,
+                   extract(epoch FROM (collected_at - prev))::int AS gap_seconds
+            FROM ordered
+            WHERE collected_at - prev > (%s || ' minutes')::interval
+            ORDER BY collected_at DESC
+            """,
+            (lookback_hours, threshold_minutes),
+        ).fetchall()
+
+
+def table_sizes(conn: psycopg.Connection, *, limit: int = 12) -> list[dict]:
+    """Tailles des plus grosses tables du schéma courant (dashboard `/admin`).
+
+    `current_schema()` plutôt qu'un nom en dur : le rôle applicatif n'a accès
+    qu'à son propre schéma (`trio_lab` en prod, `trio_lab_test` en test) —
+    un nom fixe casse en base de test avec un `permission denied` (vécu)."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            """
+            SELECT relname AS table_name,
+                   pg_total_relation_size(
+                       quote_ident(schemaname) || '.' || quote_ident(relname)
+                   ) AS bytes
+            FROM pg_stat_user_tables
+            WHERE schemaname = current_schema()
+            ORDER BY bytes DESC LIMIT %s
+            """,
+            (limit,),
+        ).fetchall()
+
+
 def trio_match_rows(
     conn: psycopg.Connection,
     patches: list[str],

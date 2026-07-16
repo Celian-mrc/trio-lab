@@ -34,7 +34,9 @@ Dans le projet Railway qui contient déjà le Postgres :
 2. Renommer `web`.
 3. Custom Start Command : `python -m trio_lab.web`
    (Railway injecte `$PORT`, l'app écoute dessus).
-4. Variables : `DATABASE_URL` (même référence Postgres), `LOG_LEVEL=INFO`.
+4. Variables : `DATABASE_URL` (même référence Postgres), `LOG_LEVEL=INFO`,
+   `ADMIN_USER` et `ADMIN_PASSWORD` (identifiants du dashboard `/admin`,
+   HTTP Basic Auth — sans ces deux variables, `/admin` refuse tout accès).
 5. Settings → **Networking → Generate Domain** → l'URL publique de
    l'interface (accès perso).
 
@@ -66,5 +68,8 @@ Dans le projet Railway qui contient déjà le Postgres :
 - `GET /api/status` (service web) : matchs/jour sur 7 jours par plateforme,
   total, dernier match, compteurs du journal (excluded / error_retryable /
   error_permanent).
+- `GET /admin` (service web, identifiants `ADMIN_USER`/`ADMIN_PASSWORD`) :
+  dashboard visuel — games/jour par plateforme, taille des tables, trous de
+  collecte détectés sur les dernières 48h (> 3 min sans nouveau match).
 - Logs Railway : chaque plateforme logge tous les 50 matchs + un résumé par
   batch ; la purge logge les patchs supprimés.

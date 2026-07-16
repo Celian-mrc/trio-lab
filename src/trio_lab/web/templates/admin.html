@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Admin — Trio Lab{% endblock %}
+{% block content %}
+<h1>Dashboard collecteur</h1>
+
+<section class="cards">
+  <div class="card"><h3>Matchs collectés</h3>
+    <p class="big-number">{{ "{:,}".format(total_matches).replace(",", " ") }}</p>
+    <p class="meta">toutes plateformes, tous patchs</p></div>
+  <div class="card"><h3>Dernier match</h3>
+    <p class="big-number">{{ last_collected_at | since }}</p>
+    <p class="meta">fraîcheur de la collecte brute</p></div>
+  <div class="card"><h3>Journal (48h)</h3>
+    <p class="big-number">{{ journal.get('excluded', 0) }} <small>exclus</small></p>
+    <p class="meta">{{ journal.get('error_retryable', 0) }} erreurs retentées · {{ journal.get('error_permanent', 0) }} erreurs définitives</p></div>
+  <div class="card"><h3>Trous de collecte</h3>
+    <p class="big-number {{ 'neg' if gaps }}">{{ gaps | length }}</p>
+    <p class="meta">&gt; 3 min sans nouveau match, 48 dernières heures</p></div>
+</section>
+
+<h2>Games collectés par jour et par plateforme</h2>
+<div class="chart-box"><canvas id="chart-per-day"></canvas></div>
+
+<h2>Taille des tables (schéma trio_lab)</h2>
+<div class="chart-box chart-box-short"><canvas id="chart-sizes"></canvas></div>
+
+<h2>Derniers trous de collecte</h2>
+<table class="data narrow">
+  <thead><tr><th>Début</th><th>Fin</th><th>Durée</th></tr></thead>
+  <tbody>
+    {% for g in gaps %}
+    <tr><td>{{ g.gap_start | since }}</td><td>{{ g.gap_end | since }}</td><td>{{ g.gap_seconds | duration }}</td></tr>
+    {% else %}
+    <tr><td colspan="3" class="empty">Aucun trou détecté sur les 48 dernières heures.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<script type="application/json" id="admin-per-day-data">{{ per_day_chart_json | safe }}</script>
+<script type="application/json" id="admin-sizes-data">{{ sizes_chart_json | safe }}</script>
+<script src="/static/chart.min.js?v={{ static_version('chart.min.js') }}" defer></script>
+<script src="/static/admin.js?v={{ static_version('admin.js') }}" defer></script>
+{% endblock %}
