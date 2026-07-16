@@ -36,7 +36,7 @@
         {% set p = champ(r.partner_champion) %}
         <tr>
           <td class="col-combo">
-            <a class="combo" href="/champion/{{ partner_role }}/{{ r.partner_champion }}?window={{ window }}&platform={{ platform }}">
+            <a class="combo" href="/champion/{{ partner_role }}/{{ r.partner_champion }}?window={{ window | urlencode }}&platform={{ platform | urlencode }}">
               <span class="champ">{% if p.icon_url %}<img src="{{ p.icon_url }}" alt="" width="22" height="22">{% endif %}{{ p.name }}</span>
             </a>
           </td>
@@ -64,7 +64,7 @@
       {% for t in best_trios %}
       <tr>
         <td class="col-combo">
-          <a class="combo" href="/trio/{{ t.jgl_champion }}/{{ t.mid_champion }}/{{ t.sup_champion }}?window={{ window }}&platform={{ platform }}">
+          <a class="combo" href="/trio/{{ t.jgl_champion }}/{{ t.mid_champion }}/{{ t.sup_champion }}?window={{ window | urlencode }}&platform={{ platform | urlencode }}">
             {% for cid, rkey in ((t.jgl_champion, 'jgl'), (t.mid_champion, 'mid'), (t.sup_champion, 'sup')) %}
             {% set cc = champ(cid) %}
             <span class="champ" title="{{ ROLE_LABELS[rkey] }}"><span class="role-badge role-{{ rkey }}">{{ rkey | upper }}</span>{% if cc.icon_url %}<img src="{{ cc.icon_url }}" alt="" width="22" height="22">{% endif %}{{ cc.name }}</span>

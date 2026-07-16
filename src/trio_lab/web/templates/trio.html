@@ -6,7 +6,7 @@
 {% block content %}
 <h1 class="trio-title">
   {% for c, key, label in ((jgl, 'jgl', 'Jungle'), (mid, 'mid', 'Mid'), (sup, 'sup', 'Support')) %}
-  <a class="champ big" href="/champion/{{ key }}/{{ c.id }}?window={{ window }}&platform={{ platform }}">
+  <a class="champ big" href="/champion/{{ key }}/{{ c.id }}?window={{ window | urlencode }}&platform={{ platform | urlencode }}">
     {% if c.icon_url %}<img src="{{ c.icon_url }}" alt="" width="48" height="48">{% endif %}
     {{ c.name }} <small>{{ label }}</small>
   </a>
@@ -110,7 +110,7 @@
       <tbody>
         {% for d in duos %}
         <tr>
-          <td class="trio-cell"><a href="/duo/{{ d.roles }}/{{ d.champ_a }}/{{ d.champ_b }}?window={{ window }}&platform={{ platform }}">{{ champ(d.champ_a).name }} + {{ champ(d.champ_b).name }}</a></td>
+          <td class="trio-cell"><a href="/duo/{{ d.roles }}/{{ d.champ_a }}/{{ d.champ_b }}?window={{ window | urlencode }}&platform={{ platform | urlencode }}">{{ champ(d.champ_a).name }} + {{ champ(d.champ_b).name }}</a></td>
           <td>{{ d.games }}</td>
           <td>{{ d.wr | pct }}</td>
           <td class="{{ 'pos' if d.synergy > 0 else 'neg' if d.synergy < 0 }}">{{ d.synergy | signed_pct }}</td>

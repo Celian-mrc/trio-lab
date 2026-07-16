@@ -79,7 +79,7 @@
     {% for r in rows %}
     <tr>
       <td class="col-combo">
-        <a class="combo" href="/trio/{{ r.jgl_champion }}/{{ r.mid_champion }}/{{ r.sup_champion }}?window={{ window }}&platform={{ platform }}">
+        <a class="combo" href="/trio/{{ r.jgl_champion }}/{{ r.mid_champion }}/{{ r.sup_champion }}?window={{ window | urlencode }}&platform={{ platform | urlencode }}">
           {% for cid, rkey in ((r.jgl_champion, 'jgl'), (r.mid_champion, 'mid'), (r.sup_champion, 'sup')) %}
           {% set c = champ(cid) %}
           <span class="champ" title="{{ ROLE_LABELS[rkey] }}"><span class="role-badge role-{{ rkey }}">{{ rkey | upper }}</span>{% if c.icon_url %}<img src="{{ c.icon_url }}" alt="" width="22" height="22">{% endif %}{{ c.name }}</span>
