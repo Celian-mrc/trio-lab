@@ -27,23 +27,32 @@ class _FakeClient:
         return per_division[page - 1] if page <= len(per_division) else []
 
 
-async def test_discovery_merges_apex_and_entries_with_dedup():
+async def test_discover_apex_dedups_across_tiers():
+    client = _FakeClient()
+    rows = await ladder.discover_apex(client, platform="euw1")
+    by_puuid = {r.puuid: r for r in rows}
+
+    assert set(by_puuid) == {"chall-1", "gm-1", "master-1"}
+    # Premier tier vu conservé : chall-1 reste CHALLENGER malgré sa présence en grandmaster.
+    assert by_puuid["chall-1"].tier == "CHALLENGER"
+    assert by_puuid["chall-1"].division is None
+    # routing dérivé de la plateforme (budget de rate-limit).
+    assert all(r.platform == "euw1" and r.routing == "europe" for r in rows)
+
+
+async def test_discover_entries_returns_all_divisions():
     client = _FakeClient(
         pages={
-            ("EMERALD", "I"): [[{"puuid": "em-1"}, {"puuid": "gm-1"}]],  # gm-1 déjà vu (apex)
+            ("EMERALD", "I"): [[{"puuid": "em-1"}]],
             ("DIAMOND", "IV"): [[{"puuid": "dia-1"}]],
         }
     )
-    rows = await ladder.discover_players(client, platform="euw1", max_pages=3)
+    rows = await ladder.discover_entries(client, platform="euw1", max_pages=3)
     by_puuid = {r.puuid: r for r in rows}
 
-    assert set(by_puuid) == {"chall-1", "gm-1", "master-1", "em-1", "dia-1"}
-    # Premier tier vu conservé : gm-1 reste GRANDMASTER malgré sa présence en EMERALD I.
-    assert by_puuid["gm-1"].tier == "GRANDMASTER"
-    assert by_puuid["gm-1"].division is None
+    assert set(by_puuid) == {"em-1", "dia-1"}
     assert by_puuid["em-1"].tier == "EMERALD"
     assert by_puuid["em-1"].division == "I"
-    # routing dérivé de la plateforme (budget de rate-limit).
     assert all(r.platform == "euw1" and r.routing == "europe" for r in rows)
 
 
@@ -51,7 +60,7 @@ async def test_pagination_stops_on_empty_page():
     client = _FakeClient(
         pages={("EMERALD", "I"): [[{"puuid": "a"}], [{"puuid": "b"}]]}  # 2 pages puis vide
     )
-    rows = await ladder.discover_players(client, platform="kr", max_pages=10)
+    rows = await ladder.discover_entries(client, platform="kr", max_pages=10)
     # Page 3 (vide) demandée pour EMERALD I, puis arrêt — pas de page 4.
     emerald_i_pages = [p for (t, d, p) in client.entry_calls if (t, d) == ("EMERALD", "I")]
     assert emerald_i_pages == [1, 2, 3]
@@ -61,15 +70,15 @@ async def test_pagination_stops_on_empty_page():
 async def test_pagination_is_capped_at_max_pages():
     endless = [[{"puuid": f"em-{i}"}] for i in range(100)]  # jamais de page vide
     client = _FakeClient(pages={("EMERALD", "II"): endless})
-    await ladder.discover_players(client, platform="na1", max_pages=2)
+    await ladder.discover_entries(client, platform="na1", max_pages=2)
     emerald_ii_pages = [p for (t, d, p) in client.entry_calls if (t, d) == ("EMERALD", "II")]
     assert emerald_ii_pages == [1, 2]
 
 
 async def test_scope_is_emerald_plus():
-    """La découverte n'interroge que EMERALD et DIAMOND (+ apex), jamais en dessous."""
+    """La découverte paginée n'interroge que EMERALD et DIAMOND, jamais en dessous."""
     client = _FakeClient()
-    await ladder.discover_players(client, platform="euw1", max_pages=1)
+    await ladder.discover_entries(client, platform="euw1", max_pages=1)
     tiers_called = {t for (t, _d, _p) in client.entry_calls}
     assert tiers_called == set(ladder.SUB_APEX_TIERS)
 

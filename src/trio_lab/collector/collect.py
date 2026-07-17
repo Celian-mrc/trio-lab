@@ -5,7 +5,9 @@ concurrence dans le même process — les budgets de rate-limit restent séparé
 car le limiteur pulsefire compte par région de routage (americas/europe/asia).
 
 Boucle d'une plateforme :
-1. **découverte** (rafraîchie toutes les DISCOVERY_TTL_S) : Emerald+ → `players` ;
+1. **découverte** : apex (rafraîchie toutes les APEX_DISCOVERY_TTL_S, peu
+   coûteux) + Emerald/Diamond paginé (ENTRIES_DISCOVERY_TTL_S, coûteux — cf.
+   ladder.py) → `players` ;
 2. **file** : joueur le moins récemment scanné (`matches_fetched_at NULLS FIRST`) ;
 3. **fan-out** : match_ids SoloQ bornés au patch, filtrés du déjà-fait ;
 4. **téléchargement** : detail → inclusion → parsing → timeline → Postgres
@@ -41,8 +43,15 @@ from trio_lab.stats import extract
 
 logger = logging.getLogger(__name__)
 
-# Période de rafraîchissement de la découverte des joueurs (1 h).
-DISCOVERY_TTL_S = 3600
+# Période de rafraîchissement des ladders apex (challenger/GM/master) : peu
+# coûteux (3 appels/plateforme), reste horaire.
+APEX_DISCOVERY_TTL_S = 3600
+# Période de rafraîchissement de la découverte paginée Emerald/Diamond :
+# coûteuse (max_pages × 8 divisions appels/plateforme, cf. ladder.py), passée
+# de horaire à quotidienne le 17/07/2026 avec le relèvement du plafond de
+# pages — le mouvement de promotion est de toute façon lent, un rescan
+# horaire n'apportait rien face à ce coût.
+ENTRIES_DISCOVERY_TTL_S = 86400
 # Heartbeat de log : état de la collecte tous les N matchs traités.
 LOG_EVERY = 50
 # Pause après une erreur de boucle (429 résiduel ayant épuisé les retries du
@@ -109,19 +118,28 @@ async def _collect_platform(
     """Boucle de collecte d'une plateforme. Une connexion Postgres dédiée par boucle."""
     counts: Counter[str] = Counter()
     start_s, end_s = epoch_bounds
-    last_discovery = float("-inf")
+    last_apex_discovery = float("-inf")
+    last_entries_discovery = float("-inf")
     conn = await db.connect(dsn)
     try:
         async with RiotClient() as client:
             while target is None or counts["downloaded"] < target:
                 try:
-                    if time.monotonic() - last_discovery > DISCOVERY_TTL_S:
-                        rows = await ladder.discover_players(
+                    if time.monotonic() - last_apex_discovery > APEX_DISCOVERY_TTL_S:
+                        rows = await ladder.discover_apex(client, platform=platform)
+                        await storage.upsert_players(conn, rows)
+                        last_apex_discovery = time.monotonic()
+                        logger.info("%s : découverte apex → %d joueurs", platform, len(rows))
+
+                    if time.monotonic() - last_entries_discovery > ENTRIES_DISCOVERY_TTL_S:
+                        rows = await ladder.discover_entries(
                             client, platform=platform, max_pages=max_pages
                         )
                         await storage.upsert_players(conn, rows)
-                        last_discovery = time.monotonic()
-                        logger.info("%s : découverte → %d joueurs Emerald+", platform, len(rows))
+                        last_entries_discovery = time.monotonic()
+                        logger.info(
+                            "%s : découverte Emerald/Diamond → %d joueurs", platform, len(rows)
+                        )
 
                     puuid = await storage.next_player(conn, platform=platform)
                     if puuid is None:

@@ -1,14 +1,19 @@
 """Découverte des joueurs Emerald+ : league-v4 → lignes pour la table `players`.
 
-Deux sources, fusionnées et dédupliquées par PUUID :
-- les ladders **apex** (challenger/grandmaster/master), non paginés ;
-- l'endpoint paginé `/entries` pour **EMERALD et DIAMOND** (4 divisions chacun).
+Deux sources, appelées séparément (cadences différentes côté `collect.py`) :
+- `discover_apex` : ladders challenger/grandmaster/master, non paginés, peu
+  coûteux (3 appels/plateforme) — peut rester rafraîchi souvent ;
+- `discover_entries` : endpoint paginé `/entries` pour **EMERALD et DIAMOND**
+  (4 divisions chacun) — chaque division dépasse largement le plafond de
+  pagination observé en pratique (`kr EMERALD IV` encore pleine à la page 200,
+  soit 40 000+ joueurs, cf. session du 17/07/2026) : l'exhaustivité n'est pas
+  visée, `max_pages` cherche juste un vivier nettement plus large que
+  l'ancien plafond de 5 pages (~1 000 joueurs/division, jugé trop restrictif —
+  il expliquait une bonne partie du plafonnement du volume quotidien collecté).
+  Coûteux (`max_pages` × 8 divisions appels/plateforme) → cadence journalière,
+  pas horaire.
 
-La pagination est plafonnée (`max_pages` par division) : on cherche un vivier de
-seeds suffisant (~8 divisions × 5 pages × ~205 entrées ≈ 8 000 joueurs par
-plateforme), pas l'exhaustivité — chaque joueur ouvre jusqu'à 100 match_ids par
-patch au fan-out, largement de quoi saturer le budget API. La persistance
-(upsert `players`) relève de `storage`.
+La persistance (upsert `players`) relève de `storage`.
 """
 
 from __future__ import annotations
@@ -23,7 +28,13 @@ logger = logging.getLogger(__name__)
 
 # Tiers non-apex du scope trio-lab (Emerald+, cf. PROJECT.md § Collecte).
 SUB_APEX_TIERS: tuple[str, ...] = ("EMERALD", "DIAMOND")
-DEFAULT_MAX_PAGES = 5
+# Relevé le 17/07/2026 (5 -> 100) : l'ancien plafond ne captait qu'une
+# fraction marginale de chaque division (vérifié en direct sur l'API,
+# kr EMERALD IV encore pleine à la page 200) et plafonnait mécaniquement le
+# volume quotidien de matchs collectés. 100 pages reste loin de
+# l'exhaustivité mais élargit le vivier x20 pour un coût encore négligeable
+# (~800 appels/plateforme, cf. discover_entries) une fois par jour.
+DEFAULT_MAX_PAGES = 100
 
 
 class _LeagueClient(Protocol):
@@ -47,13 +58,8 @@ class PlayerRow:
     division: str | None
 
 
-async def discover_players(
-    client: _LeagueClient,
-    *,
-    platform: str,
-    max_pages: int = DEFAULT_MAX_PAGES,
-) -> list[PlayerRow]:
-    """PUUIDs Emerald+ d'une plateforme, dédupliqués (premier tier vu conservé)."""
+async def discover_apex(client: _LeagueClient, *, platform: str) -> list[PlayerRow]:
+    """PUUIDs challenger/grandmaster/master d'une plateforme (premier tier vu conservé)."""
     routing = regional_for(platform)
     rows: dict[str, PlayerRow] = {}
 
@@ -65,6 +71,19 @@ async def discover_players(
             if puuid and puuid not in rows:
                 rows[puuid] = PlayerRow(puuid, platform, routing, tier.upper(), None)
         logger.info("league-v4 %s %s : %d entrées", platform, tier, len(entries))
+
+    return list(rows.values())
+
+
+async def discover_entries(
+    client: _LeagueClient,
+    *,
+    platform: str,
+    max_pages: int = DEFAULT_MAX_PAGES,
+) -> list[PlayerRow]:
+    """PUUIDs Emerald+Diamond d'une plateforme (paginé, plafonné à `max_pages`/division)."""
+    routing = regional_for(platform)
+    rows: dict[str, PlayerRow] = {}
 
     for tier in SUB_APEX_TIERS:
         for division in DIVISIONS:
