@@ -137,14 +137,24 @@ def test_api_trios_sorted_by_scaling_nulls_last(pg_sync, client):
     assert [r["jgl_champion"] for r in payload["rows"]] == [1, 4]  # NULL toujours en dernier
 
 
-def test_api_trios_champion_filter_by_name_and_role(pg_sync, client):
+def test_api_trios_champion_filter_per_role(pg_sync, client):
     _seed_scores(pg_sync)
-    payload = client.get("/api/trios", params={"champion": "Ahri", "role": "mid"}).json()
+    payload = client.get("/api/trios", params={"mid": "Ahri"}).json()
     assert [r["mid_champion"] for r in payload["rows"]] == [2]
     # Ahri ne joue pas jungle dans le jeu de données.
-    payload = client.get("/api/trios", params={"champion": "Ahri", "role": "jgl"}).json()
+    payload = client.get("/api/trios", params={"jgl": "Ahri"}).json()
     assert payload["rows"] == []
-    assert client.get("/api/trios", params={"champion": "Inconnu"}).status_code == 404
+    assert client.get("/api/trios", params={"jgl": "Inconnu"}).status_code == 404
+
+
+def test_api_trios_champion_filters_combine_with_and(pg_sync, client):
+    """3 champs indépendants, combinables — pas un simple champion+rôle unique."""
+    _seed_scores(pg_sync)
+    payload = client.get("/api/trios", params={"jgl": "Lee Sin", "mid": "Ahri"}).json()
+    assert [r["jgl_champion"] for r in payload["rows"]] == [1]
+    # Vi (jungle du 2e trio) combiné à Ahri (mid du 1er trio) : aucun trio ne matche les 2.
+    payload = client.get("/api/trios", params={"jgl": "Vi", "mid": "Ahri"}).json()
+    assert payload["rows"] == []
 
 
 def test_api_trio_detail_stats_and_counters(pg_sync, client):

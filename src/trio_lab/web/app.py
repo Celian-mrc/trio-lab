@@ -321,7 +321,6 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
     # sort/dir : listes séparées par des virgules (tri multi-colonnes façon
     # tableur), validées à la main par `parse_sort` — pas de pattern Query
     # unique, la forme n'est plus une simple valeur whitelistée.
-    _ROLE_PATTERN = "^(jgl|mid|sup)?$"
     _DUO_ROLES_PATTERN = f"^({'|'.join(queries.DUO_ROLES)})$"
 
     @app.get("/", response_class=HTMLResponse)
@@ -329,27 +328,27 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         request: Request,
         window: str | None = None,
         platform: str | None = None,
-        champion: str | None = None,
-        role: str | None = Query(None, pattern=_ROLE_PATTERN),
+        jgl: str | None = None,
+        mid: str | None = None,
+        sup: str | None = None,
         min_games: int = Query(0, ge=0),
         min_tier: str = Query("faible", pattern="^(faible|moyen|eleve)$"),
         sort: str = "synergy",
         direction: str = Query("desc", alias="dir"),
         page: int = Query(1, ge=1),
     ):
-        role = role or None
         sorts, dirs = parse_sort(sort, direction, queries.TRIO_SORTS)
         thresholds_raw = threshold_raw(request)
         thresholds = min_values(thresholds_raw)
         with request.app.state.pool.connection() as conn:
             window, platform, context = resolve_context(conn, window, platform)
-            champion_id = resolve_champion(champion)
             result = queries.trio_tierlist(
                 conn,
                 window,
                 platform,
-                champion_id=champion_id,
-                role=role,
+                jgl_champion_id=resolve_champion(jgl),
+                mid_champion_id=resolve_champion(mid),
+                sup_champion_id=resolve_champion(sup),
                 min_games=min_games,
                 min_tier=min_tier,
                 min_values=thresholds,
@@ -363,8 +362,9 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             {
                 **context,
                 **result,
-                "champion": champion or "",
-                "role": role or "",
+                "jgl_search": jgl or "",
+                "mid_search": mid or "",
+                "sup_search": sup or "",
                 "min_games": min_games,
                 "min_tier": min_tier,
                 "min_values": thresholds_raw,
@@ -372,8 +372,9 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                     thresholds_raw,
                     window=window,
                     platform=platform,
-                    champion=champion or "",
-                    role=role or "",
+                    jgl=jgl or "",
+                    mid=mid or "",
+                    sup=sup or "",
                     min_games=min_games,
                     min_tier=min_tier,
                 ),
@@ -391,6 +392,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         window: str | None = None,
         platform: str | None = None,
         roles: str = Query("jgl_mid", pattern=_DUO_ROLES_PATTERN),
+        champ_a: str | None = None,
+        champ_b: str | None = None,
         min_games: int = Query(0, ge=0),
         min_tier: str = Query("faible", pattern="^(faible|moyen|eleve)$"),
         sort: str = "synergy",
@@ -407,6 +410,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 window,
                 platform,
                 roles,
+                champ_a_id=resolve_champion(champ_a),
+                champ_b_id=resolve_champion(champ_b),
                 min_games=min_games,
                 min_tier=min_tier,
                 min_values=thresholds,
@@ -421,6 +426,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 **context,
                 **result,
                 "roles": roles,
+                "champ_a_search": champ_a or "",
+                "champ_b_search": champ_b or "",
                 "min_games": min_games,
                 "min_tier": min_tier,
                 "min_values": thresholds_raw,
@@ -429,6 +436,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                     window=window,
                     platform=platform,
                     roles=roles,
+                    champ_a=champ_a or "",
+                    champ_b=champ_b or "",
                     min_games=min_games,
                     min_tier=min_tier,
                 ),
@@ -436,6 +445,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 "direction": direction,
                 "sorts": sorts,
                 "directions": dirs,
+                "champion_names": sorted(c.name for c in champ_index().values()),
             },
         )
 
@@ -589,8 +599,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             conn,
             window,
             platform,
-            champion_id=champion_id,
-            role=role,
+            **{f"{role}_champion_id": champion_id},
             min_tier="moyen",  # écarte les trios à 1-2 games (retour utilisateur, 2026-07-12)
             sort=["synergy"],
             direction=["desc"],
@@ -716,8 +725,9 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         request: Request,
         window: str | None = None,
         platform: str | None = None,
-        champion: str | None = None,
-        role: str | None = Query(None, pattern=_ROLE_PATTERN),
+        jgl: str | None = None,
+        mid: str | None = None,
+        sup: str | None = None,
         min_games: int = Query(0, ge=0),
         min_tier: str = Query("faible", pattern="^(faible|moyen|eleve)$"),
         sort: str = "synergy",
@@ -731,8 +741,9 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 conn,
                 window,
                 platform,
-                champion_id=resolve_champion(champion),
-                role=role or None,
+                jgl_champion_id=resolve_champion(jgl),
+                mid_champion_id=resolve_champion(mid),
+                sup_champion_id=resolve_champion(sup),
                 min_games=min_games,
                 min_tier=min_tier,
                 min_values=min_values(threshold_raw(request)),
@@ -768,6 +779,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         window: str | None = None,
         platform: str | None = None,
         roles: str = Query("jgl_mid", pattern=_DUO_ROLES_PATTERN),
+        champ_a: str | None = None,
+        champ_b: str | None = None,
         min_games: int = Query(0, ge=0),
         min_tier: str = Query("faible", pattern="^(faible|moyen|eleve)$"),
         sort: str = "synergy",
@@ -782,6 +795,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 window,
                 platform,
                 roles,
+                champ_a_id=resolve_champion(champ_a),
+                champ_b_id=resolve_champion(champ_b),
                 min_games=min_games,
                 min_tier=min_tier,
                 min_values=min_values(threshold_raw(request)),

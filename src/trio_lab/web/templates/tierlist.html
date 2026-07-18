@@ -15,20 +15,18 @@
       {% for p in platforms %}<option value="{{ p }}" {{ 'selected' if p == platform }}>{{ 'toutes régions' if p == 'all' else p }}</option>{% endfor %}
     </select>
   </label>
-  <label>Champion
-    <input name="champion" list="champion-names" value="{{ champion }}" placeholder="tous">
-    <datalist id="champion-names">
-      {% for name in champion_names %}<option value="{{ name }}">{% endfor %}
-    </datalist>
+  <label>Jungle
+    <input name="jgl" list="champion-names" value="{{ jgl_search }}" placeholder="tous">
   </label>
-  <label>Rôle
-    <select name="role">
-      <option value="" {{ 'selected' if not role }}>tous</option>
-      {% for key, label in ROLE_LABELS.items() %}
-      <option value="{{ key }}" {{ 'selected' if role == key }}>{{ label }}</option>
-      {% endfor %}
-    </select>
+  <label>Mid
+    <input name="mid" list="champion-names" value="{{ mid_search }}" placeholder="tous">
   </label>
+  <label>Support
+    <input name="sup" list="champion-names" value="{{ sup_search }}" placeholder="tous">
+  </label>
+  <datalist id="champion-names">
+    {% for name in champion_names %}<option value="{{ name }}">{% endfor %}
+  </datalist>
   <label>Games min. <input type="number" name="min_games" value="{{ min_games }}" min="0" step="1"></label>
   <label>Fiabilité min.
     <select name="min_tier">

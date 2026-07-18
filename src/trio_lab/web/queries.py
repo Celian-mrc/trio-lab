@@ -102,8 +102,9 @@ def trio_tierlist(
     window: str,
     platform: str,
     *,
-    champion_id: int | None = None,
-    role: str | None = None,  # 'jgl' | 'mid' | 'sup' | None = les trois
+    jgl_champion_id: int | None = None,
+    mid_champion_id: int | None = None,
+    sup_champion_id: int | None = None,
     min_games: int = 0,
     min_tier: str = "faible",
     min_values: dict[str, float] | None = None,  # ex. {"wr": .52, "cc": 4.0}
@@ -111,7 +112,11 @@ def trio_tierlist(
     direction: Sequence[str] = ("desc",),
     page: int = 1,
 ) -> dict:
-    """Une page de tier list des trios + le total pour la pagination."""
+    """Une page de tier list des trios + le total pour la pagination.
+
+    Un champion par rôle (jgl/mid/sup), indépendants et combinables : remplir
+    les 3 cible un trio précis, n'en remplir qu'1 ou 2 filtre plus large.
+    """
     order_clause = _order_by_clause(sort, direction, TRIO_SORTS)
     where = ["window_label = %(window)s", "platform = %(platform)s", "games >= %(min_games)s"]
     params: dict = {
@@ -124,14 +129,14 @@ def trio_tierlist(
     }
     where.append("tier = ANY(%(tiers)s)")
     where.extend(_min_value_clauses(min_values, TRIO_SORTS, params))
-    if champion_id is not None:
-        params["champ"] = champion_id
-        if role in ("jgl", "mid", "sup"):
-            where.append(f"{role}_champion = %(champ)s")
-        else:
-            where.append(
-                "(jgl_champion = %(champ)s OR mid_champion = %(champ)s OR sup_champion = %(champ)s)"
-            )
+    for role, champion_id in (
+        ("jgl", jgl_champion_id),
+        ("mid", mid_champion_id),
+        ("sup", sup_champion_id),
+    ):
+        if champion_id is not None:
+            params[f"{role}_champ"] = champion_id
+            where.append(f"{role}_champion = %({role}_champ)s")
     with conn.cursor(row_factory=dict_row) as cur:
         rows = cur.execute(
             f"""
@@ -158,6 +163,8 @@ def duo_tierlist(
     platform: str,
     roles: str,
     *,
+    champ_a_id: int | None = None,
+    champ_b_id: int | None = None,
     min_games: int = 0,
     min_tier: str = "faible",
     min_values: dict[str, float] | None = None,  # ex. {"wr": .52, "cc": 4.0}
@@ -165,7 +172,12 @@ def duo_tierlist(
     direction: Sequence[str] = ("desc",),
     page: int = 1,
 ) -> dict:
-    """Une page de tier list des duos d'un couple de rôles."""
+    """Une page de tier list des duos d'un couple de rôles.
+
+    `champ_a_id`/`champ_b_id` : indépendants et combinables, dans l'ordre des
+    rôles de `roles` (ex. jgl_mid → champ_a=jungle, champ_b=mid) — même
+    principe que `trio_tierlist`.
+    """
     if roles not in DUO_ROLES:
         raise ValueError(f"roles inconnu : {roles!r}")
     order_clause = _order_by_clause(sort, direction, DUO_SORTS)
@@ -186,6 +198,10 @@ def duo_tierlist(
         "per_page": PER_PAGE,
     }
     where.extend(_min_value_clauses(min_values, DUO_SORTS, params))
+    for col, champion_id in (("champ_a", champ_a_id), ("champ_b", champ_b_id)):
+        if champion_id is not None:
+            params[col] = champion_id
+            where.append(f"{col} = %({col})s")
     with conn.cursor(row_factory=dict_row) as cur:
         rows = cur.execute(
             f"""

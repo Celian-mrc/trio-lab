@@ -23,6 +23,16 @@
       <option value="mid_sup" {{ 'selected' if roles == 'mid_sup' }}>Mid + Support</option>
     </select>
   </label>
+  {% set role_a, role_b = duo_badges[roles] %}
+  <label>{{ ROLE_LABELS[role_a] }}
+    <input name="champ_a" list="champion-names" value="{{ champ_a_search }}" placeholder="tous">
+  </label>
+  <label>{{ ROLE_LABELS[role_b] }}
+    <input name="champ_b" list="champion-names" value="{{ champ_b_search }}" placeholder="tous">
+  </label>
+  <datalist id="champion-names">
+    {% for name in champion_names %}<option value="{{ name }}">{% endfor %}
+  </datalist>
   <label>Games min. <input type="number" name="min_games" value="{{ min_games }}" min="0" step="1"></label>
   <label>Fiabilité min.
     <select name="min_tier">
