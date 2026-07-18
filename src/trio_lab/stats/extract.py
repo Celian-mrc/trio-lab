@@ -221,6 +221,31 @@ def gold_diffs(
     return diffs
 
 
+JUNGLE_CS_DIFF_MINUTE = 15
+
+
+def jungle_cs_diff(
+    timeline: dict[str, Any], trios: dict[int, TrioMembers]
+) -> dict[int, int | None]:
+    """Écart de CS jungle du jungler vs le jungler adverse, à la 15e minute.
+
+    Lu depuis `jungleMinionsKilled` (frame native de la timeline, distinct du
+    `minionsKilled` de lane) — capture la domination jungle early (invades,
+    pathing) avant que les rotations macro et les objectifs de mi/fin de
+    partie ne redistribuent le farm. `None` au-delà de la dernière frame
+    complète (partie finie avant 15 min), même logique que `gold_diffs`.
+    """
+    frames = timeline["info"]["frames"]
+    if frames[-1]["timestamp"] // MINUTE_MS < JUNGLE_CS_DIFF_MINUTE:
+        return {team: None for team in TEAMS}
+    pf = frames[JUNGLE_CS_DIFF_MINUTE]["participantFrames"]
+    jungle_cs = {team: pf[str(trios[team].pids[0])]["jungleMinionsKilled"] for team in TEAMS}
+    return {
+        100: jungle_cs[100] - jungle_cs[200],
+        200: jungle_cs[200] - jungle_cs[100],
+    }
+
+
 def combat_stats(
     detail: dict[str, Any],
     timeline: dict[str, Any],
@@ -242,11 +267,21 @@ def combat_stats(
     corrigée par `cc_reliability`) par membre, en plus du total `cc_time_s` —
     la donnée existe déjà par participant à cet instant, seule la ventilation
     par rôle manquait (migration 020).
+
+    `jgl_dmg_per_gold`/`mid_dmg_per_gold`/`sup_dmg_per_gold` (migration 021) :
+    dégâts aux champions ÷ gold gagné, par membre — signal d'efficacité
+    indépendant de l'allocation de ressources (un champion qui rend beaucoup
+    avec peu de gold). `None` si `goldEarned` vaut 0 (jamais observé en
+    pratique, gold de départ compris, mais on ne divise pas par 0).
+
+    `wards_placed`/`wards_killed` (migration 021) : décomposition du score de
+    vision agrégé (`vision_score`), niveau trio comme lui.
     """
     trio_pids = {team: set(trios[team].pids) for team in TEAMS}
     stats: dict[int, dict[str, Any]] = {team: {} for team in TEAMS}
     # Ordre aligné sur TrioMembers.pids (JUNGLE, MIDDLE, UTILITY).
     role_cc_fields = ("jgl_cc_time_s", "mid_cc_time_s", "sup_cc_time_s")
+    role_dmg_per_gold_fields = ("jgl_dmg_per_gold", "mid_dmg_per_gold", "sup_dmg_per_gold")
 
     # Kills early depuis la timeline.
     team_kills = dict.fromkeys(TEAMS, 0)
@@ -274,21 +309,32 @@ def combat_stats(
             vision_score=0,
             cc_time_s=0,
             plates_taken=0,
+            wards_placed=0,
+            wards_killed=0,
             jgl_cc_time_s=None,
             mid_cc_time_s=None,
             sup_cc_time_s=None,
+            jgl_dmg_per_gold=None,
+            mid_dmg_per_gold=None,
+            sup_dmg_per_gold=None,
         )
     for p in detail["info"]["participants"]:
         team, pid = p["teamId"], p["participantId"]
         damage[team]["team"] += p.get("totalDamageDealtToChampions", 0)
         stats[team]["plates_taken"] += p.get("challenges", {}).get("turretPlatesTaken", 0)
         if pid in trio_pids[team]:
-            damage[team]["trio"] += p.get("totalDamageDealtToChampions", 0)
+            member_damage = p.get("totalDamageDealtToChampions", 0)
+            damage[team]["trio"] += member_damage
             stats[team]["vision_score"] += p.get("visionScore", 0)
+            stats[team]["wards_placed"] += p.get("wardsPlaced", 0)
+            stats[team]["wards_killed"] += p.get("wardsKilled", 0)
             reliability = (cc_reliability or {}).get(p.get("championId"), 1.0)
             cc = round(p.get("timeCCingOthers", 0) * reliability)
             stats[team]["cc_time_s"] += cc
             stats[team][role_cc_fields[trios[team].pids.index(pid)]] = cc
+            gold = p.get("goldEarned", 0)
+            dmg_per_gold = member_damage / gold if gold else None
+            stats[team][role_dmg_per_gold_fields[trios[team].pids.index(pid)]] = dmg_per_gold
             if p.get("firstBloodKill") or p.get("firstBloodAssist"):
                 stats[team]["first_blood_trio"] = True
     for team in TEAMS:
@@ -323,6 +369,7 @@ def extract_match(
     objectives = team_objectives(events)
     gold = gold_diffs(timeline, trios)
     combat = combat_stats(detail, timeline, trios, cc_reliability)
+    jgl_cs = jungle_cs_diff(timeline, trios)
 
     trio_rows = []
     for team in TEAMS:
@@ -338,6 +385,7 @@ def extract_match(
                 **gold[team],
                 **objectives[team],
                 **combat[team],
+                "jgl_cs_diff_15": jgl_cs[team],
             }
         )
     event_rows = [{"match_id": match_id, **e} for e in events]

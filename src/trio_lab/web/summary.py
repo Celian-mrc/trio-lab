@@ -44,6 +44,17 @@ _PER_MINUTE_KEYS = (
     "jgl_cc_time_s",
     "mid_cc_time_s",
     "sup_cc_time_s",
+    "wards_placed",
+    "wards_killed",
+)
+# jgl/mid/sup_dmg_per_gold, jgl_cs_diff_15 (migration 021) : déjà des ratios/
+# écarts par game, pas de normalisation par durée (contrairement à
+# _PER_MINUTE_KEYS) — moyenne pondérée directe, comme damage_share.
+_RATIO_KEYS = (
+    "jgl_dmg_per_gold",
+    "mid_dmg_per_gold",
+    "sup_dmg_per_gold",
+    "jgl_cs_diff_15",
 )
 
 
@@ -94,6 +105,7 @@ def summarize(rows: list[dict], weights: dict[str, float]) -> dict:
             m: _weighted_mean(in_window, weights, f"gold_diff_{m}") for m in GOLD_MINUTES
         },
         **{key: _weighted_mean(in_window, weights, key) for key in _MEAN_KEYS},
+        **{key: _weighted_mean(in_window, weights, key) for key in _RATIO_KEYS},
         **{
             key: _weighted_mean_of(in_window, weights, _per_minute(key)) for key in _PER_MINUTE_KEYS
         },

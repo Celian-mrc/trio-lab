@@ -45,6 +45,12 @@ TEAM_POSITION_TO_CC_FIELD = {
     "MIDDLE": "mid_cc_time_s",
     "UTILITY": "sup_cc_time_s",
 }
+# Même principe (migration 021) pour le dégâts/gold par membre.
+TEAM_POSITION_TO_DMG_PER_GOLD_FIELD = {
+    "JUNGLE": "jgl_dmg_per_gold",
+    "MIDDLE": "mid_dmg_per_gold",
+    "UTILITY": "sup_dmg_per_gold",
+}
 COUNTERS_SHOWN = 10  # pires et meilleurs matchups affichés sur la page détail
 ALLIES_SHOWN = 10  # meilleurs alliés Top/ADC affichés sur la page détail
 DUO_BEST_TRIOS_SHOWN = 10  # meilleurs 3e membres affichés sur la page détail duo
@@ -544,6 +550,9 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         # les 3 rôles trio sans distinction, on ne garde que les 2 du duo.
         stats["champ_a_cc_time_s"] = stats[TEAM_POSITION_TO_CC_FIELD[role_a]]
         stats["champ_b_cc_time_s"] = stats[TEAM_POSITION_TO_CC_FIELD[role_b]]
+        # Idem dégâts/gold par membre (migration 021).
+        stats["champ_a_dmg_per_gold"] = stats[TEAM_POSITION_TO_DMG_PER_GOLD_FIELD[role_a]]
+        stats["champ_b_dmg_per_gold"] = stats[TEAM_POSITION_TO_DMG_PER_GOLD_FIELD[role_b]]
         cc_scores = queries.cc_theoretical_scores(conn)
         a_cc, b_cc = cc_scores.get(champ_a), cc_scores.get(champ_b)
         members_cc = (a_cc, b_cc)

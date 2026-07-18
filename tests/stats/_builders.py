@@ -14,6 +14,11 @@ def gold_at(minute: int, pid: int) -> int:
     return minute * (100 + pid)
 
 
+def jungle_cs_at(minute: int, pid: int) -> int:
+    """CS jungle déterministe (jungle_cs_diff) : jungler équipe 100 = pid 2, équipe 200 = pid 7."""
+    return minute * pid
+
+
 def build_timeline(
     match_id: str = "EUW1_1000000001",
     *,
@@ -31,7 +36,11 @@ def build_timeline(
             {
                 "timestamp": minute * 60_000,
                 "participantFrames": {
-                    str(pid): {"totalGold": gold_at(minute, pid)} for pid in range(1, 11)
+                    str(pid): {
+                        "totalGold": gold_at(minute, pid),
+                        "jungleMinionsKilled": jungle_cs_at(minute, pid),
+                    }
+                    for pid in range(1, 11)
                 },
                 "events": [],
             }

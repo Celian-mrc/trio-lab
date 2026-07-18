@@ -59,6 +59,13 @@
         <td><strong>Mélangé (recommandé)</strong></td><td><strong>{{ cc_scores.blended_pct | pct100 }}</strong></td>
       </tr>
     </table>
+    <h2>Dégâts / gold, par membre</h2>
+    <p class="meta">Dégâts aux champions ÷ gold gagné, par membre : met en avant un champion qui rend
+      beaucoup avec peu de ressources.</p>
+    <table class="narrow kv">
+      <tr><td>{{ a.name }} ({{ ROLE_LABELS[role_a] }})</td><td>{{ stats.champ_a_dmg_per_gold | num(2) }}</td></tr>
+      <tr><td>{{ b.name }} ({{ ROLE_LABELS[role_b] }})</td><td>{{ stats.champ_b_dmg_per_gold | num(2) }}</td></tr>
+    </table>
     <details>
       <summary class="meta">Détail du calcul théorique (score de kit brut, avant normalisation sur 100)</summary>
       <table class="narrow kv">

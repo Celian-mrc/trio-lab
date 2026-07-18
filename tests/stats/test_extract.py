@@ -216,6 +216,49 @@ def test_endgame_stats_sums_and_shares():
     assert stats[200]["first_blood_trio"] is False  # FB par le top, hors trio
 
 
+def test_dmg_per_gold_and_wards_per_member():
+    detail = build_detail()
+    stats = extract.combat_stats(detail, build_timeline(), extract.trios_of(detail))
+
+    # Builder : dégâts=1000×pid, gold=1000+200×pid ; jgl=pid2, mid=pid3, sup=pid5 (équipe 100).
+    assert stats[100]["jgl_dmg_per_gold"] == pytest.approx(2000 / 1400)
+    assert stats[100]["mid_dmg_per_gold"] == pytest.approx(3000 / 1600)
+    assert stats[100]["sup_dmg_per_gold"] == pytest.approx(5000 / 2000)
+
+    # wardsPlaced=pid+10, wardsKilled=pid ; trio 100 = pids (2,3,5).
+    assert stats[100]["wards_placed"] == (2 + 10) + (3 + 10) + (5 + 10)
+    assert stats[100]["wards_killed"] == 2 + 3 + 5
+    assert stats[200]["wards_placed"] == (7 + 10) + (8 + 10) + (10 + 10)
+    assert stats[200]["wards_killed"] == 7 + 8 + 10
+
+
+def test_dmg_per_gold_none_when_gold_earned_is_zero():
+    detail = build_detail()
+    detail["info"]["participants"][1]["goldEarned"] = 0  # pid 2 = jgl équipe 100
+    stats = extract.combat_stats(detail, build_timeline(), extract.trios_of(detail))
+    assert stats[100]["jgl_dmg_per_gold"] is None
+
+
+# --- jungle_cs_diff ---
+
+
+def test_jungle_cs_diff_at_15_minutes():
+    # jungleMinionsKilled(minute, pid) = minute × pid ; jgl 100 = pid 2, jgl 200 = pid 7.
+    timeline = build_timeline(minutes=20)
+    trios = extract.trios_of(build_detail())
+    diff = extract.jungle_cs_diff(timeline, trios)
+    assert diff[100] == 15 * 2 - 15 * 7
+    assert diff[200] == 15 * 7 - 15 * 2
+
+
+def test_jungle_cs_diff_none_before_15_minutes():
+    timeline = build_timeline(minutes=10)
+    trios = extract.trios_of(build_detail())
+    diff = extract.jungle_cs_diff(timeline, trios)
+    assert diff[100] is None
+    assert diff[200] is None
+
+
 def test_cc_time_s_applies_per_champion_reliability():
     """championId == participantId côté équipe 100 (builder) : jgl=2, mid=3, sup=5."""
     detail = build_detail()

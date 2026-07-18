@@ -73,7 +73,18 @@
       <tr><td>First blood (trio)</td><td>{{ stats.first_blood_trio | pct }}</td></tr>
       <tr><td>Kill participation &lt; 15 min</td><td>{{ stats.kill_participation_pre15 | pct }}</td></tr>
       <tr><td>Part des dégâts de l'équipe</td><td>{{ stats.damage_share | pct }}</td></tr>
+      <tr data-tooltip="Dégâts aux champions ÷ gold gagné, par membre : met en avant un champion qui rend beaucoup avec peu de ressources, indépendamment de la priorité qu'on lui donne." aria-label="Dégâts aux champions ÷ gold gagné, par membre : met en avant un champion qui rend beaucoup avec peu de ressources, indépendamment de la priorité qu'on lui donne.">
+        <td>Dégâts / gold, par membre</td><td></td>
+      </tr>
+      <tr><td class="sub">&nbsp;&nbsp;{{ jgl.name }} (jungle)</td><td class="sub">{{ stats.jgl_dmg_per_gold | num(2) }}</td></tr>
+      <tr><td class="sub">&nbsp;&nbsp;{{ mid.name }} (mid)</td><td class="sub">{{ stats.mid_dmg_per_gold | num(2) }}</td></tr>
+      <tr><td class="sub">&nbsp;&nbsp;{{ sup.name }} (support)</td><td class="sub">{{ stats.sup_dmg_per_gold | num(2) }}</td></tr>
       <tr><td>Score de vision (trio, par minute)</td><td>{{ stats.vision_score | num(2) }}</td></tr>
+      <tr><td class="sub">&nbsp;&nbsp;dont wards posés</td><td class="sub">{{ stats.wards_placed | num(2) }} /min</td></tr>
+      <tr><td class="sub">&nbsp;&nbsp;dont wards détruits</td><td class="sub">{{ stats.wards_killed | num(2) }} /min</td></tr>
+      <tr data-tooltip="Écart de CS jungle du jungler vs le jungler adverse à la 15e minute (jungleMinionsKilled de la timeline) : signal de domination early jungle (invades, pathing), avant que les rotations macro ne redistribuent le farm." aria-label="Écart de CS jungle du jungler vs le jungler adverse à la 15e minute (jungleMinionsKilled de la timeline) : signal de domination early jungle (invades, pathing), avant que les rotations macro ne redistribuent le farm.">
+        <td>CS jungle vs adverse à 15 min</td><td class="{{ 'pos' if stats.jgl_cs_diff_15 and stats.jgl_cs_diff_15 > 0 else 'neg' if stats.jgl_cs_diff_15 and stats.jgl_cs_diff_15 < 0 }}">{{ stats.jgl_cs_diff_15 | signed_int }}</td>
+      </tr>
       <tr><td>CC infligé, mesuré en jeu (Σ timeCCingOthers, par minute)</td><td>{{ stats.cc_time_s | num(2) }} s/min</td></tr>
       <tr><td class="sub">&nbsp;&nbsp;dont {{ jgl.name }} (jungle)</td><td class="sub">{{ stats.jgl_cc_time_s | num(2) }} s/min</td></tr>
       <tr><td class="sub">&nbsp;&nbsp;dont {{ mid.name }} (mid)</td><td class="sub">{{ stats.mid_cc_time_s | num(2) }} s/min</td></tr>
