@@ -30,6 +30,7 @@ def build_detail(
             participants.append(
                 {
                     "participantId": pid,
+                    "puuid": f"puuid-{pid}",
                     "teamId": team,
                     "teamPosition": role,
                     "championId": 10 * team_index + role_index + 1,

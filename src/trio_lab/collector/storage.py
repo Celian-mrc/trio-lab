@@ -74,6 +74,18 @@ async def mark_player_fetched(conn: psycopg.AsyncConnection, puuid: str) -> None
     await conn.execute("UPDATE players SET matches_fetched_at = now() WHERE puuid = %s", (puuid,))
 
 
+async def unknown_puuids(conn: psycopg.AsyncConnection, puuids: list[str]) -> list[str]:
+    """Parmi `puuids`, ceux absents de `players` — candidats à la récolte de participants.
+
+    Filtre avant d'appeler league-v4-par-PUUID (`collect.py`) : évite de
+    dépenser un appel API de vérification de rang sur un joueur déjà connu."""
+    if not puuids:
+        return []
+    cur = await conn.execute("SELECT puuid FROM players WHERE puuid = ANY(%s)", (puuids,))
+    known = {row[0] for row in await cur.fetchall()}
+    return [p for p in puuids if p not in known]
+
+
 # --- dédoublonnage / journal ---
 
 

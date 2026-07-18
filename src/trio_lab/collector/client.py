@@ -236,6 +236,14 @@ class RiotClient:
             region=platform, queue=queue, tier=tier_u, division=division, queries={"page": page}
         )
 
+    async def get_league_entries_by_puuid(
+        self, puuid: str, *, platform: str
+    ) -> list[dict[str, Any]]:
+        """Entrées league-v4 (toutes queues) d'un PUUID — vérification de rang
+        pour la récolte de joueurs via les participants d'un match (`collect.py`)."""
+        logger.debug("league-v4 entries by-puuid %s (%s)", puuid, platform)
+        return await self._client.get_lol_league_v4_entries_by_puuid(region=platform, puuid=puuid)
+
     # --- match-v5 (routing regional) ---
 
     async def get_match_ids_by_puuid(

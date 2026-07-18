@@ -11,7 +11,11 @@ Boucle d'une plateforme :
 2. **file** : joueur le moins récemment scanné (`matches_fetched_at NULLS FIRST`) ;
 3. **fan-out** : match_ids SoloQ bornés au patch, filtrés du déjà-fait ;
 4. **téléchargement** : detail → inclusion → parsing → timeline → Postgres
-   (+ archive JSON.gz), échecs journalisés.
+   (+ archive JSON.gz), échecs journalisés ;
+5. **récolte des participants** (`_harvest_participants`, session du
+   18/07/2026) : les 10 PUUIDs d'un match déjà téléchargé sont gratuits
+   (déjà dans le détail) — les inconnus sont vérifiés (rang Emerald+) via
+   league-v4-par-PUUID et ajoutés au pool. Best-effort, jamais bloquant.
 
 Reprenable et idempotent : tout l'état (joueurs, matchs, journal) vit en base ;
 relancer ignore le déjà-fait. Le débit est cadencé par le rate-limit API (~1
@@ -166,11 +170,13 @@ async def _collect_platform(
                         processed = counts["downloaded"] + counts["excluded"] + counts["errors"]
                         if processed % LOG_EVERY == 0:
                             logger.info(
-                                "%s : %d ok / %d exclus / %d erreurs (rate restant : %s)",
+                                "%s : %d ok / %d exclus / %d erreurs / %d récoltés"
+                                " (rate restant : %s)",
                                 platform,
                                 counts["downloaded"],
                                 counts["excluded"],
                                 counts["errors"],
+                                counts["harvested"],
                                 client.rate.remaining,
                             )
                     await storage.mark_player_fetched(conn, puuid)
@@ -233,6 +239,14 @@ async def _process_match(
             storage.archive_timeline(data_dir, platform, patch, match_id, timeline)
         await storage.insert_match(conn, row, participants, trio_stats, objective_events)
         counts["downloaded"] += 1
+        # Récolte des participants (snowball, session du 18/07/2026) : les 10
+        # PUUIDs du match sont déjà en main, gratuits — seule la vérification
+        # de rang des inconnus coûte un appel. Best-effort : une panne ici ne
+        # doit jamais faire échouer un match par ailleurs déjà ingéré.
+        try:
+            await _harvest_participants(client, conn, detail, platform=platform, counts=counts)
+        except Exception as exc:  # noqa: BLE001 — récolte optionnelle, jamais bloquante
+            logger.warning("%s : récolte participants échouée (%s)", match_id, exc)
     except parsing.ParseError as exc:
         await storage.journal_exclusion(conn, match_id, platform=platform, reason=f"parse: {exc}")
         counts["excluded"] += 1
@@ -242,3 +256,34 @@ async def _process_match(
         )
         counts["errors"] += 1
         logger.warning("échec %s (%s) → %s", match_id, exc, status)
+
+
+async def _harvest_participants(
+    client: RiotClient,
+    conn: psycopg.AsyncConnection,
+    detail: dict,
+    *,
+    platform: str,
+    counts: Counter[str],
+) -> None:
+    """Ajoute au pool les participants d'un match déjà téléchargé, encore inconnus et Emerald+.
+
+    Un appel league-v4-par-PUUID par candidat inconnu (vérification de rang,
+    cf. `ladder.player_row_from_entries`) ; les autres sont déjà filtrés sans
+    appel API (`storage.unknown_puuids`). Une erreur sur un PUUID (compte
+    supprimé, timeout) ne doit pas empêcher de traiter les autres.
+    """
+    candidates = await storage.unknown_puuids(conn, parsing.participant_puuids(detail))
+    rows = []
+    for puuid in candidates:
+        try:
+            entries = await client.get_league_entries_by_puuid(puuid, platform=platform)
+        except Exception as exc:  # noqa: BLE001 — un PUUID en échec n'arrête pas les autres
+            logger.debug("récolte %s : entrées league-v4 indisponibles (%s)", puuid, exc)
+            continue
+        row = ladder.player_row_from_entries(entries, puuid=puuid, platform=platform)
+        if row is not None:
+            rows.append(row)
+    if rows:
+        await storage.upsert_players(conn, rows)
+        counts["harvested"] += len(rows)

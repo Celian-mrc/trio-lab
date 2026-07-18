@@ -78,3 +78,14 @@ def participant_rows(detail: dict[str, Any]) -> list[dict[str, Any]]:
     if got != expected or len(rows) != 10:
         raise ParseError(f"rôles/équipes incohérents : {sorted(got - expected)!r}")
     return rows
+
+
+def participant_puuids(detail: dict[str, Any]) -> list[str]:
+    """Les PUUIDs des 10 participants d'un match — récolte de joueurs (`collect.py`).
+
+    Volontairement tolérant (pas de `ParseError`) : appelé après
+    `participant_rows`, qui a déjà validé la structure du match ; un PUUID
+    manquant ici n'invalide pas le match lui-même, juste une opportunité de
+    découverte en moins.
+    """
+    return [p["puuid"] for p in detail["info"].get("participants", []) if p.get("puuid")]

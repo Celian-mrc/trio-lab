@@ -8,6 +8,7 @@ réelles sont couvertes par `test_storage_pg.py` (intégration, gated).
 
 from __future__ import annotations
 
+from collections import Counter
 from datetime import UTC, datetime
 
 import pytest
@@ -55,6 +56,14 @@ class _FakeClient:
 
     async def get_match_timeline(self, match_id, *, platform):
         return build_timeline(match_id)  # extractible : le pipeline appelle extract_match
+
+    # Pas de get_league_entries_by_puuid ici : la récolte (_harvest_participants)
+    # est testée isolément plus bas (test_harvest_participants_*) pour ne pas
+    # faire cascader la file de tous les autres tests (les PUUIDs récoltés
+    # rejoindraient sinon la file et feraient boule de neige dans ce fake, où
+    # get_match_ids_by_puuid répond pour n'importe quel PUUID). Ici, l'appel
+    # échoue (AttributeError) et est avalé par le best-effort de collect.py —
+    # comportement identique aux autres tests, pas de régression.
 
 
 class _FailingClient(_FakeClient):
@@ -112,6 +121,9 @@ class _FakeStore:
 
     async def mark_player_fetched(self, conn, puuid):
         self.players[puuid]["fetched"] = True
+
+    async def unknown_puuids(self, conn, puuids):
+        return [p for p in puuids if p not in self.players]
 
     async def filter_new_match_ids(self, conn, match_ids):
         done = set(self.matches) | {
@@ -318,3 +330,56 @@ async def test_multi_platform_counts_are_aggregated(store, tmp_path, monkeypatch
     assert counts["players_scanned"] == 2
     assert counts["downloaded"] == 2
     assert set(store.matches) == {"EUW1-P1_M1", "NA1-P1_M1"}
+
+
+class _HarvestClient:
+    """Fake dédié à `_harvest_participants` : rang par PUUID programmable."""
+
+    async def get_league_entries_by_puuid(self, puuid, *, platform):
+        # "puuid-1" sous Emerald (hors scope) ; le reste au tier demandé.
+        if puuid == "puuid-1":
+            return [{"queueType": "RANKED_SOLO_5x5", "tier": "GOLD", "rank": "II"}]
+        return [{"queueType": "RANKED_SOLO_5x5", "tier": "EMERALD", "rank": "III"}]
+
+
+async def test_harvest_participants_adds_only_eligible_and_unknown(monkeypatch):
+    """Récolte isolée (pas via `collect.run`) : évite que les PUUIDs récoltés
+    rejoignent la file et fassent boule de neige dans le fake partagé."""
+    fake_store = _FakeStore()
+    fake_store.players["puuid-5"] = {"platform": "euw1", "fetched": True}  # déjà connu
+    monkeypatch.setattr(collect, "storage", fake_store)
+    detail = build_detail("EUW1_1", patch=PATCH)
+    counts: Counter[str] = Counter()
+
+    await collect._harvest_participants(
+        _HarvestClient(), None, detail, platform="euw1", counts=counts
+    )
+
+    # 10 participants ("puuid-1".."puuid-10") : "puuid-1" écarté (GOLD),
+    # "puuid-5" déjà connu (pas revérifié), les 8 autres ajoutés.
+    assert counts["harvested"] == 8
+    assert "puuid-1" not in fake_store.players
+    expected = {"puuid-5", *(f"puuid-{i}" for i in (2, 3, 4, 6, 7, 8, 9, 10))}
+    assert set(fake_store.players) == expected
+
+
+async def test_harvest_participants_survives_a_single_puuid_failure(monkeypatch):
+    """Un PUUID en échec (compte supprimé, timeout) n'empêche pas les autres."""
+
+    class _FlakyOnPuuid3(_HarvestClient):
+        async def get_league_entries_by_puuid(self, puuid, *, platform):
+            if puuid == "puuid-3":
+                raise RuntimeError("compte introuvable")
+            return await super().get_league_entries_by_puuid(puuid, platform=platform)
+
+    fake_store = _FakeStore()
+    monkeypatch.setattr(collect, "storage", fake_store)
+    detail = build_detail("EUW1_1", patch=PATCH)
+    counts: Counter[str] = Counter()
+
+    await collect._harvest_participants(
+        _FlakyOnPuuid3(), None, detail, platform="euw1", counts=counts
+    )
+
+    assert "puuid-3" not in fake_store.players
+    assert "puuid-4" in fake_store.players  # les autres candidats ont bien été traités

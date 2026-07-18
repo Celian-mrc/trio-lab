@@ -1,6 +1,6 @@
 """Découverte des joueurs Emerald+ : league-v4 → lignes pour la table `players`.
 
-Deux sources, appelées séparément (cadences différentes côté `collect.py`) :
+Trois sources, appelées séparément (cadences différentes côté `collect.py`) :
 - `discover_apex` : ladders challenger/grandmaster/master, non paginés, peu
   coûteux (3 appels/plateforme) — peut rester rafraîchi souvent ;
 - `discover_entries` : endpoint paginé `/entries` pour **EMERALD et DIAMOND**
@@ -12,6 +12,12 @@ Deux sources, appelées séparément (cadences différentes côté `collect.py`)
   il expliquait une bonne partie du plafonnement du volume quotidien collecté).
   Coûteux (`max_pages` × 8 divisions appels/plateforme) → cadence journalière,
   pas horaire.
+- `player_row_from_entries` : construit une ligne à partir d'une réponse
+  league-v4-par-PUUID — utilisé par la récolte des participants d'un match
+  déjà téléchargé (`collect.py`, session du 18/07/2026), gratuite en appels
+  API pour les PUUIDs (déjà dans le détail du match), un seul appel de
+  vérification de rang par candidat inconnu. Uniquement des endpoints
+  officiels Riot (CLAUDE.md règle 4) — pas de liste de match IDs tierce.
 
 La persistance (upsert `players`) relève de `storage`.
 """
@@ -20,7 +26,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 from trio_lab.collector.client import APEX_TIERS, DIVISIONS, regional_for
 
@@ -28,6 +34,12 @@ logger = logging.getLogger(__name__)
 
 # Tiers non-apex du scope trio-lab (Emerald+, cf. PROJECT.md § Collecte).
 SUB_APEX_TIERS: tuple[str, ...] = ("EMERALD", "DIAMOND")
+# Tiers éligibles au scope Emerald+ (apex en majuscules + sub-apex), utilisé
+# par `player_row_from_entries` pour filtrer une réponse league-v4-par-PUUID.
+_ELIGIBLE_TIERS: frozenset[str] = frozenset(t.upper() for t in APEX_TIERS) | frozenset(
+    SUB_APEX_TIERS
+)
+_SOLOQ_QUEUE_TYPE = "RANKED_SOLO_5x5"
 # Relevé le 17/07/2026 (5 -> 100) : l'ancien plafond ne captait qu'une
 # fraction marginale de chaque division (vérifié en direct sur l'API,
 # kr EMERALD IV encore pleine à la page 200) et plafonnait mécaniquement le
@@ -45,6 +57,8 @@ class _LeagueClient(Protocol):
     async def get_league_entries(
         self, tier: str, division: str, *, platform: str, page: int
     ) -> list[dict]: ...
+
+    async def get_league_entries_by_puuid(self, puuid: str, *, platform: str) -> list[dict]: ...
 
 
 @dataclass(frozen=True)
@@ -102,3 +116,24 @@ async def discover_entries(
             )
 
     return list(rows.values())
+
+
+def player_row_from_entries(
+    entries: list[dict[str, Any]], *, puuid: str, platform: str
+) -> PlayerRow | None:
+    """Ligne candidate depuis une réponse league-v4-par-PUUID, `None` si hors scope.
+
+    Filtre sur l'entrée RANKED_SOLO_5x5 uniquement (un compte a aussi des
+    entrées flex/autres queues) et sur le tier Emerald+ — un participant
+    d'un match ramené par la récolte peut très bien être en dessous
+    (matchmaking, ancien compte) et ne doit pas entrer dans le pool.
+    """
+    for entry in entries:
+        if entry.get("queueType") != _SOLOQ_QUEUE_TYPE:
+            continue
+        tier = entry.get("tier", "").upper()
+        if tier not in _ELIGIBLE_TIERS:
+            return None
+        division = entry.get("rank") if tier in SUB_APEX_TIERS else None
+        return PlayerRow(puuid, platform, regional_for(platform), tier, division)
+    return None
