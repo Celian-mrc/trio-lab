@@ -72,9 +72,42 @@ _AGG_STAT_COLUMNS = ("games", "wins", *(col for pair in STAT_PAIRS.values() for 
 # pondérée d'agrégats comme STAT_PAIRS, calculé à part par `_cc_pct_fields`.
 _CC_PCT_COLUMNS = ("cc_theoretical_pct", "cc_empirical_pct", "cc_blended_pct")
 
+# CC empirique par membre (migration 020), en plus du total (`cc_time_s` dans
+# STAT_PAIRS) : colonnes différentes trio (rôles fixes) vs duo (champ_a/b
+# génériques, cf. `stats/aggregate.py`) — deux mappings séparés plutôt qu'un
+# STAT_PAIRS partagé, qui suppose le même schéma agg_trio/agg_duo.
+_TRIO_POSITION_CC_PAIRS: dict[str, tuple[str, str]] = {
+    "jgl_cc_time_s": ("jgl_cc_sum", "jgl_cc_n"),
+    "mid_cc_time_s": ("mid_cc_sum", "mid_cc_n"),
+    "sup_cc_time_s": ("sup_cc_sum", "sup_cc_n"),
+}
+_DUO_POSITION_CC_PAIRS: dict[str, tuple[str, str]] = {
+    "champ_a_cc_time_s": ("champ_a_cc_sum", "champ_a_cc_n"),
+    "champ_b_cc_time_s": ("champ_b_cc_sum", "champ_b_cc_n"),
+}
+
 _SCORE_COLUMNS = (*STAT_PAIRS, *_CC_PCT_COLUMNS)
 _SCORE_STAT_SQL = ", ".join(_SCORE_COLUMNS)
 _SCORE_STAT_PLACEHOLDERS = ", ".join(f"%({name})s" for name in _SCORE_COLUMNS)
+
+# Colonnes agg_trio/agg_duo à charger dans `_load` : le socle partagé + la
+# ventilation CC propre à chaque table (schémas différents, cf. plus haut).
+_TRIO_STAT_COLUMNS = (
+    *_AGG_STAT_COLUMNS,
+    *(c for pair in _TRIO_POSITION_CC_PAIRS.values() for c in pair),
+)
+_DUO_STAT_COLUMNS = (
+    *_AGG_STAT_COLUMNS,
+    *(c for pair in _DUO_POSITION_CC_PAIRS.values() for c in pair),
+)
+
+# Colonnes score_trio/score_duo à écrire : socle partagé + ventilation CC.
+_TRIO_SCORE_COLUMNS = (*_SCORE_COLUMNS, *_TRIO_POSITION_CC_PAIRS)
+_DUO_SCORE_COLUMNS = (*_SCORE_COLUMNS, *_DUO_POSITION_CC_PAIRS)
+_TRIO_SCORE_SQL = ", ".join(_TRIO_SCORE_COLUMNS)
+_TRIO_SCORE_PLACEHOLDERS = ", ".join(f"%({name})s" for name in _TRIO_SCORE_COLUMNS)
+_DUO_SCORE_SQL = ", ".join(_DUO_SCORE_COLUMNS)
+_DUO_SCORE_PLACEHOLDERS = ", ".join(f"%({name})s" for name in _DUO_SCORE_COLUMNS)
 
 _DUO_PK = ("window_label", "platform", "roles", "champ_a", "champ_b")
 _DUO_UPDATE_COLUMNS = (
@@ -90,7 +123,7 @@ _DUO_UPDATE_COLUMNS = (
     "scaling",
     "scaling_ci_low",
     "scaling_ci_high",
-    *_SCORE_COLUMNS,
+    *_DUO_SCORE_COLUMNS,
 )
 _DUO_UPDATE_SQL = ", ".join(f"{c} = EXCLUDED.{c}" for c in _DUO_UPDATE_COLUMNS)
 
@@ -110,15 +143,17 @@ _TRIO_UPDATE_COLUMNS = (
     "scaling",
     "scaling_ci_low",
     "scaling_ci_high",
-    *_SCORE_COLUMNS,
+    *_TRIO_SCORE_COLUMNS,
 )
 _TRIO_UPDATE_SQL = ", ".join(f"{c} = EXCLUDED.{c}" for c in _TRIO_UPDATE_COLUMNS)
 
 
-def _weighted_stats(rows: list[dict], weights: dict[str, float]) -> dict[str, float | None]:
+def _weighted_stats(
+    rows: list[dict], weights: dict[str, float], pairs: dict[str, tuple[str, str]] = STAT_PAIRS
+) -> dict[str, float | None]:
     """Moyennes de stats pondérées fenêtre : Σw·somme / Σw·n, None sans donnée."""
     out: dict[str, float | None] = {}
-    for name, (sum_key, n_key) in STAT_PAIRS.items():
+    for name, (sum_key, n_key) in pairs.items():
         num = 0.0
         den = 0.0
         for row in rows:
@@ -163,7 +198,7 @@ def _cc_pct_fields(
     }
 
 
-def _add_combined_stat_rows(mapping: dict[tuple, list[dict]]) -> None:
+def _add_combined_stat_rows(mapping: dict[tuple, list[dict]], columns: tuple[str, ...]) -> None:
     """Équivalent de `scores.add_combined_platform` pour les lignes dict d'agg_*."""
     combined: dict[tuple, dict[str, dict]] = {}
     for (platform, *rest), rows in mapping.items():
@@ -172,7 +207,7 @@ def _add_combined_stat_rows(mapping: dict[tuple, list[dict]]) -> None:
         acc = combined.setdefault((scores.ALL_PLATFORMS, *rest), {})
         for row in rows:
             cell = acc.setdefault(row["patch"], {"patch": row["patch"]})
-            for column in _AGG_STAT_COLUMNS:
+            for column in columns:
                 value = row.get(column)
                 if value is not None:
                     cell[column] = cell.get(column, 0) + value
@@ -191,18 +226,19 @@ def _load(conn: psycopg.Connection, window: PatchWindow):
     ):
         indiv[(platform, role, champ)].append((patch, games, wins))
 
-    stat_columns = ", ".join(_AGG_STAT_COLUMNS)
+    duo_columns = ", ".join(_DUO_STAT_COLUMNS)
+    trio_columns = ", ".join(_TRIO_STAT_COLUMNS)
     duos: dict[tuple, list[dict]] = defaultdict(list)
     trios: dict[tuple, list[dict]] = defaultdict(list)
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
         for row in cur.execute(
-            f"SELECT platform, roles, champ_a, champ_b, patch, {stat_columns}"
+            f"SELECT platform, roles, champ_a, champ_b, patch, {duo_columns}"
             " FROM agg_duo WHERE patch = ANY(%s)",
             (patches,),
         ):
             duos[(row["platform"], row["roles"], row["champ_a"], row["champ_b"])].append(row)
         for row in cur.execute(
-            f"SELECT platform, jgl_champion, mid_champion, sup_champion, patch, {stat_columns}"
+            f"SELECT platform, jgl_champion, mid_champion, sup_champion, patch, {trio_columns}"
             " FROM agg_trio WHERE patch = ANY(%s)",
             (patches,),
         ):
@@ -213,8 +249,8 @@ def _load(conn: psycopg.Connection, window: PatchWindow):
     # Vue « toutes régions » : sommes par patch entre plateformes, matérialisée
     # sous platform='all' comme n'importe quelle autre valeur de colonne.
     scores.add_combined_platform(indiv)
-    _add_combined_stat_rows(duos)
-    _add_combined_stat_rows(trios)
+    _add_combined_stat_rows(duos, _DUO_STAT_COLUMNS)
+    _add_combined_stat_rows(trios, _TRIO_STAT_COLUMNS)
 
     cc_theo_scores = dict(
         conn.execute("SELECT champion_id, score FROM champion_cc_theoretical").fetchall()
@@ -346,6 +382,7 @@ def refresh(
             # négligeable. La table score_duo publie, elle, la synergie brute.
             duo_synergies[(platform, roles, a, b)] = scores.smooth(syn, combo.games_eff, 0.0, k)
             stats = _weighted_stats(agg_rows, weights)
+            cc_by_member = _weighted_stats(agg_rows, weights, pairs=_DUO_POSITION_CC_PAIRS)
             duo_rows.append(
                 {
                     "window_label": window.label,
@@ -366,6 +403,7 @@ def refresh(
                         _scaling_slope(duo_durations.get((platform, roles, a, b)), weights)
                     ),
                     **stats,
+                    **cc_by_member,
                     **_cc_pct_fields(
                         (a, b), cc_theo_scores, stats["cc_time_s"], combo.games_eff, k
                     ),
@@ -399,6 +437,7 @@ def refresh(
             ci_low, ci_high = scores.wilson_interval(combo.wr, combo.games_eff)
             syn_ci_low, syn_ci_high = _synergy_ci(combo, (ci_low, ci_high), members)
             stats = _weighted_stats(agg_rows, weights)
+            cc_by_member = _weighted_stats(agg_rows, weights, pairs=_TRIO_POSITION_CC_PAIRS)
             trio_rows.append(
                 {
                     "window_label": window.label,
@@ -421,6 +460,7 @@ def refresh(
                         _scaling_slope(trio_durations.get((platform, jgl, mid, sup)), weights)
                     ),
                     **stats,
+                    **cc_by_member,
                     **_cc_pct_fields(
                         (jgl, mid, sup), cc_theo_scores, stats["cc_time_s"], combo.games_eff, k
                     ),
@@ -434,11 +474,11 @@ def refresh(
                     INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b,
                                            games, games_eff, wr, synergy, synergy_ci_low,
                                            synergy_ci_high, ci_low, ci_high, tier, scaling,
-                                           scaling_ci_low, scaling_ci_high, {_SCORE_STAT_SQL})
+                                           scaling_ci_low, scaling_ci_high, {_DUO_SCORE_SQL})
                     VALUES (%(window_label)s, %(platform)s, %(roles)s, %(champ_a)s, %(champ_b)s,
                             %(games)s, %(games_eff)s, %(wr)s, %(synergy)s, %(synergy_ci_low)s,
                             %(synergy_ci_high)s, %(ci_low)s, %(ci_high)s, %(tier)s, %(scaling)s,
-                            %(scaling_ci_low)s, %(scaling_ci_high)s, {_SCORE_STAT_PLACEHOLDERS})
+                            %(scaling_ci_low)s, %(scaling_ci_high)s, {_DUO_SCORE_PLACEHOLDERS})
                     ON CONFLICT ({", ".join(_DUO_PK)}) DO UPDATE SET {_DUO_UPDATE_SQL}
                     WHERE score_duo.games IS DISTINCT FROM EXCLUDED.games
                     """,
@@ -451,12 +491,12 @@ def refresh(
                                             sup_champion, games, games_eff, wr, synergy_raw,
                                             synergy_pred, synergy, synergy_ci_low,
                                             synergy_ci_high, ci_low, ci_high, tier, scaling,
-                                            scaling_ci_low, scaling_ci_high, {_SCORE_STAT_SQL})
+                                            scaling_ci_low, scaling_ci_high, {_TRIO_SCORE_SQL})
                     VALUES (%(window_label)s, %(platform)s, %(jgl_champion)s, %(mid_champion)s,
                             %(sup_champion)s, %(games)s, %(games_eff)s, %(wr)s, %(synergy_raw)s,
                             %(synergy_pred)s, %(synergy)s, %(synergy_ci_low)s,
                             %(synergy_ci_high)s, %(ci_low)s, %(ci_high)s, %(tier)s, %(scaling)s,
-                            %(scaling_ci_low)s, %(scaling_ci_high)s, {_SCORE_STAT_PLACEHOLDERS})
+                            %(scaling_ci_low)s, %(scaling_ci_high)s, {_TRIO_SCORE_PLACEHOLDERS})
                     ON CONFLICT ({", ".join(_TRIO_PK)}) DO UPDATE SET {_TRIO_UPDATE_SQL}
                     WHERE score_trio.games IS DISTINCT FROM EXCLUDED.games
                     """,

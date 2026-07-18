@@ -57,19 +57,35 @@ _STAT_SUMS_COLUMNS = """
                           cc_sum, cc_n
 """
 
+# CC empirique par membre (migration 020), en plus du total (_STAT_SUMS_SQL).
+# Trio : colonnes directes (t.jgl/mid/sup_cc_time_s). Duo : pas de rôle fixe
+# (jgl_mid/jgl_sup/mid_sup selon `roles`) — champ_a_cc/champ_b_cc génériques,
+# la CROSS JOIN LATERAL choisit la bonne colonne source par paire de rôles.
+_TRIO_CC_POSITION_SQL = """
+           sum(t.jgl_cc_time_s / (m.game_duration_s / 60.0)), count(t.jgl_cc_time_s),
+           sum(t.mid_cc_time_s / (m.game_duration_s / 60.0)), count(t.mid_cc_time_s),
+           sum(t.sup_cc_time_s / (m.game_duration_s / 60.0)), count(t.sup_cc_time_s)
+"""
+_TRIO_CC_POSITION_COLUMNS = "jgl_cc_sum, jgl_cc_n, mid_cc_sum, mid_cc_n, sup_cc_sum, sup_cc_n"
+_DUO_CC_POSITION_SQL = """
+           sum(d.champ_a_cc_time_s / (m.game_duration_s / 60.0)), count(d.champ_a_cc_time_s),
+           sum(d.champ_b_cc_time_s / (m.game_duration_s / 60.0)), count(d.champ_b_cc_time_s)
+"""
+_DUO_CC_POSITION_COLUMNS = "champ_a_cc_sum, champ_a_cc_n, champ_b_cc_sum, champ_b_cc_n"
+
 _DUO_SQL = f"""
     INSERT INTO agg_duo (patch, platform, roles, champ_a, champ_b, games, wins,
-                         {_STAT_SUMS_COLUMNS})
+                         {_STAT_SUMS_COLUMNS}, {_DUO_CC_POSITION_COLUMNS})
     SELECT m.patch, m.platform, d.roles, d.champ_a, d.champ_b,
            count(*), count(*) FILTER (WHERE t.win),
-           {_STAT_SUMS_SQL}
+           {_STAT_SUMS_SQL}, {_DUO_CC_POSITION_SQL}
     FROM match_trio_stats t
     JOIN matches m USING (match_id)
     CROSS JOIN LATERAL (VALUES
-        ('jgl_mid', t.jgl_champion, t.mid_champion),
-        ('jgl_sup', t.jgl_champion, t.sup_champion),
-        ('mid_sup', t.mid_champion, t.sup_champion)
-    ) AS d(roles, champ_a, champ_b)
+        ('jgl_mid', t.jgl_champion, t.mid_champion, t.jgl_cc_time_s, t.mid_cc_time_s),
+        ('jgl_sup', t.jgl_champion, t.sup_champion, t.jgl_cc_time_s, t.sup_cc_time_s),
+        ('mid_sup', t.mid_champion, t.sup_champion, t.mid_cc_time_s, t.sup_cc_time_s)
+    ) AS d(roles, champ_a, champ_b, champ_a_cc_time_s, champ_b_cc_time_s)
     WHERE m.patch = %(patch)s
     GROUP BY m.patch, m.platform, d.roles, d.champ_a, d.champ_b
 """
@@ -77,10 +93,10 @@ _DUO_SQL = f"""
 _TRIO_SQL = f"""
     INSERT INTO agg_trio (patch, platform, jgl_champion, mid_champion, sup_champion,
                           games, wins,
-                          {_STAT_SUMS_COLUMNS})
+                          {_STAT_SUMS_COLUMNS}, {_TRIO_CC_POSITION_COLUMNS})
     SELECT m.patch, m.platform, t.jgl_champion, t.mid_champion, t.sup_champion,
            count(*), count(*) FILTER (WHERE t.win),
-           {_STAT_SUMS_SQL}
+           {_STAT_SUMS_SQL}, {_TRIO_CC_POSITION_SQL}
     FROM match_trio_stats t
     JOIN matches m USING (match_id)
     WHERE m.patch = %(patch)s

@@ -36,6 +36,15 @@ _HERE = Path(__file__).resolve().parent
 
 ROLE_LABELS = {"jgl": "Jungle", "mid": "Mid", "sup": "Support"}
 ROLE_TO_TEAM_POSITION = {"jgl": "JUNGLE", "mid": "MIDDLE", "sup": "UTILITY"}
+# `DUO_ROLES` (compute.py) donne les 2 rôles d'un duo en noms Riot (JUNGLE/
+# MIDDLE/UTILITY) ; ce mapping retrouve la colonne CC par membre (migration
+# 020) correspondante pour choisir laquelle des 3 valeurs trio concerne
+# champ_a/champ_b (`_duo_detail`, summary.py calcule les 3 sans distinction).
+TEAM_POSITION_TO_CC_FIELD = {
+    "JUNGLE": "jgl_cc_time_s",
+    "MIDDLE": "mid_cc_time_s",
+    "UTILITY": "sup_cc_time_s",
+}
 COUNTERS_SHOWN = 10  # pires et meilleurs matchups affichés sur la page détail
 ALLIES_SHOWN = 10  # meilleurs alliés Top/ADC affichés sur la page détail
 DUO_BEST_TRIOS_SHOWN = 10  # meilleurs 3e membres affichés sur la page détail duo
@@ -530,13 +539,17 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             champ_b,
         )
         stats = summary.summarize(rows, weights)
+        role_a, role_b = DUO_ROLES[roles]
+        # Ventilation CC par membre (migration 020) : summary.summarize calcule
+        # les 3 rôles trio sans distinction, on ne garde que les 2 du duo.
+        stats["champ_a_cc_time_s"] = stats[TEAM_POSITION_TO_CC_FIELD[role_a]]
+        stats["champ_b_cc_time_s"] = stats[TEAM_POSITION_TO_CC_FIELD[role_b]]
         cc_scores = queries.cc_theoretical_scores(conn)
         a_cc, b_cc = cc_scores.get(champ_a), cc_scores.get(champ_b)
         members_cc = (a_cc, b_cc)
         # Total seulement si les 2 membres sont résolus (sinon somme partielle
         # trompeuse — affichée comme « — » à la place).
         duo_cc_raw = sum(members_cc) if None not in members_cc else None
-        role_a, role_b = DUO_ROLES[roles]
         member_wr = {
             "a": queries.member_wr(
                 conn, list(patch_window.patches), platform, role_a, champ_a, weights

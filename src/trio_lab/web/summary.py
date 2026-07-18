@@ -34,7 +34,17 @@ _MEAN_KEYS = (
     "kill_participation_pre15",
     "damage_share",
 )
-_PER_MINUTE_KEYS = ("vision_score", "drakes_taken", "cc_time_s")
+# jgl/mid/sup_cc_time_s (migration 020) : ventilation par membre du CC déjà
+# sommé dans cc_time_s — calculée pour trio ET duo (le duo n'a besoin que de
+# 2 des 3, choisis par `app._duo_detail` selon `roles`).
+_PER_MINUTE_KEYS = (
+    "vision_score",
+    "drakes_taken",
+    "cc_time_s",
+    "jgl_cc_time_s",
+    "mid_cc_time_s",
+    "sup_cc_time_s",
+)
 
 
 def _weighted_mean(rows: Iterable[dict], weights: dict[str, float], key: str) -> float | None:

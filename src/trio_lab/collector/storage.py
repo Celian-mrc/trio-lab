@@ -167,7 +167,8 @@ _TRIO_STATS_SQL = """
         gold_diff_25, gold_diff_30, gold_diff_35,
         grubs_taken, herald_taken, drakes_taken, soul_taken,
         nashor_first, nashor_first_s, first_tower, towers_destroyed, plates_taken,
-        first_blood_trio, kill_participation_pre15, damage_share, vision_score, cc_time_s
+        first_blood_trio, kill_participation_pre15, damage_share, vision_score, cc_time_s,
+        jgl_cc_time_s, mid_cc_time_s, sup_cc_time_s
     ) VALUES (
         %(match_id)s, %(team_id)s, %(jgl_champion)s, %(mid_champion)s, %(sup_champion)s,
         %(win)s,
@@ -178,7 +179,8 @@ _TRIO_STATS_SQL = """
         %(nashor_first)s, %(nashor_first_s)s, %(first_tower)s, %(towers_destroyed)s,
         %(plates_taken)s,
         %(first_blood_trio)s, %(kill_participation_pre15)s, %(damage_share)s,
-        %(vision_score)s, %(cc_time_s)s
+        %(vision_score)s, %(cc_time_s)s,
+        %(jgl_cc_time_s)s, %(mid_cc_time_s)s, %(sup_cc_time_s)s
     )
     ON CONFLICT (match_id, team_id) DO NOTHING
 """

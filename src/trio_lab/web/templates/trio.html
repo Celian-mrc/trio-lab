@@ -75,6 +75,9 @@
       <tr><td>Part des dégâts de l'équipe</td><td>{{ stats.damage_share | pct }}</td></tr>
       <tr><td>Score de vision (trio, par minute)</td><td>{{ stats.vision_score | num(2) }}</td></tr>
       <tr><td>CC infligé, mesuré en jeu (Σ timeCCingOthers, par minute)</td><td>{{ stats.cc_time_s | num(2) }} s/min</td></tr>
+      <tr><td class="sub">&nbsp;&nbsp;dont {{ jgl.name }} (jungle)</td><td class="sub">{{ stats.jgl_cc_time_s | num(2) }} s/min</td></tr>
+      <tr><td class="sub">&nbsp;&nbsp;dont {{ mid.name }} (mid)</td><td class="sub">{{ stats.mid_cc_time_s | num(2) }} s/min</td></tr>
+      <tr><td class="sub">&nbsp;&nbsp;dont {{ sup.name }} (support)</td><td class="sub">{{ stats.sup_cc_time_s | num(2) }} s/min</td></tr>
     </table>
     <h2>CC — empirique vs théorique <span class="meta">(0-100, les 3 valeurs sont comparables entre elles)</span></h2>
     <p class="meta">L'empirique vient du chrono du jeu : le temps réel où ce trio a gardé des

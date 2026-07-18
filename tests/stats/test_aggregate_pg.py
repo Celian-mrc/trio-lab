@@ -71,6 +71,27 @@ async def test_refresh_counts_games_and_wins(pg_conn):
     )
     assert await cur.fetchall() == [(2, 1)]
 
+    # Ventilation CC par membre (migration 020) : builder cc=2×pid, jgl(pid2)=4,
+    # mid(pid3)=6, sup(pid5)=10, durée 30 min, 2 matchs, PAR MINUTE (comme le total).
+    cur = await pg_conn.execute(
+        "SELECT jgl_cc_sum, jgl_cc_n, mid_cc_sum, mid_cc_n, sup_cc_sum, sup_cc_n FROM agg_trio"
+        " WHERE jgl_champion = 2 AND mid_champion = 3 AND sup_champion = 5"
+    )
+    [(jgl_sum, jgl_n, mid_sum, mid_n, sup_sum, sup_n)] = await cur.fetchall()
+    assert (jgl_sum, jgl_n) == (pytest.approx(2 * (4 / 30)), 2)
+    assert (mid_sum, mid_n) == (pytest.approx(2 * (6 / 30)), 2)
+    assert (sup_sum, sup_n) == (pytest.approx(2 * (10 / 30)), 2)
+
+    # Duo jgl_mid (champ_a=jgl=2, champ_b=mid=3) : reprend les mêmes colonnes
+    # source que le trio, pas le total 3 membres.
+    cur = await pg_conn.execute(
+        "SELECT champ_a_cc_sum, champ_a_cc_n, champ_b_cc_sum, champ_b_cc_n FROM agg_duo"
+        " WHERE roles = 'jgl_mid' AND champ_a = 2 AND champ_b = 3"
+    )
+    [(a_sum, a_n, b_sum, b_n)] = await cur.fetchall()
+    assert (a_sum, a_n) == (pytest.approx(2 * (4 / 30)), 2)
+    assert (b_sum, b_n) == (pytest.approx(2 * (6 / 30)), 2)
+
     cur = await pg_conn.execute(
         "SELECT games, wins FROM agg_champion WHERE role = 'JUNGLE' AND champion_id = 2"
     )

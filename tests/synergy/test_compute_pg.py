@@ -208,6 +208,37 @@ async def test_cc_pct_columns_materialized_for_duo_and_trio(pg_conn):
     assert emp_duo == pytest.approx(12.5)
 
 
+async def test_cc_per_member_materialized_for_duo_and_trio(pg_conn):
+    """Ventilation CC par membre (migration 020) : jgl/mid/sup pour un trio,
+    champ_a/champ_b (selon `roles`) pour un duo — indépendante du total `cc_sum`."""
+    await _seed(pg_conn)
+    await pg_conn.execute(
+        "UPDATE agg_trio SET"
+        " jgl_cc_sum = 10, jgl_cc_n = 10, mid_cc_sum = 20, mid_cc_n = 10,"
+        " sup_cc_sum = 30, sup_cc_n = 10"
+    )
+    # roles='jgl_mid' : champ_a = jgl, champ_b = mid.
+    await pg_conn.execute(
+        "UPDATE agg_duo SET"
+        " champ_a_cc_sum = 5, champ_a_cc_n = 40, champ_b_cc_sum = 15, champ_b_cc_n = 40"
+        " WHERE roles = 'jgl_mid'"
+    )
+    compute.refresh(windows.make_window(["16.13"]), dsn=TEST_DSN)
+
+    cur = await pg_conn.execute(
+        "SELECT jgl_cc_time_s, mid_cc_time_s, sup_cc_time_s FROM score_trio WHERE platform = 'euw1'"
+    )
+    jgl_cc, mid_cc, sup_cc = await cur.fetchone()
+    assert (jgl_cc, mid_cc, sup_cc) == (pytest.approx(1.0), pytest.approx(2.0), pytest.approx(3.0))
+
+    cur = await pg_conn.execute(
+        "SELECT champ_a_cc_time_s, champ_b_cc_time_s FROM score_duo"
+        " WHERE roles = 'jgl_mid' AND platform = 'euw1'"
+    )
+    champ_a_cc, champ_b_cc = await cur.fetchone()
+    assert (champ_a_cc, champ_b_cc) == (pytest.approx(0.125), pytest.approx(0.375))
+
+
 async def test_all_platforms_view_combines_and_averages_stats(pg_conn):
     """La vue 'all' somme les agrégats entre plateformes ; les stats sont moyennées."""
     await _seed(pg_conn, platform="euw1")

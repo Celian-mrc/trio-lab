@@ -47,6 +47,8 @@
       sans regarder aucune game jouée. Le mélangé combine les deux — c'est le score à retenir : il
       privilégie l'empirique quand le duo est beaucoup joué, et le théorique quand il l'est peu.</p>
     <table class="narrow kv">
+      <tr><td>{{ a.name }} ({{ ROLE_LABELS[role_a] }}), mesuré en jeu</td><td>{{ stats.champ_a_cc_time_s | num(2) }} s/min</td></tr>
+      <tr><td>{{ b.name }} ({{ ROLE_LABELS[role_b] }}), mesuré en jeu</td><td>{{ stats.champ_b_cc_time_s | num(2) }} s/min</td></tr>
       <tr data-tooltip="Mesuré directement sur les games jouées (Σ timeCCingOthers du trio complet, par minute), plafonné à 6 s/min puis ramené sur 100." aria-label="Mesuré directement sur les games jouées (Σ timeCCingOthers du trio complet, par minute), plafonné à 6 s/min puis ramené sur 100.">
         <td>Empirique</td><td>{{ cc_scores.empirical_pct | pct100 }}</td>
       </tr>

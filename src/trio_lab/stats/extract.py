@@ -237,9 +237,16 @@ def combat_stats(
     appliqué à `timeCCingOthers` avant sommation trio — certains champions
     (Nocturne confirmé) gonflent cette stat Riot sans immobiliser réellement
     plus que la moyenne. `None`/absent = 1.0, aucune correction.
+
+    `jgl_cc_time_s`/`mid_cc_time_s`/`sup_cc_time_s` : la même valeur (déjà
+    corrigée par `cc_reliability`) par membre, en plus du total `cc_time_s` —
+    la donnée existe déjà par participant à cet instant, seule la ventilation
+    par rôle manquait (migration 020).
     """
     trio_pids = {team: set(trios[team].pids) for team in TEAMS}
     stats: dict[int, dict[str, Any]] = {team: {} for team in TEAMS}
+    # Ordre aligné sur TrioMembers.pids (JUNGLE, MIDDLE, UTILITY).
+    role_cc_fields = ("jgl_cc_time_s", "mid_cc_time_s", "sup_cc_time_s")
 
     # Kills early depuis la timeline.
     team_kills = dict.fromkeys(TEAMS, 0)
@@ -262,7 +269,15 @@ def combat_stats(
     # Stats de fin de match depuis le detail.
     damage = {team: {"trio": 0, "team": 0} for team in TEAMS}
     for team in TEAMS:
-        stats[team].update(first_blood_trio=False, vision_score=0, cc_time_s=0, plates_taken=0)
+        stats[team].update(
+            first_blood_trio=False,
+            vision_score=0,
+            cc_time_s=0,
+            plates_taken=0,
+            jgl_cc_time_s=None,
+            mid_cc_time_s=None,
+            sup_cc_time_s=None,
+        )
     for p in detail["info"]["participants"]:
         team, pid = p["teamId"], p["participantId"]
         damage[team]["team"] += p.get("totalDamageDealtToChampions", 0)
@@ -271,7 +286,9 @@ def combat_stats(
             damage[team]["trio"] += p.get("totalDamageDealtToChampions", 0)
             stats[team]["vision_score"] += p.get("visionScore", 0)
             reliability = (cc_reliability or {}).get(p.get("championId"), 1.0)
-            stats[team]["cc_time_s"] += round(p.get("timeCCingOthers", 0) * reliability)
+            cc = round(p.get("timeCCingOthers", 0) * reliability)
+            stats[team]["cc_time_s"] += cc
+            stats[team][role_cc_fields[trios[team].pids.index(pid)]] = cc
             if p.get("firstBloodKill") or p.get("firstBloodAssist"):
                 stats[team]["first_blood_trio"] = True
     for team in TEAMS:

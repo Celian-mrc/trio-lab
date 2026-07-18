@@ -199,6 +199,16 @@ def test_endgame_stats_sums_and_shares():
     assert stats[100]["vision_score"] == 2 + 3 + 5
     assert stats[200]["vision_score"] == 7 + 8 + 10
     assert stats[100]["cc_time_s"] == 2 * (2 + 3 + 5)
+    # Ventilation par membre (migration 020) : jgl=pid2, mid=pid3, sup=pid5.
+    assert (
+        stats[100]["jgl_cc_time_s"],
+        stats[100]["mid_cc_time_s"],
+        stats[100]["sup_cc_time_s"],
+    ) == (
+        2 * 2,
+        2 * 3,
+        2 * 5,
+    )
     assert stats[100]["damage_share"] == pytest.approx(10 / 15)
     assert stats[200]["damage_share"] == pytest.approx(25 / 40)
     assert stats[100]["plates_taken"] == 5
@@ -214,6 +224,9 @@ def test_cc_time_s_applies_per_champion_reliability():
     )
     # jgl (champ 2, cc brut 4) atténué à 2 ; mid (6) et sup (10) inchangés (défaut 1.0).
     assert stats[100]["cc_time_s"] == 2 + 6 + 10
+    # La ventilation par membre reflète la même atténuation (pas juste le total).
+    assert stats[100]["jgl_cc_time_s"] == 2
+    assert (stats[100]["mid_cc_time_s"], stats[100]["sup_cc_time_s"]) == (6, 10)
     # Sans reliability fournie : comportement identique à avant (aucune atténuation).
     baseline = extract.combat_stats(detail, build_timeline(), extract.trios_of(detail))
     assert baseline[100]["cc_time_s"] == 2 * (2 + 3 + 5)
