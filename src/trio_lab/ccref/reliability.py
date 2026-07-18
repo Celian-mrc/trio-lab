@@ -74,3 +74,64 @@ def backfill_trio_cc(
         n = cur.rowcount
     logger.info("match_trio_stats.cc_time_s recalculé pour %d équipes (patch=%s)", n, patch)
     return n
+
+
+def backfill_trio_cc_per_role(
+    conn: psycopg.Connection,
+    *,
+    patch: str | None = None,
+    reliability: dict[int, float] = CC_TIME_RELIABILITY,
+) -> int:
+    """Renseigne `jgl/mid/sup_cc_time_s` (migration 020) depuis `match_participants`.
+
+    Backfill un-shot pour les lignes ingérées avant l'ajout de ces colonnes
+    (2026-07-18) : ne touche que les lignes encore NULL (idempotent, ne
+    recalcule jamais ce que le collector a déjà posé) et seulement les
+    matchs dont les 3 participants portent encore `cc_time_s` (même trou
+    historique que `backfill_trio_cc`, avant le 2026-07-10)."""
+    champ_ids = list(reliability.keys())
+    coeffs = list(reliability.values())
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE match_trio_stats t
+            SET jgl_cc_time_s = corrected.jgl,
+                mid_cc_time_s = corrected.mid,
+                sup_cc_time_s = corrected.sup
+            FROM (
+                SELECT pj.match_id, pj.team_id,
+                       round(pj.cc_time_s * coalesce(rj.reliability, 1.0))::int AS jgl,
+                       round(pm.cc_time_s * coalesce(rm.reliability, 1.0))::int AS mid,
+                       round(pu.cc_time_s * coalesce(ru.reliability, 1.0))::int AS sup
+                FROM match_participants pj
+                JOIN match_participants pm
+                    ON pm.match_id = pj.match_id AND pm.team_id = pj.team_id AND pm.role = 'MIDDLE'
+                JOIN match_participants pu
+                    ON pu.match_id = pj.match_id AND pu.team_id = pj.team_id AND pu.role = 'UTILITY'
+                JOIN matches m ON m.match_id = pj.match_id
+                LEFT JOIN (
+                    SELECT * FROM unnest(%(champ_ids)s::int[], %(coeffs)s::real[])
+                        AS r(champion_id, reliability)
+                ) rj ON rj.champion_id = pj.champion_id
+                LEFT JOIN (
+                    SELECT * FROM unnest(%(champ_ids)s::int[], %(coeffs)s::real[])
+                        AS r(champion_id, reliability)
+                ) rm ON rm.champion_id = pm.champion_id
+                LEFT JOIN (
+                    SELECT * FROM unnest(%(champ_ids)s::int[], %(coeffs)s::real[])
+                        AS r(champion_id, reliability)
+                ) ru ON ru.champion_id = pu.champion_id
+                WHERE pj.role = 'JUNGLE'
+                  AND pj.cc_time_s IS NOT NULL
+                  AND pm.cc_time_s IS NOT NULL
+                  AND pu.cc_time_s IS NOT NULL
+                  AND (%(patch)s::text IS NULL OR m.patch = %(patch)s::text)
+            ) corrected
+            WHERE t.match_id = corrected.match_id AND t.team_id = corrected.team_id
+              AND t.jgl_cc_time_s IS NULL
+            """,
+            {"champ_ids": champ_ids, "coeffs": coeffs, "patch": patch},
+        )
+        n = cur.rowcount
+    logger.info("jgl/mid/sup_cc_time_s backfillés pour %d équipes (patch=%s)", n, patch)
+    return n

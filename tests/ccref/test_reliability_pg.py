@@ -116,3 +116,54 @@ def test_backfill_trio_cc_scoped_by_patch(pg_sync):
     )
     assert cc_p1 == 100  # 200×0.5
     assert cc_p2 == 260  # inchangé, hors patch ciblé
+
+
+def test_backfill_trio_cc_per_role_fills_null_columns_from_participants(pg_sync):
+    pg_sync.execute(
+        "INSERT INTO matches (match_id, platform, patch, game_version, queue_id,"
+        " game_creation, game_duration_s, winning_team)"
+        " VALUES ('EUW1_BF3', 'euw1', '16.13', '16.13.1', 420, now(), 1800, 100)"
+    )
+    for role, champ, cc in (("JUNGLE", 56, 200), ("MIDDLE", 2, 40), ("UTILITY", 3, 20)):
+        pg_sync.execute(
+            "INSERT INTO match_participants (match_id, team_id, role, champion_id, win,"
+            " cc_time_s, immobilizations) VALUES ('EUW1_BF3', 100, %s, %s, true, %s, 5)",
+            (role, champ, cc),
+        )
+    pg_sync.execute(
+        "INSERT INTO match_trio_stats (match_id, team_id, jgl_champion, mid_champion,"
+        " sup_champion, win, cc_time_s) VALUES ('EUW1_BF3', 100, 56, 2, 3, true, 260)"
+    )
+    n = reliability.backfill_trio_cc_per_role(pg_sync, reliability={56: 0.25})
+    assert n == 1
+    jgl, mid, sup = pg_sync.execute(
+        "SELECT jgl_cc_time_s, mid_cc_time_s, sup_cc_time_s FROM match_trio_stats"
+        " WHERE match_id = 'EUW1_BF3' AND team_id = 100"
+    ).fetchone()
+    assert (jgl, mid, sup) == (50, 40, 20)  # 200×0.25, 40×1.0, 20×1.0
+
+
+def test_backfill_trio_cc_per_role_does_not_overwrite_already_filled_rows(pg_sync):
+    pg_sync.execute(
+        "INSERT INTO matches (match_id, platform, patch, game_version, queue_id,"
+        " game_creation, game_duration_s, winning_team)"
+        " VALUES ('EUW1_BF4', 'euw1', '16.13', '16.13.1', 420, now(), 1800, 100)"
+    )
+    for role, champ, cc in (("JUNGLE", 56, 200), ("MIDDLE", 2, 40), ("UTILITY", 3, 20)):
+        pg_sync.execute(
+            "INSERT INTO match_participants (match_id, team_id, role, champion_id, win,"
+            " cc_time_s, immobilizations) VALUES ('EUW1_BF4', 100, %s, %s, true, %s, 5)",
+            (role, champ, cc),
+        )
+    pg_sync.execute(
+        "INSERT INTO match_trio_stats (match_id, team_id, jgl_champion, mid_champion,"
+        " sup_champion, win, cc_time_s, jgl_cc_time_s, mid_cc_time_s, sup_cc_time_s)"
+        " VALUES ('EUW1_BF4', 100, 56, 2, 3, true, 260, 9, 9, 9)"
+    )
+    n = reliability.backfill_trio_cc_per_role(pg_sync)
+    assert n == 0  # déjà rempli par le collector, on ne touche pas
+    jgl, mid, sup = pg_sync.execute(
+        "SELECT jgl_cc_time_s, mid_cc_time_s, sup_cc_time_s FROM match_trio_stats"
+        " WHERE match_id = 'EUW1_BF4' AND team_id = 100"
+    ).fetchone()
+    assert (jgl, mid, sup) == (9, 9, 9)
