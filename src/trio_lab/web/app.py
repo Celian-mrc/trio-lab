@@ -54,6 +54,9 @@ TEAM_POSITION_TO_DMG_PER_GOLD_FIELD = {
 # Échelle fixe (pas relative au trio affiché) des barres d'avantage gold : un
 # écart au-delà sature la barre à 100 %, mais le nombre affiché reste exact.
 GOLD_DIFF_BAR_CAP = 2500
+# En dessous de ce pourcentage de games atteignant un checkpoint gold, la
+# carte est grisée (échantillon trop réduit pour être lu comme un signal).
+GOLD_DIFF_LOW_SAMPLE_PCT = 10
 COUNTERS_SHOWN = 10  # pires et meilleurs matchups affichés sur la page détail
 ALLIES_SHOWN = 10  # meilleurs alliés Top/ADC affichés sur la page détail
 DUO_BEST_TRIOS_SHOWN = 10  # meilleurs 3e membres affichés sur la page détail duo
@@ -135,6 +138,13 @@ def _bar_pct_abs(value: float | None, cap: float) -> float:
     return max(0.0, min(100.0, 100 * abs(value) / cap))
 
 
+def _pct_of(n: int, total: int) -> float:
+    """Pourcentage `n` ÷ `total` (0-100), 0 si `total` nul. Communique la taille
+    d'échantillon réelle derrière un checkpoint (ex. gold_diff_35 ne porte que
+    sur les games qui ont duré ≥35 min — retour utilisateur 2026-07-19)."""
+    return 100 * n / total if total else 0.0
+
+
 def _fmt_bytes(value: int | None) -> str:
     if value is None:
         return "—"
@@ -196,6 +206,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
 
     templates.env.globals["static_version"] = static_version
     templates.env.globals["gold_diff_bar_cap"] = GOLD_DIFF_BAR_CAP
+    templates.env.globals["gold_diff_low_sample_pct"] = GOLD_DIFF_LOW_SAMPLE_PCT
     templates.env.filters.update(
         pct=_fmt_pct,
         pct100=_fmt_pct100,
@@ -207,6 +218,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         bytes=_fmt_bytes,
         barpct=_bar_pct,
         barpct_abs=_bar_pct_abs,
+        pctof=_pct_of,
     )
     state = {"champions": champion_index}
 

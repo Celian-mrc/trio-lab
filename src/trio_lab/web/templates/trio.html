@@ -42,7 +42,9 @@
   <h2>Avantage gold du trio</h2>
   <div class="gold-diff-grid">
     {% for m, v in stats.gold_diff.items() %}
-    <div class="cell">
+    {% set n = stats.gold_diff_n[m] %}
+    {% set sample_pct = n | pctof(stats.games) %}
+    <div class="cell {{ 'low-sample' if sample_pct < gold_diff_low_sample_pct else '' }}">
       <div class="label">{{ m }} min</div>
       <div class="value {{ 'pos' if v and v > 0 else 'neg' if v and v < 0 }}">{{ v | signed_int }}</div>
       <div class="diverging-bar">
@@ -51,6 +53,7 @@
         <div class="fill {{ 'pos' if v > 0 else 'neg' }}" style="width: {{ (v | barpct_abs(gold_diff_bar_cap)) / 2 }}%"></div>
         {% endif %}
       </div>
+      <div class="n" data-tooltip="Nombre de games (sur {{ stats.games }} au total) ayant duré au moins {{ m }} min — la moyenne ci-dessus ne porte que sur ce sous-ensemble." aria-label="Nombre de games (sur {{ stats.games }} au total) ayant duré au moins {{ m }} min — la moyenne ci-dessus ne porte que sur ce sous-ensemble.">{{ n }} games ({{ sample_pct | round | int }}%)</div>
     </div>
     {% endfor %}
   </div>

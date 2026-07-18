@@ -220,6 +220,11 @@ a.champ.big:hover { color: var(--accent); }
 .gold-diff-grid .cell { font-size: 0.8rem; }
 .gold-diff-grid .cell .label { color: var(--muted-fg); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
 .gold-diff-grid .cell .value { font-variant-numeric: tabular-nums; font-weight: 600; margin-top: 0.15rem; }
+.gold-diff-grid .cell .n { color: var(--muted-fg); font-size: 0.68rem; margin-top: 0.3rem; cursor: help; }
+/* Échantillon trop réduit (< GOLD_DIFF_LOW_SAMPLE_PCT % des games du trio) :
+   estompé plutôt que masqué — la valeur reste lisible sur demande, mais ne
+   capte pas l'œil comme un checkpoint fiable (retour utilisateur 2026-07-19). */
+.gold-diff-grid .cell.low-sample { opacity: 0.4; }
 
 /* --- Tooltips CSS-only (attribut `data-tooltip`, PAS `title`) ---
    `title` déclenche l'infobulle native du navigateur (~1s, invisible tant

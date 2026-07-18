@@ -100,3 +100,18 @@ def test_empty_rows_yield_none_everywhere():
     assert stats["wr"] is None
     assert stats["avg_duration_win_s"] is None
     assert all(v is None for v in stats["gold_diff"].values())
+    assert all(n == 0 for n in stats["gold_diff_n"].values())
+
+
+def test_gold_diff_n_counts_games_reaching_each_checkpoint():
+    rows = [
+        _row(gold_diff_5=100, gold_diff_10=200),  # partie longue : les 2 checkpoints atteints
+        _row(gold_diff_5=50, gold_diff_10=None),  # finie avant 10 min
+        _row(patch="16.12", gold_diff_5=10, gold_diff_10=20),  # poids 0.6, compte quand même
+        _row(patch="16.11", gold_diff_5=999, gold_diff_10=999),  # hors fenêtre : ignorée
+    ]
+    stats = summary.summarize(rows, {"16.13": 1.0, "16.12": 0.6})
+    # brut, PAS pondéré : 3 games dans la fenêtre ont gold_diff_5, 2 ont gold_diff_10.
+    assert stats["gold_diff_n"][5] == 3
+    assert stats["gold_diff_n"][10] == 2
+    assert stats["gold_diff_n"][15] == 0  # jamais renseignée

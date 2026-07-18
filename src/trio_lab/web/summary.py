@@ -78,6 +78,19 @@ def _weighted_mean_of(rows: Iterable[dict], weights: dict[str, float], value_of)
     return num / den if den > 0.0 else None
 
 
+def _count_valid(rows: Iterable[dict], weights: dict[str, float], key: str) -> int:
+    """Nombre de games (dans la fenêtre) où `key` n'est pas NULL.
+
+    Brut, PAS pondéré par patch : sert à communiquer la taille réelle de
+    l'échantillon derrière une moyenne (ex. `gold_diff_35` ne porte que sur
+    les games qui ont duré ≥35 min, un sous-ensemble bien plus petit que
+    `gold_diff_5` — retour utilisateur 2026-07-19, la moyenne seule masquait
+    ce rétrécissement)."""
+    return sum(
+        1 for row in rows if weights.get(row["patch"], 0.0) > 0.0 and row.get(key) is not None
+    )
+
+
 def _per_minute(key: str):
     def value_of(row: dict) -> float | None:
         value = row.get(key)
@@ -103,6 +116,9 @@ def summarize(rows: list[dict], weights: dict[str, float]) -> dict:
         "wr": _weighted_mean(in_window, weights, "win"),
         "gold_diff": {
             m: _weighted_mean(in_window, weights, f"gold_diff_{m}") for m in GOLD_MINUTES
+        },
+        "gold_diff_n": {
+            m: _count_valid(in_window, weights, f"gold_diff_{m}") for m in GOLD_MINUTES
         },
         **{key: _weighted_mean(in_window, weights, key) for key in _MEAN_KEYS},
         **{key: _weighted_mean(in_window, weights, key) for key in _RATIO_KEYS},
