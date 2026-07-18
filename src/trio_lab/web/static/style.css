@@ -163,6 +163,64 @@ a.champ.big:hover { color: var(--accent); }
 .trio-cell a { color: var(--foreground); text-decoration: none; display: flex; gap: 0.9rem; }
 .trio-cell a:hover .champ { color: var(--accent); }
 
+/* --- Dashboard de stats (page détail trio/duo) : grille de cartes, une par
+   thème (Objectifs, Combat, Vision, CC...), remplace les longs tableaux
+   clé-valeur à 2 colonnes qui désynchronisaient la hauteur des colonnes. --- */
+.stat-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: 1rem; margin: 1rem 0; align-items: start;
+}
+.stat-grid .card { display: flex; flex-direction: column; }
+.stat-grid h3 {
+  margin: 0 0 0.7rem; font-size: 0.72rem; color: var(--muted-fg);
+  text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500;
+}
+.kv-list { display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.83rem; }
+.kv-list .row { display: flex; justify-content: space-between; gap: 1rem; }
+.kv-list .row span:first-child { color: var(--muted-fg); }
+.kv-list .row span:last-child { font-variant-numeric: tabular-nums; text-align: right; }
+
+/* --- Barres horizontales (répartition par membre, CC empirique/théorique/
+   mélangé) : comparaison visuelle immédiate, remplace les sous-lignes texte
+   (bug corrigé : l'ancienne `.sub` en `display:block` cassait l'alignement
+   label/valeur d'une cellule de table, retour utilisateur 2026-07-18). --- */
+.bar-group { display: flex; flex-direction: column; gap: 0.6rem; }
+.bar-group + .bar-group { margin-top: 0.85rem; }
+.bar-row { display: grid; grid-template-columns: 6rem 1fr auto; align-items: center; gap: 0.6rem; }
+.bar-row .bar-label {
+  color: var(--muted-fg); font-size: 0.78rem; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.bar-track {
+  position: relative; height: 0.5rem; background: var(--muted);
+  border-radius: 9999px; overflow: hidden;
+}
+.bar-fill { position: absolute; top: 0; left: 0; height: 100%; border-radius: 9999px; background: var(--accent); }
+.bar-fill.pos { background: var(--pos); }
+.bar-fill.neg { background: var(--neg); }
+.bar-row .bar-value {
+  font-size: 0.8rem; font-variant-numeric: tabular-nums;
+  text-align: right; min-width: 4rem;
+}
+
+/* Barre divergente (centrée sur 0, ex. avantage gold par tranche de temps) :
+   remplit depuis le centre vers la droite (positif, vert) ou la gauche
+   (négatif, rouge), échelle absolue fixe (`GOLD_DIFF_BAR_CAP`). */
+.diverging-bar {
+  position: relative; height: 0.45rem; background: var(--muted);
+  border-radius: 9999px; overflow: hidden; margin-top: 0.3rem;
+}
+.diverging-bar .zero-line { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--border); }
+.diverging-bar .fill { position: absolute; top: 0; height: 100%; }
+.diverging-bar .fill.pos { left: 50%; background: var(--pos); border-radius: 0 9999px 9999px 0; }
+.diverging-bar .fill.neg { right: 50%; background: var(--neg); border-radius: 9999px 0 0 9999px; }
+.gold-diff-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr)); gap: 1rem;
+}
+.gold-diff-grid .cell { font-size: 0.8rem; }
+.gold-diff-grid .cell .label { color: var(--muted-fg); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.gold-diff-grid .cell .value { font-variant-numeric: tabular-nums; font-weight: 600; margin-top: 0.15rem; }
+
 /* --- Tooltips CSS-only (attribut `data-tooltip`, PAS `title`) ---
    `title` déclenche l'infobulle native du navigateur (~1s, invisible tant
    qu'on ne survole pas assez longtemps) : les deux s'affichaient l'une sur

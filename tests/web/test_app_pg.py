@@ -268,7 +268,7 @@ def test_html_pages_render(pg_sync, client):
     assert detail.status_code == 200
     assert "Nocturne" in detail.text
     assert "Détail du calcul théorique" in detail.text
-    assert "Mélangé (recommandé)" in detail.text
+    assert "Mélangé" in detail.text
     assert "Meilleurs alliés" in detail.text
     assert "+1.50 %" in detail.text  # card Scaling (0.015 → signed_pct(2))
     assert "/duo/jgl_mid/1/2" in detail.text  # lien depuis les duos internes

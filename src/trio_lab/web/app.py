@@ -51,6 +51,9 @@ TEAM_POSITION_TO_DMG_PER_GOLD_FIELD = {
     "MIDDLE": "mid_dmg_per_gold",
     "UTILITY": "sup_dmg_per_gold",
 }
+# Échelle fixe (pas relative au trio affiché) des barres d'avantage gold : un
+# écart au-delà sature la barre à 100 %, mais le nombre affiché reste exact.
+GOLD_DIFF_BAR_CAP = 2500
 COUNTERS_SHOWN = 10  # pires et meilleurs matchups affichés sur la page détail
 ALLIES_SHOWN = 10  # meilleurs alliés Top/ADC affichés sur la page détail
 DUO_BEST_TRIOS_SHOWN = 10  # meilleurs 3e membres affichés sur la page détail duo
@@ -110,6 +113,26 @@ def _fmt_duration(value: float | None) -> str:
         return "—"
     minutes, seconds = divmod(int(value), 60)
     return f"{minutes}:{seconds:02d}"
+
+
+def _bar_pct(value: float | None, siblings: list[float | None]) -> float:
+    """Largeur de barre (0-100) : `value` proportionnel au max des `siblings`
+    (None ignorés). Utilisé pour comparer des membres entre eux (CC, dégâts/
+    gold, wards) — l'échelle est relative au trio/duo affiché, pas absolue."""
+    if value is None:
+        return 0.0
+    reference = max((s for s in siblings if s is not None), default=0.0)
+    if reference <= 0:
+        return 0.0
+    return max(0.0, min(100.0, 100 * value / reference))
+
+
+def _bar_pct_abs(value: float | None, cap: float) -> float:
+    """Largeur de barre (0-100) sur une échelle absolue fixe : |value| ÷ `cap`,
+    saturée à 100 au-delà (le nombre affiché à côté reste, lui, non plafonné)."""
+    if value is None:
+        return 0.0
+    return max(0.0, min(100.0, 100 * abs(value) / cap))
 
 
 def _fmt_bytes(value: int | None) -> str:
@@ -172,6 +195,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         return int((_HERE / "static" / filename).stat().st_mtime)
 
     templates.env.globals["static_version"] = static_version
+    templates.env.globals["gold_diff_bar_cap"] = GOLD_DIFF_BAR_CAP
     templates.env.filters.update(
         pct=_fmt_pct,
         pct100=_fmt_pct100,
@@ -181,6 +205,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         duration=_fmt_duration,
         since=_fmt_since,
         bytes=_fmt_bytes,
+        barpct=_bar_pct,
+        barpct_abs=_bar_pct_abs,
     )
     state = {"champions": champion_index}
 

@@ -40,75 +40,95 @@
 
 <section>
   <h2>Avantage gold du trio</h2>
-  <table class="narrow">
-    <thead><tr>{% for m in stats.gold_diff %}<th>{{ m }} min</th>{% endfor %}</tr></thead>
-    <tbody><tr>
-      {% for m, v in stats.gold_diff.items() %}
-      <td class="{{ 'pos' if v and v > 0 else 'neg' if v and v < 0 }}">{{ v | signed_int }}</td>
-      {% endfor %}
-    </tr></tbody>
-  </table>
+  <div class="gold-diff-grid">
+    {% for m, v in stats.gold_diff.items() %}
+    <div class="cell">
+      <div class="label">{{ m }} min</div>
+      <div class="value {{ 'pos' if v and v > 0 else 'neg' if v and v < 0 }}">{{ v | signed_int }}</div>
+      <div class="diverging-bar">
+        <div class="zero-line"></div>
+        {% if v %}
+        <div class="fill {{ 'pos' if v > 0 else 'neg' }}" style="width: {{ (v | barpct_abs(gold_diff_bar_cap)) / 2 }}%"></div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
 </section>
 
-<section class="columns">
-  <div>
-    <h2>Objectifs</h2>
-    <table class="narrow kv">
-      <tr><td>Grubs pris (moy.)</td><td>{{ stats.grubs_taken | num }}</td></tr>
-      <tr><td>Héraut</td><td>{{ stats.herald_taken | pct }}</td></tr>
-      <tr><td>Drakes / min</td><td>{{ stats.drakes_taken | num(2) }}</td></tr>
-      <tr><td>Âme obtenue</td><td>{{ stats.soul_taken | pct }}</td></tr>
-      <tr><td>WR avec l'âme</td><td>{{ stats.wr_with_soul | pct }}</td></tr>
-      <tr><td>WR sans l'âme</td><td>{{ stats.wr_without_soul | pct }}</td></tr>
-      <tr><td>Premier Nashor</td><td>{{ stats.nashor_first | pct }}</td></tr>
-      <tr><td>Timing 1er Nashor</td><td>{{ stats.nashor_first_s | duration }}</td></tr>
-      <tr><td>Première tour</td><td>{{ stats.first_tower | pct }}</td></tr>
-      <tr><td>Tours détruites (moy.)</td><td>{{ stats.towers_destroyed | num }}</td></tr>
-      <tr><td>Plaques (moy.)</td><td>{{ stats.plates_taken | num }}</td></tr>
-    </table>
+<div class="stat-grid">
+  <div class="card">
+    <h3>Objectifs</h3>
+    <div class="kv-list">
+      <div class="row"><span>Grubs pris (moy.)</span><span>{{ stats.grubs_taken | num }}</span></div>
+      <div class="row"><span>Héraut</span><span>{{ stats.herald_taken | pct }}</span></div>
+      <div class="row"><span>Drakes / min</span><span>{{ stats.drakes_taken | num(2) }}</span></div>
+      <div class="row"><span>Âme obtenue</span><span>{{ stats.soul_taken | pct }}</span></div>
+      <div class="row"><span>WR avec l'âme</span><span>{{ stats.wr_with_soul | pct }}</span></div>
+      <div class="row"><span>WR sans l'âme</span><span>{{ stats.wr_without_soul | pct }}</span></div>
+      <div class="row"><span>Premier Nashor</span><span>{{ stats.nashor_first | pct }}</span></div>
+      <div class="row"><span>Timing 1er Nashor</span><span>{{ stats.nashor_first_s | duration }}</span></div>
+      <div class="row"><span>Première tour</span><span>{{ stats.first_tower | pct }}</span></div>
+      <div class="row"><span>Tours détruites (moy.)</span><span>{{ stats.towers_destroyed | num }}</span></div>
+      <div class="row"><span>Plaques (moy.)</span><span>{{ stats.plates_taken | num }}</span></div>
+    </div>
   </div>
-  <div>
-    <h2>Combat & vision</h2>
-    <table class="narrow kv">
-      <tr><td>First blood (trio)</td><td>{{ stats.first_blood_trio | pct }}</td></tr>
-      <tr><td>Kill participation &lt; 15 min</td><td>{{ stats.kill_participation_pre15 | pct }}</td></tr>
-      <tr><td>Part des dégâts de l'équipe</td><td>{{ stats.damage_share | pct }}</td></tr>
-      <tr data-tooltip="Dégâts aux champions ÷ gold gagné, par membre : met en avant un champion qui rend beaucoup avec peu de ressources, indépendamment de la priorité qu'on lui donne." aria-label="Dégâts aux champions ÷ gold gagné, par membre : met en avant un champion qui rend beaucoup avec peu de ressources, indépendamment de la priorité qu'on lui donne.">
-        <td>Dégâts / gold, par membre</td><td></td>
-      </tr>
-      <tr><td class="sub">&nbsp;&nbsp;{{ jgl.name }} (jungle)</td><td class="sub">{{ stats.jgl_dmg_per_gold | num(2) }}</td></tr>
-      <tr><td class="sub">&nbsp;&nbsp;{{ mid.name }} (mid)</td><td class="sub">{{ stats.mid_dmg_per_gold | num(2) }}</td></tr>
-      <tr><td class="sub">&nbsp;&nbsp;{{ sup.name }} (support)</td><td class="sub">{{ stats.sup_dmg_per_gold | num(2) }}</td></tr>
-      <tr><td>Score de vision (trio, par minute)</td><td>{{ stats.vision_score | num(2) }}</td></tr>
-      <tr><td class="sub">&nbsp;&nbsp;dont wards posés</td><td class="sub">{{ stats.wards_placed | num(2) }} /min</td></tr>
-      <tr><td class="sub">&nbsp;&nbsp;dont wards détruits</td><td class="sub">{{ stats.wards_killed | num(2) }} /min</td></tr>
-      <tr data-tooltip="Écart de CS jungle du jungler vs le jungler adverse à la 15e minute (jungleMinionsKilled de la timeline) : signal de domination early jungle (invades, pathing), avant que les rotations macro ne redistribuent le farm." aria-label="Écart de CS jungle du jungler vs le jungler adverse à la 15e minute (jungleMinionsKilled de la timeline) : signal de domination early jungle (invades, pathing), avant que les rotations macro ne redistribuent le farm.">
-        <td>CS jungle vs adverse à 15 min</td><td class="{{ 'pos' if stats.jgl_cs_diff_15 and stats.jgl_cs_diff_15 > 0 else 'neg' if stats.jgl_cs_diff_15 and stats.jgl_cs_diff_15 < 0 }}">{{ stats.jgl_cs_diff_15 | signed_int }}</td>
-      </tr>
-      <tr><td>CC infligé, mesuré en jeu (Σ timeCCingOthers, par minute)</td><td>{{ stats.cc_time_s | num(2) }} s/min</td></tr>
-      <tr><td class="sub">&nbsp;&nbsp;dont {{ jgl.name }} (jungle)</td><td class="sub">{{ stats.jgl_cc_time_s | num(2) }} s/min</td></tr>
-      <tr><td class="sub">&nbsp;&nbsp;dont {{ mid.name }} (mid)</td><td class="sub">{{ stats.mid_cc_time_s | num(2) }} s/min</td></tr>
-      <tr><td class="sub">&nbsp;&nbsp;dont {{ sup.name }} (support)</td><td class="sub">{{ stats.sup_cc_time_s | num(2) }} s/min</td></tr>
-    </table>
-    <h2>CC — empirique vs théorique <span class="meta">(0-100, les 3 valeurs sont comparables entre elles)</span></h2>
-    <p class="meta">L'empirique vient du chrono du jeu : le temps réel où ce trio a gardé des
-      ennemis sous contrôle sur les games déjà jouées, rapporté à la minute (pour ne pas favoriser
-      les trios aux games plus longues). Le théorique est calculé depuis les sorts
-      des champions (durée des stuns, roots, etc.), sans regarder aucune game jouée. Le mélangé
-      combine les deux — c'est le score à retenir : il privilégie l'empirique quand le trio est
-      beaucoup joué, et le théorique quand il l'est peu (pas encore assez de games pour un chrono
-      fiable).</p>
-    <table class="narrow kv">
-      <tr data-tooltip="Mesuré directement sur les games jouées (Σ timeCCingOthers du trio, par minute), plafonné à 6 s/min puis ramené sur 100." aria-label="Mesuré directement sur les games jouées (Σ timeCCingOthers du trio, par minute), plafonné à 6 s/min puis ramené sur 100.">
-        <td>Empirique</td><td>{{ cc_scores.empirical_pct | pct100 }}</td>
-      </tr>
-      <tr data-tooltip="Score de kit (durées/zones/fiabilité des sorts, cf. détail ci-dessous) ramené sur 100 via un repère fixe : 3 × le score max d'un champion (plafond mathématique, jamais atteignable en pratique)." aria-label="Score de kit (durées/zones/fiabilité des sorts, cf. détail ci-dessous) ramené sur 100 via un repère fixe : 3 × le score max d'un champion (plafond mathématique, jamais atteignable en pratique).">
-        <td>Théorique</td><td>{{ cc_scores.theoretical_pct | pct100 }}</td>
-      </tr>
-      <tr data-tooltip="Le score à retenir : combine les deux, en donnant plus de poids à l'empirique quand le trio est beaucoup joué." aria-label="Le score à retenir : combine les deux, en donnant plus de poids à l'empirique quand le trio est beaucoup joué.">
-        <td><strong>Mélangé (recommandé)</strong></td><td><strong>{{ cc_scores.blended_pct | pct100 }}</strong></td>
-      </tr>
-    </table>
+
+  <div class="card">
+    <h3>Combat</h3>
+    <div class="kv-list">
+      <div class="row"><span>First blood (trio)</span><span>{{ stats.first_blood_trio | pct }}</span></div>
+      <div class="row"><span>Kill participation &lt; 15 min</span><span>{{ stats.kill_participation_pre15 | pct }}</span></div>
+      <div class="row"><span>Part des dégâts de l'équipe</span><span>{{ stats.damage_share | pct }}</span></div>
+      <div class="row">
+        <span data-tooltip="Écart de CS jungle du jungler vs le jungler adverse à la 15e minute (jungleMinionsKilled de la timeline) : signal de domination early jungle (invades, pathing), avant que les rotations macro ne redistribuent le farm." aria-label="Écart de CS jungle du jungler vs le jungler adverse à la 15e minute (jungleMinionsKilled de la timeline) : signal de domination early jungle (invades, pathing), avant que les rotations macro ne redistribuent le farm.">CS jungle vs adverse à 15 min</span>
+        <span class="{{ 'pos' if stats.jgl_cs_diff_15 and stats.jgl_cs_diff_15 > 0 else 'neg' if stats.jgl_cs_diff_15 and stats.jgl_cs_diff_15 < 0 }}">{{ stats.jgl_cs_diff_15 | signed_int }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Dégâts / gold, par membre</h3>
+    <p class="meta" data-tooltip="Dégâts aux champions ÷ gold gagné : met en avant un champion qui rend beaucoup avec peu de ressources, indépendamment de la priorité qu'on lui donne." aria-label="Dégâts aux champions ÷ gold gagné : met en avant un champion qui rend beaucoup avec peu de ressources, indépendamment de la priorité qu'on lui donne.">efficacité de ressources</p>
+    {% set dpg = [stats.jgl_dmg_per_gold, stats.mid_dmg_per_gold, stats.sup_dmg_per_gold] %}
+    <div class="bar-group">
+      <div class="bar-row"><span class="bar-label">{{ jgl.name }}</span><div class="bar-track"><div class="bar-fill" style="width: {{ stats.jgl_dmg_per_gold | barpct(dpg) }}%"></div></div><span class="bar-value">{{ stats.jgl_dmg_per_gold | num(2) }}</span></div>
+      <div class="bar-row"><span class="bar-label">{{ mid.name }}</span><div class="bar-track"><div class="bar-fill" style="width: {{ stats.mid_dmg_per_gold | barpct(dpg) }}%"></div></div><span class="bar-value">{{ stats.mid_dmg_per_gold | num(2) }}</span></div>
+      <div class="bar-row"><span class="bar-label">{{ sup.name }}</span><div class="bar-track"><div class="bar-fill" style="width: {{ stats.sup_dmg_per_gold | barpct(dpg) }}%"></div></div><span class="bar-value">{{ stats.sup_dmg_per_gold | num(2) }}</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Vision <span class="meta">(par minute)</span></h3>
+    <p class="big-number" style="font-size: 1.3rem;">{{ stats.vision_score | num(2) }}</p>
+    <p class="meta">score de vision, trio</p>
+    {% set wards = [stats.wards_placed, stats.wards_killed] %}
+    <div class="bar-group">
+      <div class="bar-row"><span class="bar-label">Posés</span><div class="bar-track"><div class="bar-fill" style="width: {{ stats.wards_placed | barpct(wards) }}%"></div></div><span class="bar-value">{{ stats.wards_placed | num(2) }}/min</span></div>
+      <div class="bar-row"><span class="bar-label">Détruits</span><div class="bar-track"><div class="bar-fill" style="width: {{ stats.wards_killed | barpct(wards) }}%"></div></div><span class="bar-value">{{ stats.wards_killed | num(2) }}/min</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>CC empirique vs théorique <span class="meta">(0-100)</span></h3>
+    <div class="bar-group">
+      <div class="bar-row">
+        <span class="bar-label" data-tooltip="Mesuré directement sur les games jouées (Σ timeCCingOthers du trio, par minute), plafonné à 6 s/min puis ramené sur 100." aria-label="Mesuré directement sur les games jouées (Σ timeCCingOthers du trio, par minute), plafonné à 6 s/min puis ramené sur 100.">Empirique</span><div class="bar-track"><div class="bar-fill" style="width: {{ cc_scores.empirical_pct or 0 }}%"></div></div><span class="bar-value">{{ cc_scores.empirical_pct | pct100 }}</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label" data-tooltip="Score de kit (durées/zones/fiabilité des sorts, cf. détail ci-dessous) ramené sur 100 via un repère fixe : 3 × le score max d'un champion (plafond mathématique, jamais atteignable en pratique)." aria-label="Score de kit (durées/zones/fiabilité des sorts, cf. détail ci-dessous) ramené sur 100 via un repère fixe : 3 × le score max d'un champion (plafond mathématique, jamais atteignable en pratique).">Théorique</span><div class="bar-track"><div class="bar-fill" style="width: {{ cc_scores.theoretical_pct or 0 }}%"></div></div><span class="bar-value">{{ cc_scores.theoretical_pct | pct100 }}</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label" data-tooltip="Le score à retenir : combine les deux, en donnant plus de poids à l'empirique quand le trio est beaucoup joué." aria-label="Le score à retenir : combine les deux, en donnant plus de poids à l'empirique quand le trio est beaucoup joué."><strong>Mélangé</strong></span><div class="bar-track"><div class="bar-fill" style="width: {{ cc_scores.blended_pct or 0 }}%"></div></div><span class="bar-value"><strong>{{ cc_scores.blended_pct | pct100 }}</strong></span>
+      </div>
+    </div>
+    <h3 style="margin-top: 1rem;">CC par membre <span class="meta">(s/min, empirique)</span></h3>
+    {% set cc = [stats.jgl_cc_time_s, stats.mid_cc_time_s, stats.sup_cc_time_s] %}
+    <div class="bar-group">
+      <div class="bar-row"><span class="bar-label">{{ jgl.name }}</span><div class="bar-track"><div class="bar-fill" style="width: {{ stats.jgl_cc_time_s | barpct(cc) }}%"></div></div><span class="bar-value">{{ stats.jgl_cc_time_s | num(2) }}</span></div>
+      <div class="bar-row"><span class="bar-label">{{ mid.name }}</span><div class="bar-track"><div class="bar-fill" style="width: {{ stats.mid_cc_time_s | barpct(cc) }}%"></div></div><span class="bar-value">{{ stats.mid_cc_time_s | num(2) }}</span></div>
+      <div class="bar-row"><span class="bar-label">{{ sup.name }}</span><div class="bar-track"><div class="bar-fill" style="width: {{ stats.sup_cc_time_s | barpct(cc) }}%"></div></div><span class="bar-value">{{ stats.sup_cc_time_s | num(2) }}</span></div>
+    </div>
     <details>
       <summary class="meta">Détail du calcul théorique (score de kit brut, avant normalisation sur 100)</summary>
       <table class="narrow kv">
@@ -118,23 +138,26 @@
         <tr><td>&nbsp;&nbsp;dont {{ sup.name }} (support)</td><td>{{ cc_theoretical.sup | num(2) }}</td></tr>
       </table>
     </details>
-    <h2>Duos internes</h2>
-    <table class="narrow">
-      <thead><tr><th>Duo</th><th>Games</th><th>WR</th><th>Synergie</th></tr></thead>
-      <tbody>
-        {% for d in duos %}
-        <tr>
-          <td class="trio-cell"><a href="/duo/{{ d.roles }}/{{ d.champ_a }}/{{ d.champ_b }}?window={{ window | urlencode }}&platform={{ platform | urlencode }}">{{ champ(d.champ_a).name }} + {{ champ(d.champ_b).name }}</a></td>
-          <td>{{ d.games }}</td>
-          <td>{{ d.wr | pct }}</td>
-          <td class="{{ 'pos' if d.synergy > 0 else 'neg' if d.synergy < 0 }}">{{ d.synergy | signed_pct }}</td>
-        </tr>
-        {% else %}
-        <tr><td colspan="4" class="empty">Aucun duo scoré.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
   </div>
+</div>
+
+<section>
+  <h2>Duos internes</h2>
+  <table class="narrow">
+    <thead><tr><th>Duo</th><th>Games</th><th>WR</th><th>Synergie</th></tr></thead>
+    <tbody>
+      {% for d in duos %}
+      <tr>
+        <td class="trio-cell"><a href="/duo/{{ d.roles }}/{{ d.champ_a }}/{{ d.champ_b }}?window={{ window | urlencode }}&platform={{ platform | urlencode }}">{{ champ(d.champ_a).name }} + {{ champ(d.champ_b).name }}</a></td>
+        <td>{{ d.games }}</td>
+        <td>{{ d.wr | pct }}</td>
+        <td class="{{ 'pos' if d.synergy > 0 else 'neg' if d.synergy < 0 }}">{{ d.synergy | signed_pct }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="empty">Aucun duo scoré.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </section>
 
 <section class="columns">
