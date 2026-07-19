@@ -85,6 +85,13 @@ DRAFT_RECOMMENDED_COUNT = 12
 # connu) — mêmes games_eff que le tier 'moyen' des matchups (score_matchup),
 # affiché uniquement quand aucun ennemi même rôle n'est verrouillé.
 DRAFT_SAFETY_MIN_GAMES_EFF = 50.0
+# Delta à partir duquel un matchup compte comme un "contre notable" pour le
+# signal de sécurité blind pick (retour utilisateur 2026-07-19 : compter les
+# contres plutôt que ne montrer que le pire — un champion avec dix contres
+# à -3 % est un risque différent d'un champion avec un seul à -15 %, ce que
+# le pire cas seul ne distingue pas). -3 pts de WR : repère arbitraire mais
+# cohérent avec l'amplitude typique des deltas de score_matchup.
+DRAFT_NOTABLE_COUNTER_DELTA = -0.03
 # Libellés lisibles pour le dashboard /insights (synergy.win_factors.FEATURES).
 WIN_FACTOR_LABELS = {
     "team_gold_diff_15": "Avantage gold d'ÉQUIPE à 15 min",
@@ -851,9 +858,10 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             )
             _accumulate(enemy_matchups, "delta", "candidate_champion")
 
-        # Sécurité "blind pick" : pire contre connu, seulement pertinent quand
-        # aucun ennemi même rôle n'est encore verrouillé (sinon le delta du
-        # counter réel prime déjà, cf. `edge`).
+        # Sécurité "blind pick" : pire contre connu + nombre de contres
+        # notables, seulement pertinent quand aucun ennemi même rôle n'est
+        # encore verrouillé (sinon le delta du counter réel prime déjà,
+        # cf. `edge`).
         safety = (
             queries.role_worst_matchups(
                 conn,
@@ -861,6 +869,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 platform,
                 DRAFT_ROLE_TO_TEAM_POSITION[role],
                 min_games_eff=DRAFT_SAFETY_MIN_GAMES_EFF,
+                notable_delta=DRAFT_NOTABLE_COUNTER_DELTA,
             )
             if blind
             else {}

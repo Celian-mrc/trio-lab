@@ -742,8 +742,11 @@ def test_draft_page_blind_pick_shows_worst_matchup_safety(pg_sync, client):
     """Sécurité blind pick (retour utilisateur 2026-07-19, clarification :
     « un blind pick est un pick qui a peu de counter, ou du moins des
     counters qui n'ont pas un énorme winrate contre ce champion ») : quand
-    aucun ennemi même rôle n'est verrouillé, la grille affiche le pire
-    matchup connu de chaque champion (MIN(delta), score_matchup)."""
+    aucun ennemi même rôle n'est verrouillé, la grille affiche le NOMBRE de
+    contres notables (delta ≤ DRAFT_NOTABLE_COUNTER_DELTA) et le pire
+    d'entre eux — pas seulement le pire cas isolé (2e retour utilisateur,
+    2026-07-19 : un champion avec dix contres modérés est un risque
+    différent d'un champion avec un seul contre sévère)."""
     pg_sync.execute(
         "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
         " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
@@ -752,26 +755,40 @@ def test_draft_page_blind_pick_shows_worst_matchup_safety(pg_sync, client):
     )
     pg_sync.execute(
         "INSERT INTO agg_champion (patch, platform, role, champion_id, games, wins)"
-        " VALUES ('16.13', 'euw1', 'JUNGLE', 1, 100, 50)"
+        " VALUES ('16.13', 'euw1', 'JUNGLE', 1, 100, 50),"
+        "        ('16.13', 'euw1', 'JUNGLE', 2, 100, 50),"
+        "        ('16.13', 'euw1', 'JUNGLE', 4, 100, 50)"
     )
     pg_sync.execute(
         "INSERT INTO score_matchup (window_label, platform, role, champ_a, champ_b, games,"
         " games_eff, wr, delta_raw, delta, ci_low, ci_high, tier)"
+        # Champion 1 (Lee Sin) : 1 contre notable (-0.1) + 1 sous le seuil (-0.02).
         " VALUES ('16.13', 'euw1', 'JUNGLE', 1, 5, 60, 60.0, 0.40, -0.1, -0.1, -0.3, 0.1, 'moyen'),"
         "        ('16.13', 'euw1', 'JUNGLE', 1, 6, 60, 60.0, 0.48, -0.02, -0.02, -0.2,"
+        " 0.2, 'moyen'),"
+        # Champion 2 (Ahri) : données de matchup, mais rien sous le seuil.
+        "        ('16.13', 'euw1', 'JUNGLE', 2, 5, 60, 60.0, 0.49, -0.01, -0.01, -0.2,"
         " 0.2, 'moyen')"
+        # Champion 4 (Vi) : aucune ligne score_matchup — pas de données.
     )
     resp = client.get("/draft", params={"active": "blue_jgl"})
     assert resp.status_code == 200
     assert 'class="badge-blind"' in resp.text
-    assert "pire contre -10.0 %" in resp.text  # le pire des deux contres (-0.1 < -0.02)
+    assert '<span class="sub neg">1 contre notable (pire -10.0 %)</span>' in resp.text
+    assert '<span class="sub pos">aucun contre notable</span>' in resp.text
+    assert '<span class="sub meta">pas de données de contre</span>' in resp.text
 
     # Un ennemi jungle verrouillé : la synergie/contre réel prime, la
-    # sécurité blind pick disparaît (elle ne dit rien sur CET adversaire).
+    # sécurité blind pick disparaît (elle ne dit rien sur CET adversaire) —
+    # aucune des 3 lignes de sécurité par champion ne doit plus apparaître
+    # (le paragraphe d'intro, lui, mentionne toujours "contre notable" en
+    # général : on cible les balises par champion, pas le texte libre).
     resp = client.get("/draft", params={"active": "blue_jgl", "red_jgl": "Orianna"})
     assert resp.status_code == 200
     assert 'class="badge-blind"' not in resp.text
-    assert "pire contre" not in resp.text
+    assert 'sub neg">1 contre notable' not in resp.text
+    assert 'class="sub pos">aucun contre notable</span>' not in resp.text
+    assert 'class="sub meta">pas de données de contre</span>' not in resp.text
     assert "pire contre" not in resp.text
 
 

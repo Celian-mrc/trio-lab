@@ -240,13 +240,20 @@ gagner") avec les données déjà en place.
       pick d'un rôle (rien de verrouillé) : repli sur le WR baseline
       (`champion_role_baseline_list`). Candidat sans donnée commune :
       contribution nulle, jamais exclu. Fiabilité grisée sous
-      `DRAFT_MIN_GAMES_EFF` (50), jamais filtrée. **Sécurité blind pick**
-      (retour utilisateur : « un blind pick est un pick qui a peu de
+      `DRAFT_MIN_GAMES_EFF` (50), jamais filtrée. Roster limité aux
+      champions avec ≥ 1 game réelle dans ce rôle (`agg_champion`) — pas de
+      WR inventé sur 0 game ; sur une seule région un rôle inhabituel peut
+      afficher moins de candidats (ex. jungle en KR : 141/173 champions),
+      "toutes régions" donne la couverture la plus large. **Sécurité blind
+      pick** (retour utilisateur : « un blind pick est un pick qui a peu de
       counter, ou dont les counters n'ont pas un énorme WR contre lui ») :
       quand aucun ennemi même rôle n'est verrouillé, chaque candidat affiche
-      son pire matchup connu (`queries.role_worst_matchups`, MIN(delta) sur
-      `score_matchup`, un seul aller-retour par rôle). hx-boost rend chaque
-      pick réactif sans JS custom.
+      le NOMBRE de contres notables (delta ≤ `DRAFT_NOTABLE_COUNTER_DELTA`,
+      -3 pts) et le pire d'entre eux (`queries.role_worst_matchups`, un seul
+      aller-retour par rôle) — pas seulement le pire cas isolé, qui ne
+      distingue pas un champion avec un seul contre sévère d'un champion
+      avec dix contres modérés. hx-boost rend chaque pick réactif sans JS
+      custom.
 - [x] Dashboard "ce qui fait gagner" (2026-07-19, reconstruit le même jour
       suite au retour « pourquoi ça ne parle que du trio jgl/mid/sup ? ») :
       `/insights` — régression logistique multi-variables

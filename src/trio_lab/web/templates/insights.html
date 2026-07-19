@@ -2,11 +2,18 @@
 {% block title %}Ce qui fait gagner — Trio Lab{% endblock %}
 {% block content %}
 <h1>Ce qui fait gagner</h1>
-<p class="meta">Régression logistique multi-variables sur les games de la fenêtre (toutes régions
-  combinées, <strong>équipe complète des 5 rôles</strong> — top/jungle/mid/adc/support, pas
-  seulement jungle/mid/support) : effet propre de chaque stat en contrôlant les autres, pas une
-  simple corrélation brute. Odds ratio ×N = N fois plus de chances de gagner (variables continues :
-  pour +1 écart-type ; booléennes : présent vs absent). ×1 = aucun effet, sous 1 = effet négatif.</p>
+<p class="meta">Ce tableau classe les facteurs de jeu selon leur poids réel dans la victoire, sur
+  toutes les games de la fenêtre (<strong>équipe complète des 5 rôles</strong> — top/jungle/mid/adc/
+  support, pas seulement jungle/mid/support). « Poids réel » : chaque facteur est isolé des autres,
+  pour ne pas confondre corrélation et cause — ex. les équipes qui prennent l'âme de dragon gagnent
+  plus, mais est-ce l'âme qui fait gagner ou juste qu'elles étaient déjà en avance ? Ce calcul essaie
+  de démêler les deux plutôt que de tout mettre sur le même plan.</p>
+<p class="meta"><strong>Comment lire les chiffres</strong> : ×N veut dire « N fois plus de chances de
+  gagner que la moyenne quand ce facteur est marqué ». ×1 = aucun effet. Au-dessus de 1 (vert) = ce
+  facteur aide à gagner, plus le nombre est grand plus il pèse lourd. En dessous de 1 (rouge) = ce
+  facteur est associé à la défaite. Exemple : « Avantage gold d'équipe à 15 min ×4.08 » veut dire
+  qu'une équipe nettement en avance au gold à 15 min a environ 4 fois plus de chances de gagner que
+  la moyenne — de loin le facteur le plus déterminant du tableau.</p>
 <p class="meta"><strong>Limites</strong> : données solo queue Emerald+, pas scrims/pro — les
   tendances early (gold, objectifs) transfèrent généralement bien, les choix de champions bien
   moins. Certains signaux (CS jungle) sont en partie définitionnels du gold lui-même : corrélation,

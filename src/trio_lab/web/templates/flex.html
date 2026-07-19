@@ -5,12 +5,14 @@
 <p class="meta">Détecte les champions joués dans un rôle secondaire réel (pas un troll pick isolé)
   avec un profil de ressources qui s'écarte de la moyenne du rôle — signal de méta hybride (ex. un
   bruiser/skirmisher en support), pas forcément un artefact de données.</p>
-<p class="meta"><strong>Lecture</strong> : « rôle secondaire » = un rôle où ce champion a ≥ 100
-  games et ≥ 5 % de son temps de jeu, mais pas son rôle principal. « Gold@15 vs moyenne du rôle » =
-  son gold moyen à 15 min dans ce rôle, divisé par le gold moyen de TOUS les champions dans ce même
-  rôle. ×1,08 = 8 % au-dessus de la moyenne (joue plus « carry » que la norme du rôle) ; ×0,90 = 10 %
-  en-dessous. Seuls les écarts ≥ 5 % sont affichés — en-dessous, le profil est essentiellement celui
-  du rôle, pas un vrai signal.</p>
+<p class="meta"><strong>Lecture</strong> : « rôle secondaire » (colonne du même nom) = un rôle où ce
+  champion a ≥ 100 games et ≥ 5 % de son temps de jeu, mais pas son rôle principal. « Gold@15 vs
+  moyenne du rôle secondaire » compare toujours au RÔLE SECONDAIRE (pas au rôle principal) : son
+  gold moyen à 15 min quand il est joué dans ce rôle secondaire, divisé par le gold moyen de TOUS les
+  champions dans ce même rôle secondaire. Ex. Twitch en Support : on compare son gold à la moyenne
+  des SUPPORTS, pas à la moyenne des ADC. ×1,08 = 8 % au-dessus de la moyenne du rôle secondaire
+  (joue plus « carry » que la norme de ce rôle) ; ×0,90 = 10 % en-dessous. Seuls les écarts ≥ 5 %
+  sont affichés — en-dessous, le profil est essentiellement celui du rôle, pas un vrai signal.</p>
 <p class="meta"><strong>Limite</strong> : le ratio ne porte que sur match_role_stats, déployée le
   19/07/2026 — la profondeur grandit avec le temps, les chiffres sont encore jeunes.</p>
 
@@ -48,7 +50,7 @@
       <th>Rôle principal</th>
       <th>Rôle secondaire</th>
       <th data-tooltip="Part des games de ce champion jouées dans ce rôle secondaire, sur l'historique complet retenu (agg_champion)." aria-label="Part des games de ce champion jouées dans ce rôle secondaire, sur l'historique complet retenu (agg_champion).">Part des games</th>
-      <th data-tooltip="Gold moyen à 15 min de ce champion dans ce rôle, comparé à la moyenne de tous les champions dans ce rôle." aria-label="Gold moyen à 15 min de ce champion dans ce rôle, comparé à la moyenne de tous les champions dans ce rôle.">Gold@15 vs moyenne du rôle</th>
+      <th data-tooltip="Gold moyen à 15 min de ce champion dans son rôle SECONDAIRE (colonne précédente), comparé à la moyenne de tous les champions dans ce même rôle secondaire — pas le rôle principal." aria-label="Gold moyen à 15 min de ce champion dans son rôle SECONDAIRE (colonne précédente), comparé à la moyenne de tous les champions dans ce même rôle secondaire — pas le rôle principal.">Gold@15 vs moyenne du rôle secondaire</th>
       <th>Dégâts/gold</th>
     </tr>
   </thead>

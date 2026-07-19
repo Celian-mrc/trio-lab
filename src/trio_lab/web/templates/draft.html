@@ -4,15 +4,19 @@
 <h1>Simulateur de draft</h1>
 <p class="meta">Simule un draft complet façon champ select : verrouille les picks des deux équipes,
   rôle par rôle. Le rôle actif est surligné à gauche/droite ; la grille ci-dessous liste
-  <strong>tous les champions du rôle</strong>, triés par valeur ajoutée par rapport à ce qui est déjà
-  posé — synergie avec les alliés verrouillés + contre l'adversaire même rôle s'il est déjà connu. Les
-  {{ draft_recommended_count }} premiers sont marqués « Recommandé » ; le reste du roster reste
-  cliquable, rien n'est masqué. État entièrement dans l'URL : partage le lien pour reprendre où tu en
-  es.</p>
+  <strong>tous les champions ayant au moins une game jouée dans ce rôle</strong> sur la fenêtre et la
+  région choisies (pas de WR inventé sur 0 game — sur une seule région et un rôle inhabituel, le
+  roster peut être incomplet ; passer sur « toutes régions » donne la couverture la plus large),
+  triés par valeur ajoutée par rapport à ce qui est déjà posé — synergie avec les alliés verrouillés +
+  contre l'adversaire même rôle s'il est déjà connu. Les {{ draft_recommended_count }} premiers sont
+  marqués « Recommandé » ; le reste du roster reste cliquable, rien n'est masqué. État entièrement
+  dans l'URL : partage le lien pour reprendre où tu en es.</p>
 <p class="meta"><strong>Blind pick</strong> : tant qu'aucun adversaire même rôle n'est verrouillé, le
-  tri ne porte que sur la synergie côté allié (pas de contre à calculer) — la grille affiche alors le
-  pire matchup connu de chaque champion (le contre le plus défavorable parmi ceux recensés), pour
-  repérer les picks à risque avant de les locker.</p>
+  tri ne porte que sur la synergie côté allié (pas de contre à calculer) — la grille affiche alors,
+  pour chaque champion, le NOMBRE de contres notables connus (delta ≤ 3 pts de WR contre lui) et le
+  pire d'entre eux. Un champion avec 0 contre notable encaisse mal aucun contre fort ; un champion
+  avec plusieurs contres notables est un blind pick plus risqué, même si son pire cas n'est pas
+  extrême.</p>
 
 <form method="get" action="/draft" class="filters">
   <label>Fenêtre
@@ -115,10 +119,12 @@
       <span class="meta">{{ r.wr | pct }} WR</span>
       {% endif %}
       {% if grid.blind %}
-      {% if r.safety is not none %}
-      <span class="sub neg">pire contre {{ r.safety | signed_pct }}</span>
+      {% if r.safety is none %}
+      <span class="sub meta">pas de données de contre</span>
+      {% elif r.safety.notable_counters > 0 %}
+      <span class="sub neg">{{ r.safety.notable_counters }} contre{{ 's' if r.safety.notable_counters != 1 else '' }} notable{{ 's' if r.safety.notable_counters != 1 else '' }} (pire {{ r.safety.worst_delta | signed_pct }})</span>
       {% else %}
-      <span class="sub meta">pas de contre notable</span>
+      <span class="sub pos">aucun contre notable</span>
       {% endif %}
       {% endif %}
     </a>

@@ -402,17 +402,28 @@ def matchup_candidates(
 
 
 def role_worst_matchups(
-    conn: psycopg.Connection, window: str, platform: str, role: str, *, min_games_eff: float
-) -> dict[int, float]:
-    """Pire matchup connu (MIN(delta)) par champion pour un rôle — signal de
-    risque « blind pick » (simulateur de draft, Phase 8) : un champion dont
-    le pire cas reste proche de 0 encaisse mal aucun contre fort, contrairement
-    à un champion avec un pire cas très négatif. Un seul aller-retour par rôle
-    (pas par champion candidat), donc utilisable sur une grille complète."""
+    conn: psycopg.Connection,
+    window: str,
+    platform: str,
+    role: str,
+    *,
+    min_games_eff: float,
+    notable_delta: float,
+) -> dict[int, dict]:
+    """Exposition aux contres par champion pour un rôle — signal de risque
+    « blind pick » (simulateur de draft, Phase 8, retour utilisateur : « un
+    blind pick est un pick qui a peu de counter, ou dont les counters n'ont
+    pas un énorme WR contre lui »). `worst_delta` = pire matchup connu
+    (MIN(delta)) ; `notable_counters` = NOMBRE de matchups au moins aussi
+    mauvais que `notable_delta` — un champion avec un seul pire cas sévère
+    est un risque différent d'un champion avec dix contres modérés, ce que
+    `worst_delta` seul ne distingue pas. Un seul aller-retour par rôle (pas
+    par champion candidat), donc utilisable sur une grille complète."""
     with conn.cursor(row_factory=dict_row) as cur:
         rows = cur.execute(
             """
-            SELECT champ_a AS candidate_champion, min(delta) AS worst_delta
+            SELECT champ_a AS candidate_champion, min(delta) AS worst_delta,
+                   count(*) FILTER (WHERE delta <= %(notable_delta)s) AS notable_counters
             FROM score_matchup
             WHERE window_label = %(window)s AND platform = %(platform)s AND role = %(role)s
               AND games_eff >= %(min_games_eff)s
@@ -423,9 +434,16 @@ def role_worst_matchups(
                 "platform": platform,
                 "role": role,
                 "min_games_eff": min_games_eff,
+                "notable_delta": notable_delta,
             },
         ).fetchall()
-    return {r["candidate_champion"]: r["worst_delta"] for r in rows}
+    return {
+        r["candidate_champion"]: {
+            "worst_delta": r["worst_delta"],
+            "notable_counters": r["notable_counters"],
+        }
+        for r in rows
+    }
 
 
 def champion_role_baseline_list(
