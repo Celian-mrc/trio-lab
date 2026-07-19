@@ -638,3 +638,66 @@ def test_api_status_reports_collection(pg_sync, client):
     assert payload["journal"] == {"excluded": 1}
     # Les 2 matchs semés datent d'aujourd'hui : présents dans la vue 7 jours.
     assert sum(d["matches"] for d in payload["matches_per_day"]) == 2
+
+
+def test_draft_page_combines_synergy_and_counter(pg_sync, client):
+    """Simulateur de draft (Phase 8) : edge = Σ synergie alliés + counter
+    ennemi même rôle. Lee Sin (jgl, id 1), Ahri (mid, id 2), Vi (mid, id 4)."""
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    pg_sync.execute(
+        "INSERT INTO agg_champion (patch, platform, role, champion_id, games, wins)"
+        " VALUES ('16.13', 'euw1', 'MIDDLE', 2, 100, 55)"
+    )
+    pg_sync.execute(
+        "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
+        " games_eff, wr, synergy, ci_low, ci_high, tier)"
+        " VALUES ('16.13', 'euw1', 'jgl_mid', 1, 2, 60, 60.0, 0.6, 0.08, 0.4, 0.8, 'moyen')"
+    )
+    pg_sync.execute(
+        "INSERT INTO score_matchup (window_label, platform, role, champ_a, champ_b, games,"
+        " games_eff, wr, delta_raw, delta, ci_low, ci_high, tier)"
+        " VALUES ('16.13', 'euw1', 'MIDDLE', 2, 4, 60, 60.0, 0.55, 0.02, 0.02, 0.3, 0.7, 'moyen')"
+    )
+
+    # 1er pick, aucun allié/ennemi verrouillé : repli sur le WR baseline.
+    resp = client.get("/draft")
+    assert resp.status_code == 200
+    assert "Ahri" in resp.text
+    assert "55.0 % WR" in resp.text
+
+    # Allié jungle verrouillé (Lee Sin) : suggestion mid par synergie seule.
+    resp = client.get("/draft", params={"blue_jgl": "Lee Sin"})
+    assert resp.status_code == 200
+    assert "+8.0 %" in resp.text  # synergy .08
+
+    # + ennemi mid verrouillé (Vi) : edge cumulé synergie + counter.
+    resp = client.get("/draft", params={"blue_jgl": "Lee Sin", "red_mid": "Vi"})
+    assert resp.status_code == 200
+    assert "+10.0 %" in resp.text  # .08 + .02
+
+    # Ban : Ahri (seule candidate connue pour mid) disparaît des suggestions,
+    # y compris du repli baseline.
+    resp = client.get("/draft", params={"blue_jgl": "Lee Sin", "red_mid": "Vi", "bans": "Ahri"})
+    assert resp.status_code == 200
+    assert "Aucune suggestion" in resp.text
+
+
+def test_draft_page_locked_slot_and_clear_link(pg_sync, client):
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    resp = client.get("/draft", params={"blue_jgl": "Lee Sin"})
+    assert resp.status_code == 200
+    assert "Lee Sin" in resp.text
+    assert 'class="draft-clear"' in resp.text
+    # Le slot bleu jungle est verrouillé : pas de champ de recherche visible
+    # pour lui (il reste en hidden dans les formulaires des autres slots).
+    assert 'name="blue_jgl" list="champion-names"' not in resp.text

@@ -217,3 +217,28 @@ avec le même niveau de détail que les pages trio/duo existantes.
       `agg_duo`/`score_duo`, pas d'explosion. Branché dans le cycle service
       et la rétention. CLAUDE.md nuancé : counter trio toujours exclu,
       counter 1v1 même rôle OK.
+
+## Phase 8 — Onglet Coach (en cours)
+
+Suite aux recherches sur les outils de draft du marché (ProComps, DraftForge,
+LoLDraftAI, METAsrc Counter Picker) : trio-lab reste le seul à faire de la
+synergie de TRIO, mais peut couvrir le reste (draft, méta, "ce qui fait
+gagner") avec les données déjà en place.
+
+- [x] Simulateur de draft interactif (2026-07-19) : `/draft` — état
+      entièrement dans l'URL (query params, pas de session serveur, même
+      principe que window/platform), 5 rôles × 2 équipes + bans. Pour
+      chaque slot vide : edge = Σ synergie avec les alliés déjà posés
+      (`champion_best_partners`, existant) + delta counter vs l'ennemi même
+      rôle (`queries.matchup_candidates`, nouveau, symétrique de
+      `champion_best_partners`) — même unité (points de WR) donc sommable
+      sans pondération arbitraire. 1er pick d'un rôle (rien de verrouillé) :
+      repli sur le WR baseline (`champion_role_baseline_list`, nouveau).
+      Candidat sans donnée commune : contribution 0, jamais exclu. Fiabilité
+      grisée sous `DRAFT_MIN_GAMES_EFF` (50, cohérent avec le tier "moyen"),
+      jamais filtrée. hx-boost (déjà en place) rend chaque pick réactif sans
+      JS custom.
+- [ ] Dashboard "ce qui fait gagner" (régression logistique + comeback,
+      recherches de cette session) — pas encore exposé en page web.
+- [ ] Détecteur de picks flex/hybrides (profil gold/CC/dmg-per-gold d'un
+      champion entre ses rôles via `match_role_stats`) — pas encore construit.

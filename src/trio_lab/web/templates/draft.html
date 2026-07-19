@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Simulateur de draft — Trio Lab{% endblock %}
+{% block content %}
+<h1>Simulateur de draft</h1>
+<p class="meta">État de la draft dans l'URL (partage le lien pour reprendre où tu en es). Suggestions
+  = synergie avec les alliés déjà posés + contre l'adversaire même rôle (mêmes données que les pages
+  Trios/Duos) — un candidat sans historique commun reste affiché, juste sans avantage chiffré.</p>
+
+<form method="get" action="/draft" class="filters">
+  <label>Fenêtre
+    <select name="window">
+      {% for w in windows %}<option value="{{ w }}" {{ 'selected' if w == window }}>{{ w }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Région
+    <select name="platform">
+      {% for p in platforms %}<option value="{{ p }}" {{ 'selected' if p == platform }}>{{ 'toutes régions' if p == 'all' else p }}</option>{% endfor %}
+    </select>
+  </label>
+  {% for side in ('blue', 'red') %}{% for role in draft_roles %}
+  <input type="hidden" name="{{ side }}_{{ role }}" value="{{ champ(picks[side][role]).name if picks[side][role] else '' }}">
+  {% endfor %}{% endfor %}
+  <label>Bans <input name="bans" value="{{ bans_raw }}" list="champion-names" placeholder="séparés par des virgules"></label>
+  <button type="submit">Appliquer</button>
+</form>
+<datalist id="champion-names">
+  {% for name in champion_names %}<option value="{{ name }}">{% endfor %}
+</datalist>
+
+<div class="draft-board">
+  {% for side, label in (('blue', 'Blue'), ('red', 'Red')) %}
+  <section class="draft-side">
+    <h2>{{ label }}</h2>
+    {% for role in draft_roles %}
+    {% set champion_id = picks[side][role] %}
+    <div class="draft-slot">
+      <div class="draft-slot-role">{{ ROLE_LABELS[role] }}</div>
+      {% if champion_id %}
+        {% set c = champ(champion_id) %}
+        <div class="champ big draft-locked">
+          {% if c.icon_url %}<img src="{{ c.icon_url }}" alt="" width="32" height="32">{% endif %}
+          {{ c.name }}
+          <a class="draft-clear" href="{{ slot_urls[side ~ '_' ~ role] }}" title="Retirer ce pick">✕</a>
+        </div>
+      {% else %}
+        <form method="get" action="/draft" class="draft-pick-form">
+          {% for s2 in ('blue', 'red') %}{% for r2 in draft_roles %}
+          {% if not (s2 == side and r2 == role) %}
+          <input type="hidden" name="{{ s2 }}_{{ r2 }}" value="{{ champ(picks[s2][r2]).name if picks[s2][r2] else '' }}">
+          {% endif %}
+          {% endfor %}{% endfor %}
+          <input type="hidden" name="bans" value="{{ bans_raw }}">
+          <input type="hidden" name="window" value="{{ window }}">
+          <input type="hidden" name="platform" value="{{ platform }}">
+          <input name="{{ side }}_{{ role }}" list="champion-names" placeholder="chercher un champion…">
+        </form>
+        <ul class="draft-suggestions">
+          {% for s in suggestions.get(side ~ '_' ~ role, []) %}
+          {% set sc = champ(s.champion_id) %}
+          <li class="{{ 'low-sample' if s.low_sample }}">
+            <a href="{{ s.pick_url }}">
+              {% if sc.icon_url %}<img src="{{ sc.icon_url }}" alt="" width="20" height="20">{% endif %}
+              {{ sc.name }}
+            </a>
+            {% if s.edge is not none %}
+            <span class="{{ 'pos' if s.edge > 0 else 'neg' if s.edge < 0 }}" data-tooltip="Σ synergie avec les alliés déjà posés + contre l'adversaire même rôle" aria-label="Σ synergie avec les alliés déjà posés + contre l'adversaire même rôle">{{ s.edge | signed_pct }}</span>
+            {% else %}
+            <span class="meta" data-tooltip="Aucun allié/ennemi encore posé pour ce rôle : tri par winrate individuel" aria-label="Aucun allié/ennemi encore posé pour ce rôle : tri par winrate individuel">{{ s.wr | pct }} WR</span>
+            {% endif %}
+            <span class="meta">{{ s.games_eff | num(0) }} eff.</span>
+          </li>
+          {% else %}
+          <li class="empty">Aucune suggestion.</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </section>
+  {% endfor %}
+</div>
+{% endblock %}

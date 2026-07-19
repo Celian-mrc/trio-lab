@@ -369,6 +369,62 @@ def champion_best_partners(
         ).fetchall()
 
 
+def matchup_candidates(
+    conn: psycopg.Connection,
+    window: str,
+    platform: str,
+    role: str,
+    enemy_champion_id: int,
+    limit: int,
+) -> list[dict]:
+    """Symétrique de `champion_best_partners` côté counter (simulateur de
+    draft, Phase 8) : `champ_b` (l'ennemi) est fixé, on liste tous les
+    `champ_a` candidats et leur delta — pas de filtre de fiabilité ici,
+    l'appelant (app.py) grise plutôt que masque (retour utilisateur)."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            """
+            SELECT champ_a AS candidate_champion, games, games_eff, wr, delta, tier
+            FROM score_matchup
+            WHERE window_label = %(window)s AND platform = %(platform)s AND role = %(role)s
+              AND champ_b = %(enemy)s
+            ORDER BY delta DESC
+            LIMIT %(limit)s
+            """,
+            {
+                "window": window,
+                "platform": platform,
+                "role": role,
+                "enemy": enemy_champion_id,
+                "limit": limit,
+            },
+        ).fetchall()
+
+
+def champion_role_baseline_list(
+    conn: psycopg.Connection, window: str, platform: str, role: str, limit: int
+) -> list[dict]:
+    """Champions triés par WR baseline dans un rôle (simulateur de draft,
+    Phase 8) : repli quand aucun allié/ennemi n'est encore verrouillé (1er
+    pick) — pas de synergie/counter à calculer, juste le WR individuel."""
+    patches = window.split("+")
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            """
+            SELECT champion_id AS candidate_champion, sum(games) AS games,
+                   sum(wins)::real / NULLIF(sum(games), 0) AS wr
+            FROM agg_champion
+            WHERE patch = ANY(%(patches)s) AND role = %(role)s
+              AND (%(platform)s = 'all' OR platform = %(platform)s)
+            GROUP BY champion_id
+            HAVING sum(games) > 0
+            ORDER BY wr DESC
+            LIMIT %(limit)s
+            """,
+            {"patches": patches, "platform": platform, "role": role, "limit": limit},
+        ).fetchall()
+
+
 def cc_theoretical_scores(conn: psycopg.Connection) -> dict[int, float]:
     """Score CC théorique par champion, depuis la table matérialisée (010) —
     jamais le fichier gelé : le service web ne l'embarque pas (voir Dockerfile),

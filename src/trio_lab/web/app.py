@@ -53,6 +53,25 @@ DUO_ROLE_KEYS: dict[str, tuple[str, str]] = {
     "mid_bot": ("mid", "bot"),
     "bot_sup": ("bot", "sup"),
 }
+# Simulateur de draft (Phase 8) : les 5 rôles courts + mapping vers les noms
+# Riot (score_matchup/agg_champion) — volontairement séparé de
+# ROLE_TO_TEAM_POSITION (qui gate la page champion, jgl/mid/sup seulement).
+DRAFT_ROLES = ("top", "jgl", "mid", "bot", "sup")
+DRAFT_ROLE_TO_TEAM_POSITION = {
+    "top": "TOP",
+    "jgl": "JUNGLE",
+    "mid": "MIDDLE",
+    "bot": "BOTTOM",
+    "sup": "UTILITY",
+}
+# roles de score_duo (ex. 'top_jgl') retrouvée depuis une paire de rôles
+# courts non ordonnée — inverse de DUO_ROLE_KEYS.
+_DRAFT_ROLES_BY_PAIR = {frozenset(v): k for k, v in DUO_ROLE_KEYS.items()}
+DRAFT_CANDIDATES_SHOWN = 15
+# Seuil de grisage (pas de filtre, retour utilisateur 2026-07-19) : sous ce
+# games_eff la suggestion reste affichée mais visuellement atténuée — même
+# esprit que GOLD_DIFF_LOW_SAMPLE_PCT, cohérent avec le tier 'moyen' (≥ 50).
+DRAFT_MIN_GAMES_EFF = 50.0
 # `DUO_ROLES` (compute.py) donne les 2 rôles d'un duo en noms Riot (JUNGLE/
 # MIDDLE/UTILITY) ; ce mapping retrouve la colonne CC par membre (migration
 # 020) correspondante pour choisir laquelle des 3 valeurs trio concerne
@@ -713,6 +732,176 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             window, platform, context = resolve_context(conn, window, platform)
             detail = _champion_detail(conn, window, platform, role, champion_id)
         return templates.TemplateResponse(request, "champion.html", {**context, **detail})
+
+    # --- Simulateur de draft (Phase 8) ---
+    #
+    # État entièrement dans l'URL (query params), pas de session serveur —
+    # même principe que window/platform ailleurs. Chaque pick redirige vers
+    # /draft avec un paramètre de plus ; hx-boost (base.html) fait le swap.
+
+    def _draft_role_suggestions(
+        conn,
+        window: str,
+        platform: str,
+        role: str,
+        locked_allies: list[tuple[str, int]],
+        locked_enemy: int | None,
+        banned: set[int],
+    ) -> list[dict]:
+        """Candidats pour un rôle vide, triés par edge = Σ synergie alliés
+        verrouillés + delta counter vs l'ennemi même rôle verrouillé — même
+        unité partout (points de WR), donc sommable sans pondération
+        arbitraire. `None` sans donnée pour une source, jamais pénalisé
+        (juste pas de contribution) — affiché en bas plutôt qu'exclu.
+        """
+        edge: dict[int, float] = {}
+        reliability: dict[int, float] = {}
+
+        def _accumulate(rows: list[dict], value_key: str, id_key: str) -> None:
+            for row in rows:
+                cid = row[id_key]
+                if cid in banned:
+                    continue
+                value = row[value_key]
+                if value is None:
+                    continue
+                edge[cid] = edge.get(cid, 0.0) + value
+                games_eff = row["games_eff"]
+                reliability[cid] = min(reliability.get(cid, games_eff), games_eff)
+
+        for ally_role, ally_champ in locked_allies:
+            roles_pair = _DRAFT_ROLES_BY_PAIR.get(frozenset({ally_role, role}))
+            if roles_pair is None:
+                continue
+            partners = queries.champion_best_partners(
+                conn, window, platform, roles_pair, ally_role, ally_champ, 200, min_tier="faible"
+            )
+            _accumulate(partners, "synergy", "partner_champion")
+
+        if locked_enemy is not None:
+            enemy_matchups = queries.matchup_candidates(
+                conn, window, platform, DRAFT_ROLE_TO_TEAM_POSITION[role], locked_enemy, 200
+            )
+            _accumulate(enemy_matchups, "delta", "candidate_champion")
+
+        if not edge:
+            # 1er pick du rôle : ni allié ni ennemi verrouillé, pas de
+            # synergie/counter à calculer — repli sur le WR baseline.
+            baseline = queries.champion_role_baseline_list(
+                conn, window, platform, DRAFT_ROLE_TO_TEAM_POSITION[role], DRAFT_CANDIDATES_SHOWN
+            )
+            return [
+                {
+                    "champion_id": r["candidate_champion"],
+                    "name": champ(r["candidate_champion"]).name,
+                    "edge": None,
+                    "wr": r["wr"],
+                    "games_eff": r["games"],
+                    "low_sample": False,
+                }
+                for r in baseline
+                if r["candidate_champion"] not in banned
+            ]
+
+        ranked = sorted(edge.items(), key=lambda kv: kv[1], reverse=True)[:DRAFT_CANDIDATES_SHOWN]
+        return [
+            {
+                "champion_id": cid,
+                "name": champ(cid).name,
+                "edge": value,
+                "wr": None,
+                "games_eff": reliability[cid],
+                "low_sample": reliability[cid] < DRAFT_MIN_GAMES_EFF,
+            }
+            for cid, value in ranked
+        ]
+
+    @app.get("/draft", response_class=HTMLResponse)
+    def draft_page(
+        request: Request,
+        window: str | None = None,
+        platform: str | None = None,
+        blue_top: str | None = None,
+        blue_jgl: str | None = None,
+        blue_mid: str | None = None,
+        blue_bot: str | None = None,
+        blue_sup: str | None = None,
+        red_top: str | None = None,
+        red_jgl: str | None = None,
+        red_mid: str | None = None,
+        red_bot: str | None = None,
+        red_sup: str | None = None,
+        bans: str | None = None,
+    ):
+        raw = {
+            "blue": {
+                "top": blue_top,
+                "jgl": blue_jgl,
+                "mid": blue_mid,
+                "bot": blue_bot,
+                "sup": blue_sup,
+            },
+            "red": {"top": red_top, "jgl": red_jgl, "mid": red_mid, "bot": red_bot, "sup": red_sup},
+        }
+        # État courant de l'URL, pour reconstruire les liens de pick/retrait
+        # sans jamais perdre un slot déjà posé (même principe que filters_qs).
+        current_params = {
+            f"{side}_{role}": v for side, roles in raw.items() for role, v in roles.items()
+        }
+        current_params["bans"] = bans or ""
+
+        def _draft_url(**overrides: str) -> str:
+            params = {
+                **current_params,
+                **overrides,
+                "window": window or "",
+                "platform": platform or "",
+            }
+            return "/draft?" + urlencode({k: v for k, v in params.items() if v})
+
+        with request.app.state.pool.connection() as conn:
+            window, platform, context = resolve_context(conn, window, platform)
+            picks = {
+                side: {role: resolve_champion(v) for role, v in roles.items()}
+                for side, roles in raw.items()
+            }
+            banned = {resolve_champion(b) for b in (bans or "").split(",") if b.strip()}
+            banned |= {c for roles in picks.values() for c in roles.values() if c is not None}
+
+            suggestions: dict[str, list[dict]] = {}
+            for side, other_side in (("blue", "red"), ("red", "blue")):
+                locked_allies = [(r, c) for r, c in picks[side].items() if c is not None]
+                for role in DRAFT_ROLES:
+                    if picks[side][role] is not None:
+                        continue
+                    key = f"{side}_{role}"
+                    role_suggestions = _draft_role_suggestions(
+                        conn, window, platform, role, locked_allies, picks[other_side][role], banned
+                    )
+                    for s in role_suggestions:
+                        s["pick_url"] = _draft_url(**{key: s["name"]})
+                    suggestions[key] = role_suggestions
+
+            slot_urls = {
+                f"{side}_{role}": _draft_url(**{f"{side}_{role}": ""})
+                for side in ("blue", "red")
+                for role in DRAFT_ROLES
+            }
+
+        return templates.TemplateResponse(
+            request,
+            "draft.html",
+            {
+                **context,
+                "picks": picks,
+                "bans_raw": bans or "",
+                "banned": banned,
+                "suggestions": suggestions,
+                "slot_urls": slot_urls,
+                "draft_roles": DRAFT_ROLES,
+                "champion_names": sorted(c.name for c in champ_index().values()),
+            },
+        )
 
     # --- API JSON ---
 

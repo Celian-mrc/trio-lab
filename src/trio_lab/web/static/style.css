@@ -279,4 +279,39 @@ th[data-tooltip]::after, label[data-tooltip]::after {
   border-radius: var(--radius); padding: 0.7rem 1rem;
 }
 .legend summary { cursor: pointer; color: var(--foreground); font-weight: 500; font-size: 0.85rem; }
+
+/* --- Simulateur de draft --- */
+.draft-board {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 1rem;
+}
+@media (max-width: 900px) { .draft-board { grid-template-columns: 1fr; } }
+.draft-side h2 { font-size: 0.95rem; margin: 0 0 0.6rem; }
+.draft-slot {
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 0.7rem 0.9rem; margin-bottom: 0.75rem;
+}
+.draft-slot-role {
+  font-size: 0.7rem; color: var(--muted-fg); text-transform: uppercase;
+  letter-spacing: 0.05em; font-weight: 500; margin-bottom: 0.4rem;
+}
+.draft-locked { justify-content: space-between; }
+.draft-clear { margin-left: auto; color: var(--muted-fg); text-decoration: none; }
+.draft-clear:hover { color: var(--neg); }
+.draft-pick-form input:not([type="hidden"]) {
+  width: 100%; background: transparent; color: var(--foreground);
+  border: 1px solid var(--input); border-radius: var(--radius);
+  padding: 0.4rem 0.6rem; font-size: 0.85rem; margin-bottom: 0.5rem;
+}
+.draft-suggestions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.15rem; }
+.draft-suggestions li {
+  display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0.3rem;
+  border-radius: 6px; font-size: 0.82rem;
+}
+.draft-suggestions li:hover:not(.empty) { background: var(--muted); }
+.draft-suggestions li.low-sample { opacity: 0.45; }
+.draft-suggestions a {
+  display: flex; align-items: center; gap: 0.4rem; color: var(--foreground);
+  text-decoration: none; flex: 1;
+}
+.draft-suggestions .meta { font-size: 0.72rem; white-space: nowrap; }
 .legend li { margin: 0.4rem 0; }
