@@ -821,11 +821,14 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         """Roster complet (pickable) pour le rôle actif — trié par
         edge = Σ synergie alliés verrouillés + delta counter vs l'ennemi même
         rôle verrouillé (même unité partout, points de WR, donc sommable sans
-        pondération arbitraire), puis par WR baseline pour les champions sans
-        edge. Contrairement à l'ancienne version, jamais de liste tronquée :
-        tout le roster reste visible/pickable, seuls les `DRAFT_RECOMMENDED_COUNT`
-        premiers sont badgés « Recommandé » (retour utilisateur 2026-07-19,
-        interface façon champ select).
+        pondération arbitraire), puis par fiabilité (`low_sample`) et enfin
+        par WR baseline pour les champions sans edge — sans ce 2e critère,
+        un champion à 25 games peut passer devant un champion à 1280 games
+        pour un écart de WR qui n'est que du bruit (`wr` n'est jamais lissé,
+        contrairement à `edge`). Contrairement à l'ancienne version, jamais
+        de liste tronquée : tout le roster reste visible/pickable, seuls les
+        `DRAFT_RECOMMENDED_COUNT` premiers sont badgés « Recommandé »
+        (retour utilisateur 2026-07-19, interface façon champ select).
         """
         edge: dict[int, float] = {}
         reliability: dict[int, float] = {}
@@ -897,7 +900,21 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                     "safety": safety.get(cid) if blind else None,
                 }
             )
-        roster.sort(key=lambda r: (r["edge"] is None, -(r["edge"] or 0.0), -(r["wr"] or 0.0)))
+        # Fiabilité avant WR brut (retour utilisateur 2026-07-19) : sans
+        # alliés/ennemis verrouillés, `wr` n'est pas lissé (contrairement à
+        # `edge`, déjà lissé côté score_duo/score_matchup) — un champion à
+        # 25 games peut sinon passer devant un champion à 1280 games pour un
+        # écart de WR qui n'est que du bruit. `low_sample` (déjà calculé,
+        # même seuil que le grisage visuel) trie tout le monde à fiabilité
+        # suffisante avant les échantillons faibles, sans jamais les masquer.
+        roster.sort(
+            key=lambda r: (
+                r["edge"] is None,
+                r["low_sample"],
+                -(r["edge"] or 0.0),
+                -(r["wr"] or 0.0),
+            )
+        )
         for i, r in enumerate(roster):
             r["recommended"] = i < DRAFT_RECOMMENDED_COUNT and r["edge"] is not None
 

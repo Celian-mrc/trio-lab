@@ -240,11 +240,15 @@ gagner") avec les données déjà en place.
       pick d'un rôle (rien de verrouillé) : repli sur le WR baseline
       (`champion_role_baseline_list`). Candidat sans donnée commune :
       contribution nulle, jamais exclu. Fiabilité grisée sous
-      `DRAFT_MIN_GAMES_EFF` (50), jamais filtrée. Roster limité aux
-      champions avec ≥ 1 game réelle dans ce rôle (`agg_champion`) — pas de
-      WR inventé sur 0 game ; sur une seule région un rôle inhabituel peut
-      afficher moins de candidats (ex. jungle en KR : 141/173 champions),
-      "toutes régions" donne la couverture la plus large. **Sécurité blind
+      `DRAFT_MIN_GAMES_EFF` (50), jamais filtrée — MAIS triée (retour
+      utilisateur 2026-07-19 : le WR baseline n'est jamais lissé,
+      contrairement à `edge` ; sans tri par fiabilité un champion à 25
+      games peut passer devant un champion à 1000+ games pour un écart de
+      WR qui n'est que du bruit). Roster limité aux champions avec ≥ 1 game
+      réelle dans ce rôle (`agg_champion`) — pas de WR inventé sur 0 game ;
+      sur une seule région un rôle inhabituel peut afficher moins de
+      candidats (ex. jungle en KR : 141/173 champions), "toutes régions"
+      donne la couverture la plus large. **Sécurité blind
       pick** (retour utilisateur : « un blind pick est un pick qui a peu de
       counter, ou dont les counters n'ont pas un énorme WR contre lui ») :
       quand aucun ennemi même rôle n'est verrouillé, chaque candidat affiche

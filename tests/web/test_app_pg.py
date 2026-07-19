@@ -710,6 +710,34 @@ def test_draft_page_locked_slot_and_clear_link(pg_sync, client):
     assert 'name="blue_jgl" list="champion-names"' not in resp.text
 
 
+def test_draft_page_blind_grid_sorts_reliable_before_low_sample(pg_sync, client):
+    """Retour utilisateur 2026-07-19 : en mode blind, le WR baseline n'est
+    jamais lissé (contrairement à `edge`) — sans tri par fiabilité, un
+    champion à quelques games peut passer devant un champion à 1000+ games
+    pour un écart de WR qui n'est que du bruit. Vi (10 games, 80 % WR,
+    low_sample) ne doit jamais apparaître avant Lee Sin (1000 games, 55 %
+    WR) dans la grille — les deux restent visibles, juste dans cet ordre."""
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    pg_sync.execute(
+        "INSERT INTO agg_champion (patch, platform, role, champion_id, games, wins)"
+        " VALUES ('16.13', 'euw1', 'TOP', 1, 1000, 550),"  # Lee Sin : 55 % WR, gros échantillon
+        "        ('16.13', 'euw1', 'TOP', 4, 10, 8)"  # Vi : 80 % WR, échantillon minuscule
+    )
+    resp = client.get("/draft", params={"active": "blue_top"})
+    assert resp.status_code == 200
+    # Se limiter à la grille (pas au <datalist>, alphabétique, qui mettrait
+    # "Lee Sin" avant "Vi" même si le tri par fiabilité était cassé).
+    grid_html = resp.text.split('<div class="champ-grid">')[1]
+    assert "Lee Sin" in grid_html
+    assert "Vi" in grid_html
+    assert grid_html.index("Lee Sin") < grid_html.index("Vi")
+
+
 def test_draft_page_active_slot_defaults_then_advances_after_pick(pg_sync, client):
     """Interface façon champ select (retour utilisateur 2026-07-19) : un seul
     slot "actif" à la fois. Sans param `active`, c'est le 1er slot vide
