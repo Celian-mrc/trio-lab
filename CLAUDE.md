@@ -2,7 +2,7 @@
 
 Projet perso : interface exposant les winrates et scores de synergie par **trio
 de champions jungle/mid/support**, avec stats détaillées (gold, objectifs,
-vision, dégâts) et counters. Collector + interface 24/24 sur Railway →
+vision, dégâts). Collector + interface 24/24 sur Railway →
 Postgres **Supabase** (schéma dédié `trio_lab` sur le projet "Loyalties v2",
 migré depuis Railway le 11/07/2026 — cf. memory `railway-deployment`).
 
@@ -54,8 +54,10 @@ mappings d'events timeline en sont dérivés — ne pas réinventer, adapter.
 - Pas de dépendance lourde sans justification (pas de Spark/Dask).
 - Pas de front « joli » tant que le pipeline de stats n'est pas solide
   (Phase 5 et pas avant).
-- Pas de counters trio vs trio (combinatoirement intraitable) : counters par
-  champion ennemi individuel uniquement.
+- Pas de counters (ni trio vs trio — combinatoirement intraitable —, ni par
+  champion ennemi/allié individuel : implémenté en Phase 4, abandonné le
+  2026-07-19, cf. `docs/ROADMAP.md` — volumétrie hors de contrôle pour un
+  signal peu fiable).
 
 ## Workflow de session
 

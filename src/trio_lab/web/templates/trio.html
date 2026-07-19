@@ -163,54 +163,6 @@
   </table>
 </section>
 
-<section class="columns">
-  {% for title, counters in (("Pires matchups", counters_worst), ("Meilleurs matchups", counters_best)) %}
-  <div>
-    <h2>{{ title }}</h2>
-    <table class="narrow">
-      <thead><tr><th>Ennemi</th><th>Rôle</th><th>Games</th><th>WR</th><th>Δ lissé</th></tr></thead>
-      <tbody>
-        {% for c in counters %}
-        {% set e = champ(c.enemy_champion) %}
-        <tr>
-          <td class="trio-cell"><span class="champ">{% if e.icon_url %}<img src="{{ e.icon_url }}" alt="" width="24" height="24">{% endif %}{{ e.name }}</span></td>
-          <td>{{ c.enemy_role | lower }}</td>
-          <td>{{ c.games }}</td>
-          <td>{{ c.wr | pct }}</td>
-          <td class="{{ 'pos' if c.delta > 0 else 'neg' if c.delta < 0 }}">{{ c.delta | signed_pct(2) }}</td>
-        </tr>
-        {% else %}
-        <tr><td colspan="5" class="empty">Aucun matchup enregistré.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% endfor %}
-</section>
-
-<section>
-  <h2>Meilleurs alliés (Top / ADC)</h2>
-  <p class="meta">WR du trio quand il est accompagné de ce champion Top ou ADC, comparé à son WR
-    global — jamais de combinaison 5v5 (CLAUDE.md), le grain est un allié individuel.</p>
-  <table class="narrow">
-    <thead><tr><th>Allié</th><th>Rôle</th><th>Games</th><th>WR</th><th>Uplift lissé</th></tr></thead>
-    <tbody>
-      {% for a in allies_best %}
-      {% set c = champ(a.ally_champion) %}
-      <tr>
-        <td class="trio-cell"><span class="champ">{% if c.icon_url %}<img src="{{ c.icon_url }}" alt="" width="24" height="24">{% endif %}{{ c.name }}</span></td>
-        <td>{{ a.ally_role | lower }}</td>
-        <td>{{ a.games }}</td>
-        <td>{{ a.wr | pct }}</td>
-        <td class="{{ 'pos' if a.uplift > 0 else 'neg' if a.uplift < 0 }}">{{ a.uplift | signed_pct(2) }}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="5" class="empty">Aucun allié enregistré.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</section>
-
 <details class="legend">
   <summary>Empirique, théorique, mélangé : comment ça se calcule ?</summary>
   <p><strong>Empirique</strong> : le CC réellement infligé par ce trio

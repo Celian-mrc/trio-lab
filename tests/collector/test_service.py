@@ -101,7 +101,7 @@ def test_failing_cycle_pauses_then_retries(monkeypatch):
     assert ("refresh", "16.14") in rec.calls
 
 
-# --- refresh_scores : enchaîne agrégats → scores/counters → purge des scores ---
+# --- refresh_scores : enchaîne agrégats → scores → purge des scores ---
 
 
 def test_refresh_scores_chains_and_prunes(monkeypatch):
@@ -115,20 +115,12 @@ def test_refresh_scores_chains_and_prunes(monkeypatch):
         service.compute, "refresh", lambda window, dsn=None: calls.append(("compute", window))
     )
     monkeypatch.setattr(
-        service.counters, "refresh", lambda window, dsn=None: calls.append(("counters", window))
-    )
-    monkeypatch.setattr(
-        service.allies, "refresh", lambda window, dsn=None: calls.append(("allies", window))
-    )
-    monkeypatch.setattr(
         service.maintenance, "purge_stale_scores", lambda dsn=None: calls.append(("prune_scores",))
     )
     service.refresh_scores("16.13")
     assert calls == [
         ("agg", "16.13"),
         ("compute", fake_window),
-        ("counters", fake_window),
-        ("allies", fake_window),
         ("prune_scores",),
     ]
 
@@ -143,7 +135,7 @@ def test_refresh_scores_skips_compute_when_window_empty(monkeypatch):
         service.maintenance, "purge_stale_scores", lambda dsn=None: calls.append(("prune_scores",))
     )
     service.refresh_scores("16.13")
-    # Base vide : ni compute/counters ni purge des scores (rien à purger).
+    # Base vide : ni compute ni purge des scores (rien à purger).
     assert calls == [("agg", "16.13")]
 
 

@@ -1,13 +1,11 @@
 """CLI des scores de synergie.
 
     python -m trio_lab.synergy --patches 16.13
-    python -m trio_lab.synergy --patches 16.14,16.13,16.12 --k 200 --counters
+    python -m trio_lab.synergy --patches 16.14,16.13,16.12 --k 200
 
 `--patches` : fenêtre du patch le plus récent au plus ancien (1 à 3), poids
-1.0/0.6/0.35. `--counters` : rafraîchit aussi score_trio_vs_champion (Phase 4).
-`--allies` : rafraîchit aussi score_trio_with_ally (meilleurs alliés Top/ADC).
-Prérequis : `python -m trio_lab.stats.aggregate --patch X` pour chaque patch
-de la fenêtre.
+1.0/0.6/0.35. Prérequis : `python -m trio_lab.stats.aggregate --patch X` pour
+chaque patch de la fenêtre.
 """
 
 from __future__ import annotations
@@ -16,7 +14,7 @@ import argparse
 import logging
 
 from trio_lab import config
-from trio_lab.synergy import allies, compute, counters, scores, windows
+from trio_lab.synergy import compute, scores, windows
 
 
 def main() -> None:
@@ -32,16 +30,6 @@ def main() -> None:
         default=scores.DEFAULT_PRIOR_K,
         help="force du prior duo→trio en games-équivalents",
     )
-    parser.add_argument(
-        "--counters",
-        action="store_true",
-        help="rafraîchir aussi les counters (score_trio_vs_champion)",
-    )
-    parser.add_argument(
-        "--allies",
-        action="store_true",
-        help="rafraîchir aussi les meilleurs alliés (score_trio_with_ally)",
-    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -49,10 +37,6 @@ def main() -> None:
     )
     window = windows.make_window([p.strip() for p in args.patches.split(",") if p.strip()])
     compute.refresh(window, k=args.k)
-    if args.counters:
-        counters.refresh(window, k=args.k)
-    if args.allies:
-        allies.refresh(window, k=args.k)
 
 
 if __name__ == "__main__":

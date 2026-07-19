@@ -382,41 +382,6 @@ def trio_duos(
         ).fetchall()
 
 
-def trio_counters(
-    conn: psycopg.Connection, window: str, platform: str, jgl: int, mid: int, sup: int
-) -> list[dict]:
-    """Tous les matchups du trio, du pire (delta le plus négatif) au meilleur."""
-    with conn.cursor(row_factory=dict_row) as cur:
-        return cur.execute(
-            """
-            SELECT enemy_role, enemy_champion, games, games_eff, wr, delta_raw, delta, tier
-            FROM score_trio_vs_champion
-            WHERE window_label = %s AND platform = %s
-              AND jgl_champion = %s AND mid_champion = %s AND sup_champion = %s
-            ORDER BY delta ASC, games DESC
-            """,
-            (window, platform, jgl, mid, sup),
-        ).fetchall()
-
-
-def trio_allies(
-    conn: psycopg.Connection, window: str, platform: str, jgl: int, mid: int, sup: int, limit: int
-) -> list[dict]:
-    """Meilleurs alliés Top/ADC du trio, du plus fort uplift au plus faible."""
-    with conn.cursor(row_factory=dict_row) as cur:
-        return cur.execute(
-            """
-            SELECT ally_role, ally_champion, games, games_eff, wr, uplift_raw, uplift, tier
-            FROM score_trio_with_ally
-            WHERE window_label = %s AND platform = %s
-              AND jgl_champion = %s AND mid_champion = %s AND sup_champion = %s
-            ORDER BY uplift DESC, games DESC
-            LIMIT %s
-            """,
-            (window, platform, jgl, mid, sup, limit),
-        ).fetchall()
-
-
 def window_freshness(conn: psycopg.Connection, window: str) -> dict:
     """Volume de matchs de la fenêtre + horodatage du dernier match collecté.
 

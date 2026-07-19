@@ -31,12 +31,7 @@ la majorité des trios auront trop peu de games pour un winrate fiable. Stratég
    beaucoup plus de données. Le trio n'affiche un score « pur » que quand son
    volume le justifie. Bonus : les tier lists de duos sortent gratuitement du
    même pipeline.
-3. **Counters** : trio vs trio ennemi est combinatoirement intraitable (10^13).
-   On calcule les counters **par champion ennemi individuel** (ex. « ce trio
-   souffre contre Nocturne jungle »). Même raisonnement côté allié : pas de
-   combinaison 5v5, mais un **meilleur allié Top/ADC individuel** (ex. « ce
-   trio est boosté par tel Top »).
-4. **Fenêtre multi-patchs glissante.** Les patchs ne sont **jamais fusionnés au
+3. **Fenêtre multi-patchs glissante.** Les patchs ne sont **jamais fusionnés au
    stockage** : chaque match garde sa colonne `patch`, la fenêtre (1 à 3 patchs)
    est un filtre appliqué à la lecture. Patchs récents pondérés plus fort
    (décroissance ex. 1.0 / 0.6 / 0.35), fenêtre coupée en cas de rework majeur
@@ -61,10 +56,6 @@ Toutes extraites des endpoints match-v5 + timeline :
   kill participation du trio avant 15 min, CC score (`timeCCingOthers`)
 - **Profil de tempo** : durée moyenne des games gagnées vs perdues (trio
   early-game vs scaling)
-- **Counters** : winrate du trio face à chaque champion ennemi (par rôle)
-- **Meilleurs alliés** : winrate du trio accompagné de chaque champion
-  Top/ADC individuel (jamais de combinaison 5v5, même raisonnement que les
-  counters)
 
 ## Score CC théorique par champion
 
@@ -132,7 +123,13 @@ personnelle ne couvre que l'usage privé.
 
 ## Non-objectifs (pour l'instant)
 
-- Pas de counters trio vs trio.
+- Pas de counters trio vs trio (combinatoirement intraitable).
+- Pas de counters/alliés par champion individuel non plus : implémentés en
+  Phase 4, **abandonnés le 2026-07-19** — le combinatoire (trio × champion
+  ennemi/allié individuel) grossissait plus vite que le reste du schéma
+  (`score_trio_vs_champion`/`score_trio_with_ally` étaient déjà le plus gros
+  poste de volumétrie) pour un signal jugé peu fiable (peu de games par
+  combo, le lissage bayésien ne suffisant pas à compenser).
 - Pas de comptes utilisateurs / auth.
 - Pas d'analyse par joueur (c'est le territoire de macro-lab).
 - Pas de scraping de sites tiers : données de match uniquement via l'API Riot.

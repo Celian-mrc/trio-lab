@@ -18,11 +18,9 @@ exploser le stockage bien avant la volumétrie visée par le projet :
   collectés. Bornées ici à une fenêtre légèrement plus large que celle des
   scores (marge de sécurité pendant un rollover de patch).
 - **score_\\*** : matérialisées par `window_label`. Chaque rollover de patch
-  crée un nouveau label sans supprimer l'ancien → accumulation illimitée
-  (le pire poste avec `score_trio_vs_champion`, un doublon quasi complet à
-  chaque nouvelle fenêtre). Purgées à la fenêtre courante uniquement :
-  l'interface n'affiche que la plus récente (`available_windows` la liste
-  toujours en premier).
+  crée un nouveau label sans supprimer l'ancien → accumulation illimitée.
+  Purgées à la fenêtre courante uniquement : l'interface n'affiche que la
+  plus récente (`available_windows` la liste toujours en premier).
 
 Seule famille d'opérations destructives du projet. Le journal
 (`match_fetch_journal`) n'est jamais purgé : il empêche de re-télécharger un
@@ -148,8 +146,6 @@ _AGG_TABLES = (
     "agg_champion",
     "agg_duo",
     "agg_trio",
-    "agg_trio_vs_champion",
-    "agg_trio_with_ally",
     "agg_trio_duration",
     "agg_duo_duration",
 )
@@ -186,7 +182,7 @@ def purge_stale_aggregates(
     return {"purged_patches": old, "agg_rows_deleted": deleted}
 
 
-_SCORE_TABLES = ("score_duo", "score_trio", "score_trio_vs_champion", "score_trio_with_ally")
+_SCORE_TABLES = ("score_duo", "score_trio")
 
 
 def purge_stale_scores(

@@ -89,23 +89,18 @@ Phase par phase : la phase N+1 ne démarre pas avant que la phase N soit verte
 - [x] Intervalles de confiance (Wilson 95 % sur n effectif) et tiers de
       fiabilité (faible < 50 ≤ moyen < 400 ≤ élevé)
 
-## Phase 4 — Counters ✅
+## Phase 4 — Counters ❌ abandonnée (2026-07-19)
 
-- [x] WR du trio face à chaque champion ennemi individuel (par rôle)
-      (`agg_trio_vs_champion`, migration 006, jointure trio × participants
-      adverses dans `stats.aggregate` — jamais de trio vs trio)
-- [x] Même traitement statistique (seuils, lissage, confiance)
-      (`synergy/counters.py` → `score_trio_vs_champion` : delta = WR(trio vs
-      ennemi) − WR global du trio sur la même fenêtre, rétréci vers 0 avec le
-      même k ; coupure de rework étendue à l'ennemi ; CLI
-      `python -m trio_lab.synergy --patches X --counters` ; les deltas
-      resteront ~0 tant que le volume par matchup est faible — max 7 games au
-      2026-07-11)
-- [x] Meilleurs alliés Top/ADC individuels (miroir des counters côté allié,
-      2026-07-12) : `migrations/014_allies.sql`, `synergy/allies.py` →
-      `score_trio_with_ally` (uplift = WR(trio + allié) − WR global, même
-      lissage), branché dans le cycle service et la rétention ; page détail
-      trio (section « Meilleurs alliés »)
+Implémentée (WR par champion ennemi individuel via `agg_trio_vs_champion`/
+`score_trio_vs_champion`, meilleurs alliés Top/ADC via `agg_trio_with_ally`/
+`score_trio_with_ally`), puis **retirée en totalité** : ces deux tables
+`score_*` étaient déjà le plus gros poste de volumétrie du schéma (constaté
+via `pg_stat_user_tables`, cf. mémoire `supabase-disk-growth`) alors que le
+signal reste peu fiable (peu de games par combo trio×ennemi/allié, le
+lissage bayésien ne compense pas assez). Tables droppées
+(`migrations/022_drop_counters_and_allies.sql`), code retiré
+(`synergy/counters.py`, `synergy/allies.py`, sections correspondantes de
+`aggregate.py`/`service.py`/`maintenance.py`/`web/`).
 
 ## Phase 5 — Interface ✅
 
@@ -115,7 +110,7 @@ Phase par phase : la phase N+1 ne démarre pas avant que la phase N soit verte
 - [x] Front : tier list des trios (filtres fenêtre/région, champion+rôle,
       games min, fiabilité min, tri), page détail trio (stats détaillées
       agrégées à la volée sur match_trio_stats pondérées fenêtre, duos
-      internes, pires/meilleurs matchups), tier list duos
+      internes), tier list duos
       (pas de filtre « rang » : la collecte est scopée Emerald+ et l'en-tête
       de l'interface l'affiche — décision du 2026-07-11)
 - [x] Page détail duo (2026-07-12) : mêmes stats que la page trio (`score_duo`
@@ -147,7 +142,7 @@ Phase par phase : la phase N+1 ne démarre pas avant que la phase N soit verte
       les régions ajoutées ont un volume Emerald+ suffisant)
       (`python -m trio_lab.collector --service` : patch courant auto via
       Data Dragon avec bornes de repli si PATCH_DATES incomplet, cycles
-      batch → refresh agrégats/scores/counters, archives timeline
+      batch → refresh agrégats/scores, archives timeline
       débrayées via ARCHIVE_TIMELINES=0, résilience par cycle)
 - [x] Postgres Railway en production, rétention/rotation par patch
       (`trio_lab.maintenance` : purge quotidienne des matchs au-delà des

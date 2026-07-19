@@ -57,8 +57,6 @@ GOLD_DIFF_BAR_CAP = 2500
 # En dessous de ce pourcentage de games atteignant un checkpoint gold, la
 # carte est grisée (échantillon trop réduit pour être lu comme un signal).
 GOLD_DIFF_LOW_SAMPLE_PCT = 10
-COUNTERS_SHOWN = 10  # pires et meilleurs matchups affichés sur la page détail
-ALLIES_SHOWN = 10  # meilleurs alliés Top/ADC affichés sur la page détail
 DUO_BEST_TRIOS_SHOWN = 10  # meilleurs 3e membres affichés sur la page détail duo
 CHAMPION_PARTNERS_SHOWN = 5  # meilleurs partenaires par rôle affichés sur la page champion
 CHAMPION_TRIOS_SHOWN = 10  # meilleurs trios affichés sur la page champion
@@ -516,8 +514,6 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             mid,
             sup,
         )
-        counters = queries.trio_counters(conn, window, platform, jgl, mid, sup)
-        allies = queries.trio_allies(conn, window, platform, jgl, mid, sup, ALLIES_SHOWN)
         stats = summary.summarize(rows, weights)
         cc_scores = queries.cc_theoretical_scores(conn)
         jgl_cc, mid_cc, sup_cc = cc_scores.get(jgl), cc_scores.get(mid), cc_scores.get(sup)
@@ -536,9 +532,6 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             "stats": stats,
             "member_wr": member_wr,
             "duos": queries.trio_duos(conn, window, platform, jgl, mid, sup),
-            "counters_worst": counters[:COUNTERS_SHOWN],
-            "counters_best": counters[::-1][:COUNTERS_SHOWN],
-            "allies_best": allies,
             "cc_theoretical": {"jgl": jgl_cc, "mid": mid_cc, "sup": sup_cc, "trio": trio_cc_raw},
             # Pourcentages 0-100 déjà matérialisés par synergy.compute (mêmes
             # valeurs que la tier list, jamais recalculés ici : évite toute
@@ -709,8 +702,6 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             "sup_champion",
             "champ_a",
             "champ_b",
-            "enemy_champion",
-            "ally_champion",
         ):
             if key in out:
                 out[key + "_name"] = champ(out[key]).name
@@ -828,9 +819,6 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             detail = _trio_detail(conn, window, platform, jgl, mid, sup)
         detail["score"] = _named(detail["score"])
         detail["duos"] = [_named(r) for r in detail["duos"]]
-        detail["counters_worst"] = [_named(r) for r in detail["counters_worst"]]
-        detail["counters_best"] = [_named(r) for r in detail["counters_best"]]
-        detail["allies_best"] = [_named(r) for r in detail["allies_best"]]
         return {"window": window, "platform": platform, **detail}
 
     @app.get("/api/duos")

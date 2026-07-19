@@ -28,8 +28,6 @@ _INDEX = {
     4: Champion(4, "Vi", ""),
     5: Champion(5, "Orianna", ""),
     6: Champion(6, "Leona", ""),
-    44: Champion(44, "Renekton", ""),
-    64: Champion(64, "Nocturne", ""),
 }
 
 
@@ -40,9 +38,9 @@ def pg_sync():
     with psycopg.connect(TEST_DSN, autocommit=True) as conn:
         conn.execute(
             "TRUNCATE players, matches, match_fetch_journal,"
-            " agg_champion, agg_duo, agg_trio, agg_trio_vs_champion, agg_trio_with_ally,"
+            " agg_champion, agg_duo, agg_trio,"
             " agg_trio_duration, agg_duo_duration,"
-            " score_duo, score_trio, score_trio_vs_champion, score_trio_with_ally,"
+            " score_duo, score_trio,"
             " champion_cc_theoretical CASCADE"
         )
         yield conn
@@ -79,20 +77,6 @@ def _seed_scores(conn) -> None:
         " cc_theoretical_pct, cc_empirical_pct, cc_blended_pct, scaling)"
         " VALUES ('16.13', 'euw1', 'jgl_mid', 1, 2, 60, 60.0, 0.58, 0.03, 0.4, 0.7, 'moyen',"
         " 37.5, 45.0, 40.2, -0.01)"
-    )
-    conn.execute(
-        "INSERT INTO score_trio_vs_champion (window_label, platform, jgl_champion,"
-        " mid_champion, sup_champion, enemy_role, enemy_champion, games, games_eff, wr,"
-        " delta_raw, delta, ci_low, ci_high, tier)"
-        " VALUES ('16.13', 'euw1', 1, 2, 3, 'JUNGLE', 64, 12, 12.0, 0.35,"
-        " -0.25, -0.014, 0.1, 0.6, 'faible')"
-    )
-    conn.execute(
-        "INSERT INTO score_trio_with_ally (window_label, platform, jgl_champion,"
-        " mid_champion, sup_champion, ally_role, ally_champion, games, games_eff, wr,"
-        " uplift_raw, uplift, ci_low, ci_high, tier)"
-        " VALUES ('16.13', 'euw1', 1, 2, 3, 'TOP', 44, 15, 15.0, 0.70,"
-        " 0.10, 0.045, 0.4, 0.9, 'faible')"
     )
 
 
@@ -157,7 +141,7 @@ def test_api_trios_champion_filters_combine_with_and(pg_sync, client):
     assert payload["rows"] == []
 
 
-def test_api_trio_detail_stats_and_counters(pg_sync, client):
+def test_api_trio_detail_stats(pg_sync, client):
     _seed_scores(pg_sync)
     _seed_matches(pg_sync)
     for champ_id, cc_score in ((1, 3.0), (2, 4.5), (3, 1.5)):
@@ -196,12 +180,6 @@ def test_api_trio_detail_stats_and_counters(pg_sync, client):
     assert stats["avg_duration_win_s"] == pytest.approx(1500.0)
     assert stats["avg_duration_loss_s"] == pytest.approx(2100.0)
     assert payload["duos"][0]["champ_a_name"] == "Lee Sin"
-    worst = payload["counters_worst"][0]
-    assert (worst["enemy_champion_name"], worst["enemy_role"]) == ("Nocturne", "JUNGLE")
-    assert worst["delta"] == pytest.approx(-0.014)
-    best_ally = payload["allies_best"][0]
-    assert (best_ally["ally_champion_name"], best_ally["ally_role"]) == ("Renekton", "TOP")
-    assert best_ally["uplift"] == pytest.approx(0.045)
     # Score CC théorique brut par champion : lu depuis `champion_cc_theoretical`
     # (table matérialisée, jamais le fichier gelé — absent de l'image Docker
     # du service web, cf. Dockerfile).
@@ -266,10 +244,8 @@ def test_html_pages_render(pg_sync, client):
     assert "Scaling" in home.text
     detail = client.get("/trio/1/2/3")
     assert detail.status_code == 200
-    assert "Nocturne" in detail.text
     assert "Détail du calcul théorique" in detail.text
     assert "Mélangé" in detail.text
-    assert "Meilleurs alliés" in detail.text
     assert "+1.50 %" in detail.text  # card Scaling (0.015 → signed_pct(2))
     assert "/duo/jgl_mid/1/2" in detail.text  # lien depuis les duos internes
     duos = client.get("/duos")
