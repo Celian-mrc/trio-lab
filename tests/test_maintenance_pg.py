@@ -165,6 +165,11 @@ async def _seed_agg(conn, patches: list[str]) -> None:
             " duration_bucket, games, wins) VALUES (%s, 'euw1', 'jgl_mid', 1, 2, 20, 1, 1)",
             (patch,),
         )
+        await conn.execute(
+            "INSERT INTO agg_matchup (patch, platform, role, champ_a, champ_b, games, wins)"
+            " VALUES (%s, 'euw1', 'JUNGLE', 1, 12, 1, 1)",
+            (patch,),
+        )
 
 
 async def test_purge_aggregates_survives_raw_purge(pg_conn):
@@ -172,13 +177,14 @@ async def test_purge_aggregates_survives_raw_purge(pg_conn):
     await _seed_agg(pg_conn, ["16.10", "16.11", "16.12", "16.13"])
     report = maintenance.purge_stale_aggregates(keep=2, dsn=TEST_DSN)
     assert report["purged_patches"] == ["16.11", "16.10"]
-    assert report["agg_rows_deleted"] == 10  # 2 patchs × 5 tables
+    assert report["agg_rows_deleted"] == 12  # 2 patchs × 6 tables
     for table in (
         "agg_champion",
         "agg_duo",
         "agg_trio",
         "agg_trio_duration",
         "agg_duo_duration",
+        "agg_matchup",
     ):
         cur = await pg_conn.execute(f"SELECT DISTINCT patch FROM {table} ORDER BY patch")  # noqa: S608
         assert [r[0] for r in await cur.fetchall()] == ["16.12", "16.13"], table
@@ -201,14 +207,20 @@ async def _seed_score_window(conn, window_label: str) -> None:
         " VALUES (%s, 'euw1', 'jgl_mid', 1, 2, 1, 1.0, 1.0, 0.0, 0.0, 1.0, 'faible')",
         (window_label,),
     )
+    await conn.execute(
+        "INSERT INTO score_matchup (window_label, platform, role, champ_a, champ_b, games,"
+        " games_eff, wr, delta_raw, delta, ci_low, ci_high, tier)"
+        " VALUES (%s, 'euw1', 'JUNGLE', 1, 12, 1, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 'faible')",
+        (window_label,),
+    )
 
 
 async def test_purge_scores_keeps_only_most_recent_window(pg_conn):
     await _seed_score_window(pg_conn, "16.12")
     await _seed_score_window(pg_conn, "16.13+16.12")  # plus récent (16.13 en tête)
     report = maintenance.purge_stale_scores(dsn=TEST_DSN)  # keep=1 par défaut
-    assert report == {"purged_window_labels": ["16.12"], "score_rows_deleted": 2}
-    for table in ("score_trio", "score_duo"):
+    assert report == {"purged_window_labels": ["16.12"], "score_rows_deleted": 3}
+    for table in ("score_trio", "score_duo", "score_matchup"):
         cur = await pg_conn.execute(
             f"SELECT DISTINCT window_label FROM {table}"  # noqa: S608
         )

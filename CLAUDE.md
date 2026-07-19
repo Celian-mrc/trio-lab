@@ -54,10 +54,12 @@ mappings d'events timeline en sont dérivés — ne pas réinventer, adapter.
 - Pas de dépendance lourde sans justification (pas de Spark/Dask).
 - Pas de front « joli » tant que le pipeline de stats n'est pas solide
   (Phase 5 et pas avant).
-- Pas de counters (ni trio vs trio — combinatoirement intraitable —, ni par
-  champion ennemi/allié individuel : implémenté en Phase 4, abandonné le
-  2026-07-19, cf. `docs/ROADMAP.md` — volumétrie hors de contrôle pour un
-  signal peu fiable).
+- Pas de counters **trio** vs champion individuel ni vs trio adverse
+  (combinatoirement intraitable : implémenté en Phase 4, abandonné le
+  2026-07-19, cf. `docs/ROADMAP.md`). Un counter **1v1 même rôle** (champion
+  vs champion, ex. top vs top) reste OK — c'est `agg_matchup`/`score_matchup`
+  (migration 026) : combinatoire borné (5 rôles × champions²), pas de
+  dimension trio, la vraie source du problème initial.
 
 ## Workflow de session
 

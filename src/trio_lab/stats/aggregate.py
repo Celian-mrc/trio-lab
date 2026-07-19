@@ -29,6 +29,22 @@ _CHAMPION_SQL = """
     GROUP BY m.patch, m.platform, p.role, p.champion_id
 """
 
+# Counter 1v1 même rôle (migration 026, retour redesigné des counters Phase 4
+# abandonnés en 022) : auto-jointure match_participants sur (match_id, role),
+# équipe adverse — aucune dimension trio, contrairement à l'ancien
+# agg_trio_vs_champion. `wins` = victoires DE champ_a.
+_MATCHUP_SQL = """
+    INSERT INTO agg_matchup (patch, platform, role, champ_a, champ_b, games, wins)
+    SELECT m.patch, m.platform, pa.role, pa.champion_id, pb.champion_id,
+           count(*), count(*) FILTER (WHERE pa.win)
+    FROM match_participants pa
+    JOIN match_participants pb
+        ON pb.match_id = pa.match_id AND pb.role = pa.role AND pb.team_id <> pa.team_id
+    JOIN matches m ON m.match_id = pa.match_id
+    WHERE m.patch = %(patch)s
+    GROUP BY m.patch, m.platform, pa.role, pa.champion_id, pb.champion_id
+"""
+
 # Sommes de stats partagées trio/duo : les stats d'un duo sont les stats
 # d'équipe des parties où il apparaît, quel que soit le 3e membre.
 # vision_score, drakes_taken, cc_time_s : PAR MINUTE (/ durée en minutes), pas
@@ -189,6 +205,7 @@ _TABLES_SQL: dict[str, tuple[str, ...]] = {
     "agg_trio": (_TRIO_SQL,),
     "agg_trio_duration": (_TRIO_DURATION_SQL,),
     "agg_duo_duration": (_DUO_DURATION_SQL,),
+    "agg_matchup": (_MATCHUP_SQL,),
 }
 
 

@@ -43,6 +43,7 @@ async def test_refresh_counts_games_and_wins(pg_conn):
         "agg_trio": 2,
         "agg_trio_duration": 2,
         "agg_duo_duration": 6,
+        "agg_matchup": 10,  # 5 rôles × 2 perspectives (champ_a/champ_b inversés)
     }
 
     cur = await pg_conn.execute(
@@ -91,6 +92,25 @@ async def test_refresh_counts_games_and_wins(pg_conn):
 
     cur = await pg_conn.execute(
         "SELECT games, wins FROM agg_champion WHERE role = 'JUNGLE' AND champion_id = 2"
+    )
+    assert await cur.fetchall() == [(2, 1)]
+
+
+async def test_refresh_agg_matchup_counts_both_perspectives(pg_conn):
+    """Counter 1v1 même rôle (migration 026) : auto-jointure match_participants,
+    aucune dimension trio. Builder : team100 jungle=champ2, team200 jungle=champ12,
+    déterministe sur les 2 matchs → champ2 gagne A (team100), perd B (team200)."""
+    await _ingest(pg_conn, "EUW1_A", winning_team=100)
+    await _ingest(pg_conn, "EUW1_B", winning_team=200)
+    aggregate.refresh("16.13", dsn=TEST_DSN)
+
+    cur = await pg_conn.execute(
+        "SELECT games, wins FROM agg_matchup WHERE role = 'JUNGLE' AND champ_a = 2 AND champ_b = 12"
+    )
+    assert await cur.fetchall() == [(2, 1)]
+    # Perspective inverse : mêmes 2 games, l'autre gagnant.
+    cur = await pg_conn.execute(
+        "SELECT games, wins FROM agg_matchup WHERE role = 'JUNGLE' AND champ_a = 12 AND champ_b = 2"
     )
     assert await cur.fetchall() == [(2, 1)]
 

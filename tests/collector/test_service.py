@@ -115,12 +115,16 @@ def test_refresh_scores_chains_and_prunes(monkeypatch):
         service.compute, "refresh", lambda window, dsn=None: calls.append(("compute", window))
     )
     monkeypatch.setattr(
+        service.matchups, "refresh", lambda window, dsn=None: calls.append(("matchups", window))
+    )
+    monkeypatch.setattr(
         service.maintenance, "purge_stale_scores", lambda dsn=None: calls.append(("prune_scores",))
     )
     service.refresh_scores("16.13")
     assert calls == [
         ("agg", "16.13"),
         ("compute", fake_window),
+        ("matchups", fake_window),
         ("prune_scores",),
     ]
 

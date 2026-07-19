@@ -14,7 +14,7 @@ import argparse
 import logging
 
 from trio_lab import config
-from trio_lab.synergy import compute, scores, windows
+from trio_lab.synergy import compute, matchups, scores, windows
 
 
 def main() -> None:
@@ -37,6 +37,7 @@ def main() -> None:
     )
     window = windows.make_window([p.strip() for p in args.patches.split(",") if p.strip()])
     compute.refresh(window, k=args.k)
+    matchups.refresh(window, k=args.k)
 
 
 if __name__ == "__main__":

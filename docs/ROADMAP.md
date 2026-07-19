@@ -204,3 +204,16 @@ avec le même niveau de détail que les pages trio/duo existantes.
       Nashor/tours/plaques) restés team-level partout, structurellement non
       attribuables à un sous-ensemble de joueurs (`match_objective_events`
       n'a pas de tueur identifié, seulement un `team_id`).
+- [x] Counters 1v1 même rôle (2026-07-19, `migrations/026_role_matchups.sql`) :
+      retour redesigné des counters Phase 4 (abandonnés en 022) — le problème
+      initial était la dimension TRIO (jgl×mid×sup×ennemi×rôle, combinatoire
+      intraitable), pas le concept de counter. Grain = duel même rôle
+      (champ_a vs champ_b, ex. top vs top), comme les outils de draft du
+      marché (METAsrc Counter Picker etc.) : `agg_matchup` (auto-jointure
+      `match_participants`, même match/rôle, équipe adverse — historique
+      complet, aucune dépendance à `match_role_stats`), `score_matchup`
+      (`synergy/matchups.py`, delta lissé vs baseline `agg_champion`, même
+      mécanique que `synergy/compute.py`). Combinatoire borné comme
+      `agg_duo`/`score_duo`, pas d'explosion. Branché dans le cycle service
+      et la rétention. CLAUDE.md nuancé : counter trio toujours exclu,
+      counter 1v1 même rôle OK.
