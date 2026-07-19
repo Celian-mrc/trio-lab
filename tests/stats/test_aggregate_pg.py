@@ -112,3 +112,55 @@ async def test_refresh_other_patch_untouched(pg_conn):
     aggregate.refresh("16.12", dsn=TEST_DSN)
     cur = await pg_conn.execute("SELECT count(*) FROM agg_trio WHERE patch = '16.13'")
     assert (await cur.fetchone())[0] == 2
+
+
+# --- agg_duo étendu (Phase 7, duo généralisé) : paires hors trio jgl/mid/sup ---
+
+
+async def _ingest_with_role_stats(conn, match_id: str, *, winning_team: int) -> None:
+    """Comme `_ingest`, plus `match_role_stats` (5 rôles) — pas branché par défaut
+    dans `_ingest` pour ne pas changer les comptes des tests existants."""
+    detail = build_detail(match_id, winning_team=winning_team)
+    timeline = build_timeline(match_id)
+    trio_stats, events = extract.extract_match(detail, timeline)
+    role_stats = extract.extract_role_stats(detail, timeline)
+    await storage.insert_match(
+        conn,
+        parsing.match_row(detail, platform="euw1"),
+        parsing.participant_rows(detail),
+        trio_stats,
+        events,
+        role_stats,
+    )
+
+
+async def test_refresh_agg_duo_ext_pairs_from_role_stats(pg_conn):
+    # Un seul match : builder gold_at(minute, pid) = minute*(100+pid), team100
+    # TOP=pid1/champ1, JUNGLE=pid2/champ2 ; team200 TOP=pid6/champ11,
+    # JUNGLE=pid7/champ12 (cf. tests/collector/_builders.py).
+    await _ingest_with_role_stats(pg_conn, "EUW1_A", winning_team=100)
+    aggregate.refresh("16.13", dsn=TEST_DSN)
+
+    cur = await pg_conn.execute(
+        "SELECT games, wins, gold10_sum, gold10_n, cc_sum, cc_n,"
+        " champ_a_cc_sum, champ_a_cc_n, champ_b_cc_sum, champ_b_cc_n"
+        " FROM agg_duo WHERE roles = 'top_jgl' AND champ_a = 1 AND champ_b = 2"
+    )
+    row = await cur.fetchone()
+    assert row is not None
+    games, wins, gold10_sum, gold10_n, cc_sum, cc_n, a_sum, a_n, b_sum, b_n = row
+    assert (games, wins) == (1, 1)  # team100 gagne
+    # (1010+1020) − (1060+1070) = −100 (gold_10, cf. gold_at).
+    assert (gold10_sum, gold10_n) == (pytest.approx(-100.0), 1)
+    # cc_time_s = pid×2 (builder) : TOP(1)=2, JUNGLE(2)=4, durée 30 min.
+    assert (cc_sum, cc_n) == (pytest.approx((2 + 4) / 30), 1)
+    assert (a_sum, a_n) == (pytest.approx(2 / 30), 1)
+    assert (b_sum, b_n) == (pytest.approx(4 / 30), 1)
+
+    # Objectifs (team-level, lus depuis match_trio_stats) : le builder n'en pose
+    # aucun, tout reste à 0/NULL — juste vérifier que la jointure ne plante pas.
+    cur = await pg_conn.execute(
+        "SELECT soul_sum, soul_n FROM agg_duo"
+        " WHERE roles = 'bot_sup' AND champ_a = 4 AND champ_b = 5"
+    )
+    assert await cur.fetchone() == (0, 1)

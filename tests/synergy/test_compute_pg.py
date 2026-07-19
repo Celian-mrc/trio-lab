@@ -317,3 +317,25 @@ async def test_rework_cut_drops_combos_without_effective_games(pg_conn, monkeypa
     assert counts == {"score_duo": 2, "score_trio": 0}
     cur = await pg_conn.execute("SELECT DISTINCT roles FROM score_duo")
     assert await cur.fetchall() == [("mid_sup",)]
+
+
+async def test_refresh_computes_scores_for_extended_duo_roles(pg_conn):
+    """Paire hors trio jgl/mid/sup (Phase 7, duo généralisé) : même pipeline,
+    juste une entrée de plus dans `compute.DUO_ROLES`."""
+    await _seed(pg_conn)  # jgl(1)=.60, mid(2)=.50, sup(3)=.40 déjà semés
+    await pg_conn.execute(
+        "INSERT INTO agg_champion (patch, platform, role, champion_id, games, wins)"
+        " VALUES ('16.13', 'euw1', 'TOP', 9, 100, 55)"
+    )  # top(9) = .55
+    await pg_conn.execute(
+        "INSERT INTO agg_duo (patch, platform, roles, champ_a, champ_b, games, wins)"
+        " VALUES ('16.13', 'euw1', 'top_jgl', 9, 1, 40, 26)"
+    )  # top_jgl : wr = .65
+    compute.refresh(windows.make_window(["16.13"]), dsn=TEST_DSN, k=200.0)
+
+    cur = await pg_conn.execute(
+        "SELECT wr, synergy FROM score_duo WHERE roles = 'top_jgl' AND platform = 'euw1'"
+    )
+    wr, synergy = await cur.fetchone()
+    assert wr == pytest.approx(0.65)
+    assert synergy == pytest.approx(0.075)  # .65 − (.55+.60)/2

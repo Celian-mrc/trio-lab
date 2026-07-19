@@ -34,8 +34,25 @@ logger = logging.getLogger(__name__)
 
 _HERE = Path(__file__).resolve().parent
 
-ROLE_LABELS = {"jgl": "Jungle", "mid": "Mid", "sup": "Support"}
+ROLE_LABELS = {"jgl": "Jungle", "mid": "Mid", "sup": "Support", "top": "Top", "bot": "ADC"}
+# Volontairement limité au trio jgl/mid/sup : gate la route /champion/{role}
+# (page individuelle par champion, jamais généralisée à top/bot — Phase 7 ne
+# généralise que le duo, cf. docs/ROADMAP.md). Exposé en global Jinja pour que
+# duo.html sache quels rôles ont une page champion à lier.
 ROLE_TO_TEAM_POSITION = {"jgl": "JUNGLE", "mid": "MIDDLE", "sup": "UTILITY"}
+# roles de score_duo/agg_duo (ex. 'top_jgl') → paire de rôles courts (Phase 7).
+DUO_ROLE_KEYS: dict[str, tuple[str, str]] = {
+    "jgl_mid": ("jgl", "mid"),
+    "jgl_sup": ("jgl", "sup"),
+    "mid_sup": ("mid", "sup"),
+    "top_jgl": ("top", "jgl"),
+    "top_mid": ("top", "mid"),
+    "top_bot": ("top", "bot"),
+    "top_sup": ("top", "sup"),
+    "jgl_bot": ("jgl", "bot"),
+    "mid_bot": ("mid", "bot"),
+    "bot_sup": ("bot", "sup"),
+}
 # `DUO_ROLES` (compute.py) donne les 2 rôles d'un duo en noms Riot (JUNGLE/
 # MIDDLE/UTILITY) ; ce mapping retrouve la colonne CC par membre (migration
 # 020) correspondante pour choisir laquelle des 3 valeurs trio concerne
@@ -237,6 +254,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
 
     templates.env.globals["champ"] = champ
     templates.env.globals["ROLE_LABELS"] = ROLE_LABELS
+    templates.env.globals["ROLE_TO_TEAM_POSITION"] = ROLE_TO_TEAM_POSITION
+    templates.env.globals["DUO_ROLE_KEYS"] = DUO_ROLE_KEYS
 
     def resolve_champion(name_or_id: str | None) -> int | None:
         """Filtre champion de la tier list : nom (recherche) ou id. None si vide."""
@@ -567,23 +586,33 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             raise HTTPException(404, "duo non scoré sur cette fenêtre/plateforme")
         patch_window = make_window(window.split("+"))
         weights = patch_window.weights_for((champ_a, champ_b))
-        rows = queries.duo_match_rows(
-            conn,
-            list(patch_window.patches),
-            None if platform == "all" else platform,  # 'all' = toutes régions
-            roles,
-            champ_a,
-            champ_b,
-        )
-        stats = summary.summarize(rows, weights)
         role_a, role_b = DUO_ROLES[roles]
-        # Ventilation CC par membre (migration 020) : summary.summarize calcule
-        # les 3 rôles trio sans distinction, on ne garde que les 2 du duo.
-        stats["champ_a_cc_time_s"] = stats[TEAM_POSITION_TO_CC_FIELD[role_a]]
-        stats["champ_b_cc_time_s"] = stats[TEAM_POSITION_TO_CC_FIELD[role_b]]
-        # Idem dégâts/gold par membre (migration 021).
-        stats["champ_a_dmg_per_gold"] = stats[TEAM_POSITION_TO_DMG_PER_GOLD_FIELD[role_a]]
-        stats["champ_b_dmg_per_gold"] = stats[TEAM_POSITION_TO_DMG_PER_GOLD_FIELD[role_b]]
+        patches = list(patch_window.patches)
+        plat = None if platform == "all" else platform  # 'all' = toutes régions
+        if roles in queries.TRIO_DUO_ROLES:
+            # 3 paires internes au trio jgl/mid/sup : match_trio_stats, notion
+            # de « 3e membre libre » (best_trios).
+            rows = queries.duo_match_rows(conn, patches, plat, roles, champ_a, champ_b)
+            stats = summary.summarize(rows, weights)
+            # Ventilation CC par membre (migration 020) : summary.summarize
+            # calcule les 3 rôles trio sans distinction, on ne garde que les 2.
+            stats["champ_a_cc_time_s"] = stats[TEAM_POSITION_TO_CC_FIELD[role_a]]
+            stats["champ_b_cc_time_s"] = stats[TEAM_POSITION_TO_CC_FIELD[role_b]]
+            # Idem dégâts/gold par membre (migration 021).
+            stats["champ_a_dmg_per_gold"] = stats[TEAM_POSITION_TO_DMG_PER_GOLD_FIELD[role_a]]
+            stats["champ_b_dmg_per_gold"] = stats[TEAM_POSITION_TO_DMG_PER_GOLD_FIELD[role_b]]
+            best_trios = queries.duo_best_trios(
+                conn, window, platform, roles, champ_a, champ_b, DUO_BEST_TRIOS_SHOWN
+            )
+        else:
+            # Paire hors trio (Phase 7) : match_role_stats, déjà champ_a/b_*
+            # génériques (cf. `duo_role_match_rows`) — pas de notion de « 3e
+            # membre », le trio de ce projet reste uniquement jgl/mid/sup.
+            rows = queries.duo_role_match_rows(
+                conn, patches, plat, role_a, role_b, champ_a, champ_b
+            )
+            stats = summary.summarize(rows, weights)
+            best_trios = []
         cc_scores = queries.cc_theoretical_scores(conn)
         a_cc, b_cc = cc_scores.get(champ_a), cc_scores.get(champ_b)
         members_cc = (a_cc, b_cc)
@@ -591,20 +620,14 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         # trompeuse — affichée comme « — » à la place).
         duo_cc_raw = sum(members_cc) if None not in members_cc else None
         member_wr = {
-            "a": queries.member_wr(
-                conn, list(patch_window.patches), platform, role_a, champ_a, weights
-            ),
-            "b": queries.member_wr(
-                conn, list(patch_window.patches), platform, role_b, champ_b, weights
-            ),
+            "a": queries.member_wr(conn, patches, platform, role_a, champ_a, weights),
+            "b": queries.member_wr(conn, patches, platform, role_b, champ_b, weights),
         }
         return {
             "score": score,
             "stats": stats,
             "member_wr": member_wr,
-            "best_trios": queries.duo_best_trios(
-                conn, window, platform, roles, champ_a, champ_b, DUO_BEST_TRIOS_SHOWN
-            ),
+            "best_trios": best_trios,
             "cc_theoretical": {"a": a_cc, "b": b_cc, "duo": duo_cc_raw},
             # Pourcentages 0-100 déjà matérialisés par synergy.compute (mêmes
             # valeurs que la tier list, jamais recalculés ici — cf. `_trio_detail`.

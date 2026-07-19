@@ -235,6 +235,71 @@ def test_api_duo_detail_stats_and_best_trios(pg_sync, client):
     assert cc_scores["blended_pct"] == pytest.approx(40.2)
 
 
+def test_api_duo_detail_for_extended_role_pair(pg_sync, client):
+    """Paire hors trio jgl/mid/sup (Phase 7) : source match_role_stats, pas de
+    notion de « meilleur 3e membre » (best_trios vide)."""
+    # available_windows lit score_trio : une ligne minimale pour que la
+    # fenêtre '16.13' soit résolue (sinon 503 "aucun score matérialisé").
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    pg_sync.execute(
+        "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
+        " games_eff, wr, synergy, ci_low, ci_high, tier,"
+        " cc_theoretical_pct, cc_empirical_pct, cc_blended_pct, scaling)"
+        " VALUES ('16.13', 'euw1', 'top_jgl', 1, 2, 40, 40.0, 0.55, 0.02, 0.3, 0.7, 'moyen',"
+        " NULL, NULL, NULL, NULL)"
+    )
+    for role, champ_id, games, wins in (("TOP", 1, 20, 11), ("JUNGLE", 2, 20, 9)):
+        pg_sync.execute(
+            "INSERT INTO agg_champion (patch, platform, role, champion_id, games, wins)"
+            " VALUES ('16.13', 'euw1', %s, %s, %s, %s)",
+            (role, champ_id, games, wins),
+        )
+    pg_sync.execute(
+        "INSERT INTO matches (match_id, platform, patch, game_version, queue_id,"
+        " game_creation, game_duration_s, winning_team)"
+        " VALUES ('EUW1_TOPJGL', 'euw1', '16.13', '16.13.1', 420, now(), 1800, 100)"
+    )
+    for team, role, champ_id, gold_10, cc, dpg, win in (
+        (100, "TOP", 1, 1200, 5, 0.8, True),
+        (100, "JUNGLE", 2, 1300, 7, 1.2, True),
+        (200, "TOP", 99, 1000, 4, 0.6, False),
+        (200, "JUNGLE", 98, 1050, 6, 0.9, False),
+    ):
+        pg_sync.execute(
+            "INSERT INTO match_role_stats (match_id, team_id, role, champion_id, win,"
+            " gold_10, cc_time_s, dmg_per_gold)"
+            " VALUES ('EUW1_TOPJGL', %s, %s, %s, %s, %s, %s, %s)",
+            (team, role, champ_id, win, gold_10, cc, dpg),
+        )
+
+    payload = client.get("/api/duos/top_jgl/1/2").json()
+    assert payload["score"]["wr"] == pytest.approx(0.55)
+    assert payload["best_trios"] == []
+    stats = payload["stats"]
+    assert stats["games"] == 1
+    # (1200+1300) − (1000+1050) = 450.
+    assert stats["gold_diff"]["10"] == pytest.approx(450.0)
+    # cc_time_s brut / (durée en minutes) : 5/30, 7/30.
+    assert stats["champ_a_cc_time_s"] == pytest.approx(5 / 30)
+    assert stats["champ_b_cc_time_s"] == pytest.approx(7 / 30)
+    # dmg_per_gold : ratio direct, pas de normalisation par durée.
+    assert stats["champ_a_dmg_per_gold"] == pytest.approx(0.8)
+    assert stats["champ_b_dmg_per_gold"] == pytest.approx(1.2)
+
+    detail = client.get("/duo/top_jgl/1/2")
+    assert detail.status_code == 200
+    assert "Meilleurs" not in detail.text  # pas de section "meilleur 3e membre"
+
+    duos_page = client.get("/duos", params={"roles": "top_jgl"})
+    assert duos_page.status_code == 200
+    assert "/duo/top_jgl/1/2" in duos_page.text
+
+
 def test_html_pages_render(pg_sync, client):
     _seed_scores(pg_sync)
     _seed_matches(pg_sync)

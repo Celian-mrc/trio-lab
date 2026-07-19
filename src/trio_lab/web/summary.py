@@ -46,6 +46,12 @@ _PER_MINUTE_KEYS = (
     "sup_cc_time_s",
     "wards_placed",
     "wards_killed",
+    # champ_a/b_cc_time_s (Phase 7, duo généralisé) : noms génériques produits
+    # directement par `queries.duo_role_match_rows` pour les paires hors trio
+    # jgl/mid/sup (top/bot) — absents des lignes match_trio_stats, donc `None`
+    # pour le trio et les 3 duos historiques (calcul via TEAM_POSITION_TO_CC_FIELD).
+    "champ_a_cc_time_s",
+    "champ_b_cc_time_s",
 )
 # jgl/mid/sup_dmg_per_gold, jgl_cs_diff_15 (migration 021) : déjà des ratios/
 # écarts par game, pas de normalisation par durée (contrairement à
@@ -55,6 +61,9 @@ _RATIO_KEYS = (
     "mid_dmg_per_gold",
     "sup_dmg_per_gold",
     "jgl_cs_diff_15",
+    # champ_a/b_dmg_per_gold (Phase 7) : même logique que champ_a/b_cc_time_s.
+    "champ_a_dmg_per_gold",
+    "champ_b_dmg_per_gold",
 )
 
 

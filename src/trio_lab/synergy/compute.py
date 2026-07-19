@@ -37,10 +37,21 @@ from trio_lab.synergy.windows import PatchWindow
 logger = logging.getLogger(__name__)
 
 # `roles` de agg_duo/score_duo → rôles agg_champion de (champ_a, champ_b).
+# Les 3 premières paires (internes au trio jgl/mid/sup) viennent de
+# match_trio_stats ; les 7 suivantes (Phase 7, duo généralisé) de
+# match_role_stats — mêmes tables agg_duo/score_duo en aval, ce dict est
+# le seul endroit qui doit connaître les 10 combinaisons.
 DUO_ROLES: dict[str, tuple[str, str]] = {
     "jgl_mid": ("JUNGLE", "MIDDLE"),
     "jgl_sup": ("JUNGLE", "UTILITY"),
     "mid_sup": ("MIDDLE", "UTILITY"),
+    "top_jgl": ("TOP", "JUNGLE"),
+    "top_mid": ("TOP", "MIDDLE"),
+    "top_bot": ("TOP", "BOTTOM"),
+    "top_sup": ("TOP", "UTILITY"),
+    "jgl_bot": ("JUNGLE", "BOTTOM"),
+    "mid_bot": ("MIDDLE", "BOTTOM"),
+    "bot_sup": ("BOTTOM", "UTILITY"),
 }
 
 _PerPatch = list[tuple[str, int, int]]  # (patch, games, wins)

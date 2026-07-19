@@ -1,22 +1,32 @@
 {% extends "base.html" %}
-{% set duo_role_keys = {'jgl_mid': ('jgl', 'mid'), 'jgl_sup': ('jgl', 'sup'), 'mid_sup': ('mid', 'sup')} %}
-{% set role_a, role_b = duo_role_keys[roles] %}
-{# Rôle du "3e membre" : le seul rôle qui ne fait pas déjà partie du duo. #}
-{% set missing_role = {'jgl_mid': 'sup', 'jgl_sup': 'mid', 'mid_sup': 'jgl'}[roles] %}
-{% set missing_role_plural = {'jgl_mid': 'supports', 'jgl_sup': 'mids', 'mid_sup': 'junglers'}[roles] %}
+{% set role_a, role_b = DUO_ROLE_KEYS[roles] %}
+{# Rôle du "3e membre" : uniquement pour les 3 paires internes au trio
+   jgl/mid/sup — pas de notion équivalente pour les autres (Phase 7). #}
+{% set missing_role = {'jgl_mid': 'sup', 'jgl_sup': 'mid', 'mid_sup': 'jgl'}.get(roles) %}
+{% set missing_role_plural = {'jgl_mid': 'supports', 'jgl_sup': 'mids', 'mid_sup': 'junglers'}.get(roles) %}
 {% set a = champ(score.champ_a) %}
 {% set b = champ(score.champ_b) %}
 {% block title %}{{ a.name }} / {{ b.name }} — Trio Lab{% endblock %}
 {% block content %}
 <h1 class="trio-title">
   {% for c, key, label in ((a, role_a, ROLE_LABELS[role_a]), (b, role_b, ROLE_LABELS[role_b])) %}
+  {% if key in ROLE_TO_TEAM_POSITION %}
   <a class="champ big" href="/champion/{{ key }}/{{ c.id }}?window={{ window | urlencode }}&platform={{ platform | urlencode }}">
     {% if c.icon_url %}<img src="{{ c.icon_url }}" alt="" width="48" height="48">{% endif %}
     {{ c.name }} <small>{{ label }}</small>
   </a>
+  {% else %}
+  <span class="champ big">
+    {% if c.icon_url %}<img src="{{ c.icon_url }}" alt="" width="48" height="48">{% endif %}
+    {{ c.name }} <small>{{ label }}</small>
+  </span>
+  {% endif %}
   {% endfor %}
 </h1>
-<p class="meta">Stats = parties de ce duo, quel que soit le 3e membre (jgl/mid/sup selon le rôle manquant).</p>
+<p class="meta">
+  {% if missing_role %}Stats = parties de ce duo, quel que soit le 3e membre (jgl/mid/sup selon le rôle manquant).
+  {% else %}Stats = parties de ce duo (les 2 rôles fixés, 3 autres joueurs quelconques dans l'équipe).{% endif %}
+</p>
 
 <section class="cards">
   <div class="card"><h3>Winrate</h3><p class="big-number">{{ score.wr | pct }}</p>
@@ -44,7 +54,7 @@
     <h3>CC empirique vs théorique <span class="meta">(0-100)</span></h3>
     <div class="bar-group">
       <div class="bar-row">
-        <span class="bar-label" data-tooltip="Mesuré directement sur les games jouées (Σ timeCCingOthers du trio complet, par minute), plafonné à 6 s/min puis ramené sur 100." aria-label="Mesuré directement sur les games jouées (Σ timeCCingOthers du trio complet, par minute), plafonné à 6 s/min puis ramené sur 100.">Empirique</span><div class="bar-track"><div class="bar-fill" style="width: {{ cc_scores.empirical_pct or 0 }}%"></div></div><span class="bar-value">{{ cc_scores.empirical_pct | pct100 }}</span>
+        <span class="bar-label" data-tooltip="Mesuré directement sur les games jouées (Σ timeCCingOthers, par minute), plafonné à 6 s/min puis ramené sur 100." aria-label="Mesuré directement sur les games jouées (Σ timeCCingOthers, par minute), plafonné à 6 s/min puis ramené sur 100.">Empirique</span><div class="bar-track"><div class="bar-fill" style="width: {{ cc_scores.empirical_pct or 0 }}%"></div></div><span class="bar-value">{{ cc_scores.empirical_pct | pct100 }}</span>
       </div>
       <div class="bar-row">
         <span class="bar-label" data-tooltip="Score de kit des 2 champions du duo (durées/zones/fiabilité des sorts, cf. détail ci-dessous) ramené sur 100 via un repère fixe : 2 × le score max d'un champion (plafond mathématique, jamais atteignable en pratique)." aria-label="Score de kit des 2 champions du duo (durées/zones/fiabilité des sorts, cf. détail ci-dessous) ramené sur 100 via un repère fixe : 2 × le score max d'un champion (plafond mathématique, jamais atteignable en pratique).">Théorique</span><div class="bar-track"><div class="bar-fill" style="width: {{ cc_scores.theoretical_pct or 0 }}%"></div></div><span class="bar-value">{{ cc_scores.theoretical_pct | pct100 }}</span>
@@ -80,6 +90,7 @@
   </div>
 </div>
 
+{% if missing_role %}
 <section>
   <h2>Meilleurs {{ missing_role_plural }}</h2>
   <p class="meta">Meilleur {{ ROLE_LABELS[missing_role] | lower }} à ajouter à ce duo (seul rôle
@@ -108,12 +119,15 @@
     </tbody>
   </table>
 </section>
+{% endif %}
 
 <details class="legend">
   <summary>Empirique, théorique, mélangé : comment ça se calcule ?</summary>
-  <p><strong>Empirique</strong> : le CC réellement infligé par le trio complet (le duo + un 3e
-  membre quelconque, <code>timeCCingOthers</code>, le chrono officiel de Riot), rapporté à la
-  minute de game puis plafonné à 6 s/min (~p99 des trios) et ramené sur 100
+  <p><strong>Empirique</strong> :
+  {% if missing_role %}le CC réellement infligé par le trio complet (le duo + un 3e
+  membre quelconque, {% else %}le CC réellement infligé par les 2 champions du duo (
+  {% endif %}<code>timeCCingOthers</code>, le chrono officiel de Riot), rapporté à la
+  minute de game puis plafonné à 6 s/min (~p99) et ramené sur 100
   pour ne pas laisser quelques valeurs extrêmes écraser l'échelle.
   <strong>Théorique</strong> : un score
   de kit des 2 champions du duo (durée des stuns/roots/etc., zone d'effet, fiabilité des sorts —

@@ -9,6 +9,11 @@ de rôles ; aucun ne le fait pour le **trio jungle/mid/support**. Trio Lab combl
 ce vide : une interface qui expose les meilleurs winrates par trio de champions
 à ces trois rôles, avec un score de synergie et des statistiques détaillées.
 
+Le **trio jgl/mid/sup reste le produit principal**. Depuis la Phase 7, le duo
+est généralisé aux 10 combinaisons de rôles possibles (pas seulement les 3
+internes au trio) — avec le même niveau de détail que dpm.lol n'offre pas
+(juste un WR/pickrate), mais toujours en complément du trio, pas à sa place.
+
 ## Score de synergie
 
 Même définition que dpm.lol pour les duos, étendue au trio :

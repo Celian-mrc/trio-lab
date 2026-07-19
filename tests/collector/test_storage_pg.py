@@ -106,6 +106,29 @@ async def test_insert_match_writes_trio_stats_and_events(pg_conn):
     assert await cur.fetchall() == [("DRAGON", "infernal", 200)]
 
 
+async def test_insert_match_writes_role_stats(pg_conn):
+    detail = build_detail("EUW1_1")
+    timeline = build_timeline("EUW1_1")
+    trio_stats, events = extract.extract_match(detail, timeline)
+    role_stats = extract.extract_role_stats(detail, timeline)
+    row, participants = _parsed("EUW1_1")
+    await storage.insert_match(pg_conn, row, participants, trio_stats, events, role_stats)
+
+    cur = await pg_conn.execute("SELECT count(*) FROM match_role_stats")
+    assert (await cur.fetchone())[0] == 10  # 5 rôles × 2 équipes
+
+    cur = await pg_conn.execute(
+        "SELECT champion_id, gold_10, cc_time_s FROM match_role_stats"
+        " WHERE team_id = 100 AND role = 'JUNGLE'"
+    )
+    assert await cur.fetchone() == (2, 1020, 4)
+
+    # Idempotent (ON CONFLICT) : rejouer ne duplique rien.
+    await storage.insert_match(pg_conn, row, participants, trio_stats, events, role_stats)
+    cur = await pg_conn.execute("SELECT count(*) FROM match_role_stats")
+    assert (await cur.fetchone())[0] == 10
+
+
 async def test_insert_trio_stats_backfills_existing_match(pg_conn):
     row, participants = _parsed("EUW1_1")
     await storage.insert_match(pg_conn, row, participants)  # sans stats trio (pré-Phase 2)

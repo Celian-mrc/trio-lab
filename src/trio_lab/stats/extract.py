@@ -27,6 +27,9 @@ from trio_lab.collector.parsing import ParseError, winning_team_of
 
 TEAMS = (100, 200)
 TRIO_ROLES = ("JUNGLE", "MIDDLE", "UTILITY")
+# Phase 7 (duo généralisé) : les 5 rôles, pour match_role_stats — n'affecte
+# jamais match_trio_stats, qui reste calculée uniquement depuis TRIO_ROLES.
+ALL_ROLES = ("TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY")
 GOLD_MINUTES = (5, 10, 15, 20, 25, 30, 35)
 MINUTE_MS = 60_000
 # Fenêtre de la kill participation « early » (cf. PROJECT.md).
@@ -342,6 +345,142 @@ def combat_stats(
             damage[team]["trio"] / damage[team]["team"] if damage[team]["team"] else None
         )
     return stats
+
+
+# --- résumés par rôle individuel (Phase 7, duo généralisé) ---
+#
+# Indépendant du trio jgl/mid/sup : produit `match_role_stats` (5 rôles, brut
+# par rôle plutôt que sommé) pour permettre à `stats.aggregate` de dériver
+# n'importe quelle paire de rôles (pas seulement les 3 internes au trio) sans
+# précalculer les 10 combinaisons ici. Ne touche à aucune donnée trio
+# existante — fonctions indépendantes de `trios_of`/`gold_diffs`/`combat_stats`.
+
+
+@dataclass(frozen=True)
+class RoleMembers:
+    """Les 5 rôles d'une équipe : participantId et championId par rôle."""
+
+    team_id: int
+    pid_by_role: dict[str, int]
+    champion_by_role: dict[str, int]
+
+
+def role_members_of(detail: dict[str, Any]) -> dict[int, RoleMembers]:
+    """Identifie les 5 rôles de chaque équipe. Lève `ParseError` si un rôle manque."""
+    by_team_role: dict[tuple[int, str], tuple[int, int]] = {}
+    for p in detail["info"].get("participants", []):
+        key = (p.get("teamId"), p.get("teamPosition"))
+        if key in by_team_role:
+            raise ParseError(f"rôle dupliqué : {key!r}")
+        by_team_role[key] = (p.get("participantId"), p.get("championId"))
+
+    members: dict[int, RoleMembers] = {}
+    for team in TEAMS:
+        pid_by_role: dict[str, int] = {}
+        champion_by_role: dict[str, int] = {}
+        for role in ALL_ROLES:
+            member = by_team_role.get((team, role))
+            if member is None or member[0] is None or member[1] is None:
+                raise ParseError(f"rôle manquant : {role} (équipe {team})")
+            pid_by_role[role] = member[0]
+            champion_by_role[role] = member[1]
+        members[team] = RoleMembers(
+            team_id=team, pid_by_role=pid_by_role, champion_by_role=champion_by_role
+        )
+    return members
+
+
+def role_gold(
+    timeline: dict[str, Any], members: dict[int, RoleMembers]
+) -> dict[int, dict[str, dict[str, int | None]]]:
+    """Gold BRUT (pas de diff) à 5/10/…/35 min, par équipe puis par rôle.
+
+    Contrairement à `gold_diffs` (trio, déjà la différence trio vs trio
+    adverse), ici la valeur brute est conservée : le diff d'une paire de
+    rôles donnée se calcule à l'agrégation par auto-jointure avec l'équipe
+    adverse, pas ici — évite de précalculer les 10 combinaisons de paires.
+    """
+    frames = timeline["info"]["frames"]
+    last_minute = frames[-1]["timestamp"] // MINUTE_MS
+    gold: dict[int, dict[str, dict[str, int | None]]] = {
+        team: {role: {} for role in ALL_ROLES} for team in TEAMS
+    }
+    for minute in GOLD_MINUTES:
+        col = f"gold_{minute}"
+        if minute > last_minute:
+            for team in TEAMS:
+                for role in ALL_ROLES:
+                    gold[team][role][col] = None
+            continue
+        pf = frames[minute]["participantFrames"]
+        for team in TEAMS:
+            for role in ALL_ROLES:
+                pid = members[team].pid_by_role[role]
+                gold[team][role][col] = pf[str(pid)]["totalGold"]
+    return gold
+
+
+def role_combat(
+    detail: dict[str, Any], cc_reliability: dict[int, float] | None = None
+) -> dict[int, dict[str, dict[str, Any]]]:
+    """CC/dégâts-gold/wards/vision par rôle individuel, depuis le detail de fin de match.
+
+    Même calcul que les champs par-membre de `combat_stats` (cc_reliability,
+    dmg_per_gold), mais pour les 5 rôles plutôt que les 3 du trio.
+    """
+    stats: dict[int, dict[str, dict[str, Any]]] = {team: {} for team in TEAMS}
+    for p in detail["info"]["participants"]:
+        team, role = p["teamId"], p.get("teamPosition")
+        if role not in ALL_ROLES:
+            continue
+        gold = p.get("goldEarned", 0)
+        damage = p.get("totalDamageDealtToChampions", 0)
+        reliability = (cc_reliability or {}).get(p.get("championId"), 1.0)
+        stats[team][role] = {
+            "cc_time_s": round(p.get("timeCCingOthers", 0) * reliability),
+            "dmg_per_gold": damage / gold if gold else None,
+            "wards_placed": p.get("wardsPlaced", 0),
+            "wards_killed": p.get("wardsKilled", 0),
+            "vision_score": p.get("visionScore", 0),
+        }
+    return stats
+
+
+def extract_role_stats(
+    detail: dict[str, Any],
+    timeline: dict[str, Any],
+    cc_reliability: dict[int, float] | None = None,
+) -> list[dict[str, Any]]:
+    """10 lignes `match_role_stats` (5 rôles × 2 équipes) d'un match.
+
+    Lève `ParseError` si les données sont inexploitables, même logique que
+    `extract_match` (indépendant : n'affecte jamais `match_trio_stats`).
+    """
+    match_id = detail["metadata"]["matchId"]
+    tl_match_id = timeline["metadata"]["matchId"]
+    if match_id != tl_match_id:
+        raise ParseError(f"timeline {tl_match_id!r} ≠ detail {match_id!r}")
+
+    members = role_members_of(detail)
+    winning_team = winning_team_of(detail)
+    gold = role_gold(timeline, members)
+    combat = role_combat(detail, cc_reliability)
+
+    rows = []
+    for team in TEAMS:
+        for role in ALL_ROLES:
+            rows.append(
+                {
+                    "match_id": match_id,
+                    "team_id": team,
+                    "role": role,
+                    "champion_id": members[team].champion_by_role[role],
+                    "win": team == winning_team,
+                    **gold[team][role],
+                    **combat[team][role],
+                }
+            )
+    return rows
 
 
 # --- assemblage ---

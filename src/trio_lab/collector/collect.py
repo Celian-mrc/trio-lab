@@ -233,11 +233,16 @@ async def _process_match(
         participants = parsing.participant_rows(detail)
         timeline = await client.get_match_timeline(match_id, platform=platform)
         trio_stats, objective_events = extract.extract_match(detail, timeline, CC_TIME_RELIABILITY)
+        # Phase 7 (duo généralisé) : indépendant du trio, n'affecte jamais
+        # match_trio_stats — alimente match_role_stats (5 rôles).
+        role_stats = extract.extract_role_stats(detail, timeline, CC_TIME_RELIABILITY)
         # Archivage débrayable (ARCHIVE_TIMELINES=0) : sur Railway le
         # filesystem est éphémère, écrire des JSON.gz n'aurait aucun sens.
         if config.ARCHIVE_TIMELINES:
             storage.archive_timeline(data_dir, platform, patch, match_id, timeline)
-        await storage.insert_match(conn, row, participants, trio_stats, objective_events)
+        await storage.insert_match(
+            conn, row, participants, trio_stats, objective_events, role_stats
+        )
         counts["downloaded"] += 1
         # Récolte des participants (snowball, session du 18/07/2026) : les 10
         # PUUIDs du match sont déjà en main, gratuits — seule la vérification

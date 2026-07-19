@@ -43,7 +43,22 @@ _STAT_COLUMNS_SQL = (
     " soul_rate, herald_rate, first_tower_rate, cc_time_s,"
     " cc_theoretical_pct, cc_empirical_pct, cc_blended_pct, scaling"
 )
-DUO_ROLES = ("jgl_mid", "jgl_sup", "mid_sup")
+# Phase 7 (duo généralisé) : les 3 premières restent sourcées sur
+# match_trio_stats (`duo_match_rows`), les 7 suivantes sur match_role_stats
+# (`duo_role_match_rows`) — cf. `TRIO_DUO_ROLES` plus bas pour distinguer les
+# deux chemins côté web/app.py.
+DUO_ROLES = (
+    "jgl_mid",
+    "jgl_sup",
+    "mid_sup",
+    "top_jgl",
+    "top_mid",
+    "top_bot",
+    "top_sup",
+    "jgl_bot",
+    "mid_bot",
+    "bot_sup",
+)
 _TIER_AT_LEAST = {
     "faible": ("faible", "moyen", "eleve"),
     "moyen": ("moyen", "eleve"),
@@ -539,6 +554,11 @@ _DUO_ROLE_COLUMNS = {
     "jgl_sup": ("jgl_champion", "sup_champion"),
     "mid_sup": ("mid_champion", "sup_champion"),
 }
+# Les 3 paires internes au trio jgl/mid/sup : source match_trio_stats, notion
+# de « 3e membre libre » (best_trios). Les 7 autres (Phase 7) n'ont pas de
+# notion de trio équivalente et sourcent match_role_stats — cf.
+# `duo_role_match_rows`, utilisée par `web/app.py._duo_detail` pour brancher.
+TRIO_DUO_ROLES = frozenset(_DUO_ROLE_COLUMNS)
 
 
 def duo_score(
@@ -584,6 +604,65 @@ def duo_match_rows(
               AND t.{col_a} = %(champ_a)s AND t.{col_b} = %(champ_b)s
             """,
             {"patches": patches, "platform": platform, "champ_a": champ_a, "champ_b": champ_b},
+        ).fetchall()
+
+
+def duo_role_match_rows(
+    conn: psycopg.Connection,
+    patches: list[str],
+    platform: str | None,
+    role_a: str,
+    role_b: str,
+    champ_a: int,
+    champ_b: int,
+) -> list[dict]:
+    """Équivalent de `duo_match_rows` pour une paire de rôles hors trio
+    jgl/mid/sup (Phase 7, duo généralisé) : source match_role_stats (5 rôles)
+    au lieu de match_trio_stats, qui ne connaît que jgl/mid/sup.
+
+    Gold : vrai diff DE LA PAIRE (auto-jointure avec l'équipe adverse, mêmes
+    2 rôles), pas le gold_diff_X du trio complet — plus précis, permis par le
+    grain par-rôle de match_role_stats. Colonnes CC/dmg-par-gold aliasées en
+    champ_a/b_* génériques : `summary.summarize` les traite déjà (cf.
+    summary.py, `_PER_MINUTE_KEYS`/`_RATIO_KEYS`).
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            """
+            SELECT m.patch, m.game_duration_s, ra.win,
+                   (ra.gold_5 + rb.gold_5) - (ea.gold_5 + eb.gold_5) AS gold_diff_5,
+                   (ra.gold_10 + rb.gold_10) - (ea.gold_10 + eb.gold_10) AS gold_diff_10,
+                   (ra.gold_15 + rb.gold_15) - (ea.gold_15 + eb.gold_15) AS gold_diff_15,
+                   (ra.gold_20 + rb.gold_20) - (ea.gold_20 + eb.gold_20) AS gold_diff_20,
+                   (ra.gold_25 + rb.gold_25) - (ea.gold_25 + eb.gold_25) AS gold_diff_25,
+                   (ra.gold_30 + rb.gold_30) - (ea.gold_30 + eb.gold_30) AS gold_diff_30,
+                   (ra.gold_35 + rb.gold_35) - (ea.gold_35 + eb.gold_35) AS gold_diff_35,
+                   ra.cc_time_s AS champ_a_cc_time_s, rb.cc_time_s AS champ_b_cc_time_s,
+                   ra.dmg_per_gold AS champ_a_dmg_per_gold, rb.dmg_per_gold AS champ_b_dmg_per_gold,
+                   ra.vision_score + rb.vision_score AS vision_score,
+                   ra.wards_placed + rb.wards_placed AS wards_placed,
+                   ra.wards_killed + rb.wards_killed AS wards_killed
+            FROM match_role_stats ra
+            JOIN match_role_stats rb
+                ON rb.match_id = ra.match_id AND rb.team_id = ra.team_id AND rb.role = %(role_b)s
+            JOIN matches m ON m.match_id = ra.match_id
+            JOIN match_role_stats ea
+                ON ea.match_id = ra.match_id AND ea.team_id <> ra.team_id AND ea.role = %(role_a)s
+            JOIN match_role_stats eb
+                ON eb.match_id = ra.match_id AND eb.team_id = ea.team_id AND eb.role = %(role_b)s
+            WHERE ra.role = %(role_a)s AND ra.champion_id = %(champ_a)s
+              AND rb.champion_id = %(champ_b)s
+              AND m.patch = ANY(%(patches)s)
+              AND (%(platform)s::text IS NULL OR m.platform = %(platform)s)
+            """,
+            {
+                "patches": patches,
+                "platform": platform,
+                "role_a": role_a,
+                "role_b": role_b,
+                "champ_a": champ_a,
+                "champ_b": champ_b,
+            },
         ).fetchall()
 
 

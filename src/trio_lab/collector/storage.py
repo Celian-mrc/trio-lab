@@ -189,6 +189,19 @@ _TRIO_STATS_SQL = """
     ON CONFLICT (match_id, team_id) DO NOTHING
 """
 
+_ROLE_STATS_SQL = """
+    INSERT INTO match_role_stats (
+        match_id, team_id, role, champion_id, win,
+        gold_5, gold_10, gold_15, gold_20, gold_25, gold_30, gold_35,
+        cc_time_s, dmg_per_gold, wards_placed, wards_killed, vision_score
+    ) VALUES (
+        %(match_id)s, %(team_id)s, %(role)s, %(champion_id)s, %(win)s,
+        %(gold_5)s, %(gold_10)s, %(gold_15)s, %(gold_20)s, %(gold_25)s, %(gold_30)s, %(gold_35)s,
+        %(cc_time_s)s, %(dmg_per_gold)s, %(wards_placed)s, %(wards_killed)s, %(vision_score)s
+    )
+    ON CONFLICT (match_id, team_id, role) DO NOTHING
+"""
+
 _OBJECTIVE_EVENTS_SQL = """
     INSERT INTO match_objective_events (match_id, seq, ts_s, event_type, subtype,
                                         team_id, pos_x, pos_y)
@@ -217,8 +230,14 @@ async def insert_match(
     participants: list[dict[str, Any]],
     trio_stats: list[dict[str, Any]] | None = None,
     objective_events: list[dict[str, Any]] | None = None,
+    role_stats: list[dict[str, Any]] | None = None,
 ) -> bool:
-    """Insère un match complet (matches, participants, stats trio, events) en une transaction.
+    """Insère un match complet (matches, participants, stats trio, events, stats par
+    rôle) en une transaction.
+
+    `role_stats` (Phase 7, duo généralisé) : indépendant de `trio_stats`,
+    n'affecte jamais match_trio_stats — optionnel pour ne pas casser les
+    appelants qui n'en produisent pas encore (backfill notamment).
 
     Retourne False si le match était déjà en base (no-op, idempotence). Purge
     l'éventuelle entrée `error_retryable` du journal : l'échec est résolu.
@@ -249,6 +268,9 @@ async def insert_match(
                 participants,
             )
         await _write_trio_stats(conn, trio_stats or [], objective_events or [])
+        if role_stats:
+            async with conn.cursor() as rcur:
+                await rcur.executemany(_ROLE_STATS_SQL, role_stats)
         await conn.execute(
             "DELETE FROM match_fetch_journal WHERE match_id = %s", (row["match_id"],)
         )

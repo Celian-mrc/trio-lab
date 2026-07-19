@@ -95,6 +95,7 @@ class _FakeStore:
         self.players: dict[str, dict] = {}  # puuid → {platform, fetched}
         self.matches: dict[str, tuple[dict, list[dict]]] = {}
         self.trio_stats: dict[str, tuple[list, list]] = {}
+        self.role_stats: dict[str, list] = {}
         self.journal: dict[str, dict] = {}
         self.archived: list[str] = []
 
@@ -146,11 +147,20 @@ class _FakeStore:
         )
         return entry["status"]
 
-    async def insert_match(self, conn, row, participants, trio_stats=None, objective_events=None):
+    async def insert_match(
+        self,
+        conn,
+        row,
+        participants,
+        trio_stats=None,
+        objective_events=None,
+        role_stats=None,
+    ):
         if row["match_id"] in self.matches:
             return False
         self.matches[row["match_id"]] = (row, participants)
         self.trio_stats[row["match_id"]] = (trio_stats or [], objective_events or [])
+        self.role_stats[row["match_id"]] = role_stats or []
         self.journal.pop(row["match_id"], None)
         return True
 

@@ -153,3 +153,36 @@ lissage bayésien ne compense pas assez). Tables droppées
 - [x] Interface hébergée sur Railway (accès perso) — déployée le 2026-07-11
       avec le service collector (build Dockerfile commun, checklist et pièges
       dans `docs/DEPLOY.md` ; ~100 K matchs/jour constatés au démarrage)
+
+## Phase 7 — Duo généralisé (n'importe quelle paire de rôles)
+
+Le trio jgl/mid/sup reste le cœur du produit (pipeline `match_trio_stats`
+inchangé) ; le duo devient utilisable pour les 10 combinaisons de rôles
+possibles (pas seulement les 3 internes au trio), comme le fait dpm.lol mais
+avec le même niveau de détail que les pages trio/duo existantes.
+
+- [x] `migrations/023_match_role_stats.sql` : table brute par rôle individuel
+      (5 rôles, gold BRUT par checkpoint — pas de diff précalculé, dérivé à
+      l'agrégation) — table séparée, `match_trio_stats` non touchée
+- [x] `migrations/024_widen_duo_roles.sql` : CHECK `agg_duo`/`score_duo.roles`
+      élargi aux 7 nouvelles paires (top_jgl, top_mid, top_bot, top_sup,
+      jgl_bot, mid_bot, bot_sup)
+- [x] `stats/extract.py` : `extract_role_stats()` (fonctions indépendantes de
+      `extract_match`, jamais appelées à sa place) → 10 lignes/match
+- [x] `stats/aggregate.py` : 2e requête `agg_duo` pour les 7 nouvelles paires,
+      sourcée sur `match_role_stats` (gold diff réel de la paire par
+      auto-jointure avec l'équipe adverse ; objectifs récupérés par jointure
+      sur `match_trio_stats`, pas dupliqués)
+- [x] `synergy/compute.py` : `DUO_ROLES` élargi à 10 entrées — le reste du
+      pipeline scores (`score_duo`) était déjà générique sur `roles`
+- [x] Web : `queries.duo_role_match_rows()` (nouvelle source pour les 7
+      paires, colonnes `champ_a/b_cc_time_s`/`champ_a/b_dmg_per_gold`
+      génériques réutilisées telles quelles par `summary.summarize`) ;
+      `/duos` et `/duo/{roles}/...` déjà génériques sur `roles`, juste
+      étendus (sélecteur, badges) ; pas de section « meilleurs 3e membres »
+      pour les paires hors trio (pas de notion de trio au-delà de jgl/mid/sup)
+- [ ] **Pas de backfill possible** : `match_role_stats` vient de la timeline
+      brute, jamais conservée après extraction (CLAUDE.md, pas de JSON brut en
+      base) — les 7 nouvelles paires démarrent à vide et grossissent
+      seulement à partir du déploiement, contrairement aux 3 historiques (déjà
+      des mois de profondeur via `match_trio_stats`)

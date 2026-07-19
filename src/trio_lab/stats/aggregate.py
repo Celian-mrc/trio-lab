@@ -89,6 +89,53 @@ _DUO_SQL = f"""
     GROUP BY m.patch, m.platform, d.roles, d.champ_a, d.champ_b
 """
 
+# Paires de rôles hors trio jgl/mid/sup (Phase 7, duo généralisé) : sourcées
+# sur match_role_stats (5 rôles bruts) plutôt que match_trio_stats, qui ne
+# connaît que jgl/mid/sup. Gold : vrai diff de la PAIRE (ses 2 rôles vs les 2
+# mêmes rôles de l'équipe adverse, auto-jointure ea/eb) — plus précis que le
+# gold_diff_X trio réutilisé pour les 3 paires historiques ci-dessus.
+# Objectifs (drakes/soul/herald/tour) : lus depuis match_trio_stats (jointure
+# sur match_id/team_id) — stats d'équipe déjà calculées là, identiques quelle
+# que soit la paire de rôles, pas dupliquées ici.
+_DUO_EXT_SQL = f"""
+    INSERT INTO agg_duo (patch, platform, roles, champ_a, champ_b, games, wins,
+                         {_STAT_SUMS_COLUMNS}, {_DUO_CC_POSITION_COLUMNS})
+    SELECT m.patch, m.platform, pair.roles, ra.champion_id, rb.champion_id,
+           count(*), count(*) FILTER (WHERE mt.win),
+           sum((ra.gold_5 + rb.gold_5) - (ea.gold_5 + eb.gold_5)),
+           count((ra.gold_5 + rb.gold_5) - (ea.gold_5 + eb.gold_5)),
+           sum((ra.gold_10 + rb.gold_10) - (ea.gold_10 + eb.gold_10)),
+           count((ra.gold_10 + rb.gold_10) - (ea.gold_10 + eb.gold_10)),
+           sum((ra.gold_15 + rb.gold_15) - (ea.gold_15 + eb.gold_15)),
+           count((ra.gold_15 + rb.gold_15) - (ea.gold_15 + eb.gold_15)),
+           sum((ra.vision_score + rb.vision_score) / (m.game_duration_s / 60.0)), count(*),
+           sum(mt.drakes_taken / (m.game_duration_s / 60.0)), count(mt.drakes_taken),
+           count(*) FILTER (WHERE mt.soul_taken), count(mt.soul_taken),
+           count(*) FILTER (WHERE mt.herald_taken), count(mt.herald_taken),
+           count(*) FILTER (WHERE mt.first_tower), count(mt.first_tower),
+           sum((ra.cc_time_s + rb.cc_time_s) / (m.game_duration_s / 60.0)), count(*),
+           sum(ra.cc_time_s / (m.game_duration_s / 60.0)), count(ra.cc_time_s),
+           sum(rb.cc_time_s / (m.game_duration_s / 60.0)), count(rb.cc_time_s)
+    FROM matches m
+    JOIN match_trio_stats mt ON mt.match_id = m.match_id
+    CROSS JOIN LATERAL (VALUES
+        ('top_jgl', 'TOP', 'JUNGLE'), ('top_mid', 'TOP', 'MIDDLE'),
+        ('top_bot', 'TOP', 'BOTTOM'), ('top_sup', 'TOP', 'UTILITY'),
+        ('jgl_bot', 'JUNGLE', 'BOTTOM'), ('mid_bot', 'MIDDLE', 'BOTTOM'),
+        ('bot_sup', 'BOTTOM', 'UTILITY')
+    ) AS pair(roles, role_a, role_b)
+    JOIN match_role_stats ra
+        ON ra.match_id = m.match_id AND ra.team_id = mt.team_id AND ra.role = pair.role_a
+    JOIN match_role_stats rb
+        ON rb.match_id = m.match_id AND rb.team_id = mt.team_id AND rb.role = pair.role_b
+    JOIN match_role_stats ea
+        ON ea.match_id = m.match_id AND ea.team_id <> mt.team_id AND ea.role = pair.role_a
+    JOIN match_role_stats eb
+        ON eb.match_id = m.match_id AND eb.team_id = ea.team_id AND eb.role = pair.role_b
+    WHERE m.patch = %(patch)s
+    GROUP BY m.patch, m.platform, pair.roles, ra.champion_id, rb.champion_id
+"""
+
 _TRIO_SQL = f"""
     INSERT INTO agg_trio (patch, platform, jgl_champion, mid_champion, sup_champion,
                           games, wins,
@@ -133,12 +180,15 @@ _DUO_DURATION_SQL = f"""
              {_DURATION_BUCKET_SQL}
 """
 
-_TABLES_SQL = {
-    "agg_champion": _CHAMPION_SQL,
-    "agg_duo": _DUO_SQL,
-    "agg_trio": _TRIO_SQL,
-    "agg_trio_duration": _TRIO_DURATION_SQL,
-    "agg_duo_duration": _DUO_DURATION_SQL,
+# agg_duo reçoit 2 INSERT (les 3 paires internes au trio depuis
+# match_trio_stats, les 7 autres depuis match_role_stats) derrière un seul
+# DELETE par patch — d'où des tuples de requêtes plutôt qu'une requête unique.
+_TABLES_SQL: dict[str, tuple[str, ...]] = {
+    "agg_champion": (_CHAMPION_SQL,),
+    "agg_duo": (_DUO_SQL, _DUO_EXT_SQL),
+    "agg_trio": (_TRIO_SQL,),
+    "agg_trio_duration": (_TRIO_DURATION_SQL,),
+    "agg_duo_duration": (_DUO_DURATION_SQL,),
 }
 
 
@@ -150,15 +200,14 @@ def refresh(patch: str, *, dsn: str | None = None) -> dict[str, int]:
         # division par ligne à _DUO_SQL/_TRIO_SQL — au-delà du statement_timeout
         # par défaut du rôle applicatif sur de gros volumes de matchs.
         conn.execute("SET LOCAL statement_timeout = '10min'")
-        for table, sql in _TABLES_SQL.items():
+        for table, sqls in _TABLES_SQL.items():
             conn.execute(
                 psycopg.sql.SQL("DELETE FROM {} WHERE patch = %(patch)s").format(
                     psycopg.sql.Identifier(table)
                 ),
                 {"patch": patch},
             )
-            cur = conn.execute(sql, {"patch": patch})
-            counts[table] = cur.rowcount
+            counts[table] = sum(conn.execute(sql, {"patch": patch}).rowcount for sql in sqls)
     logger.info("agrégats %s rafraîchis : %s", patch, counts)
     return counts
 
