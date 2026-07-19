@@ -186,3 +186,21 @@ avec le même niveau de détail que les pages trio/duo existantes.
       base) — les 7 nouvelles paires démarrent à vide et grossissent
       seulement à partir du déploiement, contrairement aux 3 historiques (déjà
       des mois de profondeur via `match_trio_stats`)
+- [x] Cohérence trio/duo (2026-07-19) : la page détail duo affiche les mêmes
+      cartes que la page trio (Avantage gold, Objectifs, Combat, Vision),
+      pour les 10 paires — `migrations/025_role_stats_combat.sql` ajoute
+      `damage`/`first_blood`/`kp_pre15` à `match_role_stats`.
+      Pour les 3 paires historiques : stats déjà présentes dans `t.*`
+      (`match_trio_stats`), zéro nouveau calcul, affichées telles quelles
+      (contexte d'équipe, pas attribuées à ces 2 joueurs en particulier —
+      même principe que la synergie/WR déjà affichés). Pour les 7 nouvelles :
+      décomposition réelle à 2 membres — gold diff (auto-jointure équipe
+      adverse), vision/wards (somme exacte), part de dégâts (somme exacte,
+      aucune ambiguïté), first blood (OR exact, un seul événement). Exception
+      volontaire : le kill participation < 15 min reste INDIVIDUEL par membre
+      pour les nouvelles paires (pas combiné en « au moins un des deux » —
+      demanderait de revérifier l'appartenance des 2 pids à chaque kill,
+      risque de double-comptage) ; objectifs (grubs/héraut/drakes/âme/
+      Nashor/tours/plaques) restés team-level partout, structurellement non
+      attribuables à un sous-ensemble de joueurs (`match_objective_events`
+      n'a pas de tueur identifié, seulement un `team_id`).

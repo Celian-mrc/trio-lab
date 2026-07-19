@@ -423,10 +423,17 @@ def role_gold(
 def role_combat(
     detail: dict[str, Any], cc_reliability: dict[int, float] | None = None
 ) -> dict[int, dict[str, dict[str, Any]]]:
-    """CC/dégâts-gold/wards/vision par rôle individuel, depuis le detail de fin de match.
+    """CC/dégâts-gold/wards/vision/first blood par rôle individuel, depuis le
+    detail de fin de match.
 
     Même calcul que les champs par-membre de `combat_stats` (cc_reliability,
     dmg_per_gold), mais pour les 5 rôles plutôt que les 3 du trio.
+
+    `damage` (migration 025) : brut, en plus du ratio `dmg_per_gold` — permet
+    une part de dégâts d'équipe exacte pour une PAIRE de rôles (somme de 2
+    valeurs individuelles, aucune ambiguïté, contrairement au kill
+    participation ci-dessous). `first_blood` : ce rôle a le kill ou l'assist
+    du 1er sang — combinable en OR exact pour une paire (un seul événement).
     """
     stats: dict[int, dict[str, dict[str, Any]]] = {team: {} for team in TEAMS}
     for p in detail["info"]["participants"]:
@@ -442,8 +449,45 @@ def role_combat(
             "wards_placed": p.get("wardsPlaced", 0),
             "wards_killed": p.get("wardsKilled", 0),
             "vision_score": p.get("visionScore", 0),
+            "damage": damage,
+            "first_blood": bool(p.get("firstBloodKill") or p.get("firstBloodAssist")),
         }
     return stats
+
+
+def role_kill_participation(
+    timeline: dict[str, Any], members: dict[int, RoleMembers]
+) -> dict[int, dict[str, float | None]]:
+    """KP < 15 min INDIVIDUELLE par rôle (migration 025) : kills de l'équipe où
+    ce rôle est killer/assist ÷ kills totaux de l'équipe sur la même fenêtre.
+
+    Volontairement PAS combinée en « au moins un des deux » pour une paire de
+    rôles : ça demanderait de revérifier l'appartenance des 2 pids à chaque
+    kill (comme `combat_stats` le fait pour le trio), pas de simplement
+    sommer 2 ratios individuels indépendants — un même kill impliquant les 2
+    membres serait compté deux fois. Affichée par membre, comme le CC ou le
+    dégâts/gold.
+    """
+    team_kills = dict.fromkeys(TEAMS, 0)
+    role_kills = {team: dict.fromkeys(ALL_ROLES, 0) for team in TEAMS}
+    for frame in timeline["info"]["frames"]:
+        for e in frame["events"]:
+            if e["type"] != "CHAMPION_KILL" or e["timestamp"] >= KP_WINDOW_MS:
+                continue
+            killer = e.get("killerId", 0)
+            team = team_of(killer) if killer else _opposite(team_of(e["victimId"]))
+            team_kills[team] += 1
+            involved = {killer, *e.get("assistingParticipantIds", [])}
+            for role, pid in members[team].pid_by_role.items():
+                if pid in involved:
+                    role_kills[team][role] += 1
+    return {
+        team: {
+            role: (role_kills[team][role] / team_kills[team] if team_kills[team] else None)
+            for role in ALL_ROLES
+        }
+        for team in TEAMS
+    }
 
 
 def extract_role_stats(
@@ -465,6 +509,7 @@ def extract_role_stats(
     winning_team = winning_team_of(detail)
     gold = role_gold(timeline, members)
     combat = role_combat(detail, cc_reliability)
+    kp = role_kill_participation(timeline, members)
 
     rows = []
     for team in TEAMS:
@@ -478,6 +523,7 @@ def extract_role_stats(
                     "win": team == winning_team,
                     **gold[team][role],
                     **combat[team][role],
+                    "kp_pre15": kp[team][role],
                 }
             )
     return rows

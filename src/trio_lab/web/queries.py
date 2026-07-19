@@ -622,9 +622,20 @@ def duo_role_match_rows(
 
     Gold : vrai diff DE LA PAIRE (auto-jointure avec l'équipe adverse, mêmes
     2 rôles), pas le gold_diff_X du trio complet — plus précis, permis par le
-    grain par-rôle de match_role_stats. Colonnes CC/dmg-par-gold aliasées en
-    champ_a/b_* génériques : `summary.summarize` les traite déjà (cf.
-    summary.py, `_PER_MINUTE_KEYS`/`_RATIO_KEYS`).
+    grain par-rôle de match_role_stats. Colonnes CC/dmg-par-gold/KP aliasées
+    en champ_a/b_* génériques : `summary.summarize` les traite déjà (cf.
+    summary.py, `_MEAN_KEYS`/`_PER_MINUTE_KEYS`/`_RATIO_KEYS`).
+
+    Objectifs (grubs/herald/drakes/âme/nashor/tours/plaques) et CS jungle à
+    15 min : stats d'ÉQUIPE déjà calculées dans match_trio_stats (mêmes
+    valeurs quelle que soit la paire de rôles regardée) — récupérées par
+    jointure sur (match_id, team_id), pas dupliquées ici. Part de dégâts :
+    somme exacte des 2 membres ÷ dégâts totaux de l'équipe (dérivés en
+    sommant les 5 lignes match_role_stats de ce match/équipe). First blood :
+    OR exact (un seul événement, aucun risque de double-comptage) — mais le
+    kill participation reste INDIVIDUEL par membre (cf. `role_kill_participation`
+    dans `stats/extract.py` : le combiner en OR demanderait de revérifier
+    l'appartenance des 2 pids à chaque kill, pas de sommer 2 ratios).
     """
     with conn.cursor(row_factory=dict_row) as cur:
         return cur.execute(
@@ -639,13 +650,23 @@ def duo_role_match_rows(
                    (ra.gold_35 + rb.gold_35) - (ea.gold_35 + eb.gold_35) AS gold_diff_35,
                    ra.cc_time_s AS champ_a_cc_time_s, rb.cc_time_s AS champ_b_cc_time_s,
                    ra.dmg_per_gold AS champ_a_dmg_per_gold, rb.dmg_per_gold AS champ_b_dmg_per_gold,
+                   ra.kp_pre15 AS champ_a_kp_pre15, rb.kp_pre15 AS champ_b_kp_pre15,
                    ra.vision_score + rb.vision_score AS vision_score,
                    ra.wards_placed + rb.wards_placed AS wards_placed,
-                   ra.wards_killed + rb.wards_killed AS wards_killed
+                   ra.wards_killed + rb.wards_killed AS wards_killed,
+                   (ra.damage + rb.damage)::real / NULLIF((
+                       SELECT sum(rt.damage) FROM match_role_stats rt
+                       WHERE rt.match_id = ra.match_id AND rt.team_id = ra.team_id
+                   ), 0) AS damage_share,
+                   (ra.first_blood OR rb.first_blood) AS first_blood_trio,
+                   mt.grubs_taken, mt.herald_taken, mt.drakes_taken, mt.soul_taken,
+                   mt.nashor_first, mt.nashor_first_s, mt.first_tower, mt.towers_destroyed,
+                   mt.plates_taken, mt.jgl_cs_diff_15
             FROM match_role_stats ra
             JOIN match_role_stats rb
                 ON rb.match_id = ra.match_id AND rb.team_id = ra.team_id AND rb.role = %(role_b)s
             JOIN matches m ON m.match_id = ra.match_id
+            JOIN match_trio_stats mt ON mt.match_id = ra.match_id AND mt.team_id = ra.team_id
             JOIN match_role_stats ea
                 ON ea.match_id = ra.match_id AND ea.team_id <> ra.team_id AND ea.role = %(role_a)s
             JOIN match_role_stats eb

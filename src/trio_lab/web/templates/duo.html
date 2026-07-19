@@ -49,7 +49,66 @@
     <p class="meta" data-tooltip="Intervalle de confiance à 95 % sur la pente (erreur-type de la régression) : si l'intervalle contient 0, ce duo pourrait n'avoir aucune tendance réelle selon la durée." aria-label="Intervalle de confiance à 95 % sur la pente (erreur-type de la régression) : si l'intervalle contient 0, ce duo pourrait n'avoir aucune tendance réelle selon la durée.">IC {{ score.scaling_ci_low | signed_pct(2) }} – {{ score.scaling_ci_high | signed_pct(2) }}</p></div>
 </section>
 
+<section>
+  <h2>Avantage gold {{ 'du trio' if missing_role else 'du duo' }}</h2>
+  <div class="gold-diff-grid">
+    {% for m, v in stats.gold_diff.items() %}
+    {% set n = stats.gold_diff_n[m] %}
+    {% set sample_pct = n | pctof(stats.games) %}
+    <div class="cell {{ 'low-sample' if sample_pct < gold_diff_low_sample_pct else '' }}">
+      <div class="label">{{ m }} min</div>
+      <div class="value {{ 'pos' if v and v > 0 else 'neg' if v and v < 0 }}">{{ v | signed_int }}</div>
+      <div class="diverging-bar">
+        <div class="zero-line"></div>
+        {% if v %}
+        <div class="fill {{ 'pos' if v > 0 else 'neg' }}" style="width: {{ (v | barpct_abs(gold_diff_bar_cap)) / 2 }}%"></div>
+        {% endif %}
+      </div>
+      <div class="n" data-tooltip="Nombre de games (sur {{ stats.games }} au total) ayant duré au moins {{ m }} min — la moyenne ci-dessus ne porte que sur ce sous-ensemble." aria-label="Nombre de games (sur {{ stats.games }} au total) ayant duré au moins {{ m }} min — la moyenne ci-dessus ne porte que sur ce sous-ensemble.">{{ n }} games ({{ sample_pct | round | int }}%)</div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
 <div class="stat-grid">
+  <div class="card">
+    <h3>Objectifs</h3>
+    <div class="kv-list">
+      <div class="row"><span>Grubs pris (moy.)</span><span>{{ stats.grubs_taken | num }}</span></div>
+      <div class="row"><span>Héraut</span><span>{{ stats.herald_taken | pct }}</span></div>
+      <div class="row"><span>Drakes / min</span><span>{{ stats.drakes_taken | num(2) }}</span></div>
+      <div class="row"><span>Âme obtenue</span><span>{{ stats.soul_taken | pct }}</span></div>
+      <div class="row"><span>WR avec l'âme</span><span>{{ stats.wr_with_soul | pct }}</span></div>
+      <div class="row"><span>WR sans l'âme</span><span>{{ stats.wr_without_soul | pct }}</span></div>
+      <div class="row"><span>Premier Nashor</span><span>{{ stats.nashor_first | pct }}</span></div>
+      <div class="row"><span>Timing 1er Nashor</span><span>{{ stats.nashor_first_s | duration }}</span></div>
+      <div class="row"><span>Première tour</span><span>{{ stats.first_tower | pct }}</span></div>
+      <div class="row"><span>Tours détruites (moy.)</span><span>{{ stats.towers_destroyed | num }}</span></div>
+      <div class="row"><span>Plaques (moy.)</span><span>{{ stats.plates_taken | num }}</span></div>
+    </div>
+    <p class="meta" data-tooltip="Stats d'équipe : identiques quels que soient les 2 rôles fixés du duo, pas attribuées à ces 2 joueurs en particulier." aria-label="Stats d'équipe : identiques quels que soient les 2 rôles fixés du duo, pas attribuées à ces 2 joueurs en particulier.">stats d'équipe dans les games de ce duo</p>
+  </div>
+
+  <div class="card">
+    <h3>Combat</h3>
+    <div class="kv-list">
+      <div class="row"><span>First blood</span><span>{{ stats.first_blood_trio | pct }}</span></div>
+      {% if missing_role %}
+      <div class="row"><span>Kill participation &lt; 15 min (trio)</span><span>{{ stats.kill_participation_pre15 | pct }}</span></div>
+      {% else %}
+      <div class="row"><span>Kill participation &lt; 15 min, {{ a.name }}</span><span>{{ stats.champ_a_kp_pre15 | pct }}</span></div>
+      <div class="row"><span>Kill participation &lt; 15 min, {{ b.name }}</span><span>{{ stats.champ_b_kp_pre15 | pct }}</span></div>
+      {% endif %}
+      <div class="row"><span>Part des dégâts de l'équipe</span><span>{{ stats.damage_share | pct }}</span></div>
+      {% if role_a == 'jgl' or role_b == 'jgl' %}
+      <div class="row">
+        <span data-tooltip="Écart de CS jungle du jungler vs le jungler adverse à la 15e minute." aria-label="Écart de CS jungle du jungler vs le jungler adverse à la 15e minute.">CS jungle vs adverse à 15 min</span>
+        <span class="{{ 'pos' if stats.jgl_cs_diff_15 and stats.jgl_cs_diff_15 > 0 else 'neg' if stats.jgl_cs_diff_15 and stats.jgl_cs_diff_15 < 0 }}">{{ stats.jgl_cs_diff_15 | signed_int }}</span>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
   <div class="card">
     <h3>CC empirique vs théorique <span class="meta">(0-100)</span></h3>
     <div class="bar-group">
@@ -86,6 +145,17 @@
     <div class="bar-group">
       <div class="bar-row"><span class="bar-label">{{ a.name }}</span><div class="bar-track"><div class="bar-fill" style="width: {{ stats.champ_a_dmg_per_gold | barpct(dpg) }}%"></div></div><span class="bar-value">{{ stats.champ_a_dmg_per_gold | num(2) }}</span></div>
       <div class="bar-row"><span class="bar-label">{{ b.name }}</span><div class="bar-track"><div class="bar-fill" style="width: {{ stats.champ_b_dmg_per_gold | barpct(dpg) }}%"></div></div><span class="bar-value">{{ stats.champ_b_dmg_per_gold | num(2) }}</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Vision <span class="meta">(par minute)</span></h3>
+    <p class="big-number" style="font-size: 1.3rem;">{{ stats.vision_score | num(2) }}</p>
+    <p class="meta">score de vision, duo</p>
+    {% set wards = [stats.wards_placed, stats.wards_killed] %}
+    <div class="bar-group">
+      <div class="bar-row"><span class="bar-label">Posés</span><div class="bar-track"><div class="bar-fill" style="width: {{ stats.wards_placed | barpct(wards) }}%"></div></div><span class="bar-value">{{ stats.wards_placed | num(2) }}/min</span></div>
+      <div class="bar-row"><span class="bar-label">Détruits</span><div class="bar-track"><div class="bar-fill" style="width: {{ stats.wards_killed | barpct(wards) }}%"></div></div><span class="bar-value">{{ stats.wards_killed | num(2) }}/min</span></div>
     </div>
   </div>
 </div>

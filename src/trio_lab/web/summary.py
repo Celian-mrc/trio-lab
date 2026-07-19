@@ -33,6 +33,12 @@ _MEAN_KEYS = (
     "first_blood_trio",
     "kill_participation_pre15",
     "damage_share",
+    # champ_a/b_kp_pre15 (Phase 7, migration 025) : kill participation < 15 min
+    # INDIVIDUELLE par membre du duo (paires hors trio jgl/mid/sup) — jamais
+    # combinée en « au moins un des deux » (cf. `duo_role_match_rows`),
+    # contrairement à `kill_participation_pre15` qui reste le total du trio.
+    "champ_a_kp_pre15",
+    "champ_b_kp_pre15",
 )
 # jgl/mid/sup_cc_time_s (migration 020) : ventilation par membre du CC déjà
 # sommé dans cc_time_s — calculée pour trio ET duo (le duo n'a besoin que de

@@ -264,17 +264,33 @@ def test_api_duo_detail_for_extended_role_pair(pg_sync, client):
         " game_creation, game_duration_s, winning_team)"
         " VALUES ('EUW1_TOPJGL', 'euw1', '16.13', '16.13.1', 420, now(), 1800, 100)"
     )
-    for team, role, champ_id, gold_10, cc, dpg, win in (
-        (100, "TOP", 1, 1200, 5, 0.8, True),
-        (100, "JUNGLE", 2, 1300, 7, 1.2, True),
-        (200, "TOP", 99, 1000, 4, 0.6, False),
-        (200, "JUNGLE", 98, 1050, 6, 0.9, False),
+    # match_trio_stats (objectifs team-level + CS jungle) : requis, la jointure
+    # de duo_role_match_rows est un INNER JOIN (toujours présent en prod, une
+    # ligne par équipe existe pour tout match valide).
+    pg_sync.execute(
+        "INSERT INTO match_trio_stats (match_id, team_id, jgl_champion, mid_champion,"
+        " sup_champion, win, grubs_taken, herald_taken, drakes_taken, soul_taken,"
+        " first_tower, towers_destroyed, plates_taken, jgl_cs_diff_15)"
+        " VALUES ('EUW1_TOPJGL', 100, 2, 3, 5, true, 3, true, 2, false, true, 2, 4, 5),"
+        " ('EUW1_TOPJGL', 200, 12, 13, 15, false, 1, false, 1, false, false, 1, 2, -5)"
+    )
+    for team, role, champ_id, gold_10, cc, dpg, dmg, fb, kp, win in (
+        (100, "TOP", 1, 1200, 5, 0.8, 3000, True, 1.0, True),
+        (100, "JUNGLE", 2, 1300, 7, 1.2, 4000, False, 0.5, True),
+        (100, "MIDDLE", 3, 1100, 2, 0.5, 2000, False, 0.0, True),
+        (100, "BOTTOM", 4, 1400, 1, 1.5, 5000, False, 0.5, True),
+        (100, "UTILITY", 5, 900, 6, 0.3, 1000, False, 0.5, True),
+        (200, "TOP", 99, 1000, 4, 0.6, 2500, False, 0.0, False),
+        (200, "JUNGLE", 98, 1050, 6, 0.9, 3500, False, 0.0, False),
+        (200, "MIDDLE", 97, 950, 1, 0.4, 1500, False, 0.0, False),
+        (200, "BOTTOM", 96, 1250, 2, 1.1, 4500, False, 0.0, False),
+        (200, "UTILITY", 95, 800, 5, 0.2, 900, False, 0.0, False),
     ):
         pg_sync.execute(
             "INSERT INTO match_role_stats (match_id, team_id, role, champion_id, win,"
-            " gold_10, cc_time_s, dmg_per_gold)"
-            " VALUES ('EUW1_TOPJGL', %s, %s, %s, %s, %s, %s, %s)",
-            (team, role, champ_id, win, gold_10, cc, dpg),
+            " gold_10, cc_time_s, dmg_per_gold, damage, first_blood, kp_pre15)"
+            " VALUES ('EUW1_TOPJGL', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (team, role, champ_id, win, gold_10, cc, dpg, dmg, fb, kp),
         )
 
     payload = client.get("/api/duos/top_jgl/1/2").json()
@@ -284,6 +300,18 @@ def test_api_duo_detail_for_extended_role_pair(pg_sync, client):
     assert stats["games"] == 1
     # (1200+1300) − (1000+1050) = 450.
     assert stats["gold_diff"]["10"] == pytest.approx(450.0)
+    # Objectifs team-level (match_trio_stats), gratuits pour cette paire.
+    assert stats["grubs_taken"] == pytest.approx(3)
+    assert stats["herald_taken"] == pytest.approx(1.0)
+    assert stats["first_tower"] == pytest.approx(1.0)
+    assert stats["jgl_cs_diff_15"] == pytest.approx(5)
+    # First blood : OR exact (Top a le first blood, Jungle non).
+    assert stats["first_blood_trio"] == pytest.approx(1.0)
+    # Part de dégâts : (3000+4000) / (3000+4000+2000+5000+1000) = 7000/15000.
+    assert stats["damage_share"] == pytest.approx(7000 / 15000)
+    # KP individuelle (pas combinée) : Top 1.0, Jungle 0.5.
+    assert stats["champ_a_kp_pre15"] == pytest.approx(1.0)
+    assert stats["champ_b_kp_pre15"] == pytest.approx(0.5)
     # cc_time_s brut / (durée en minutes) : 5/30, 7/30.
     assert stats["champ_a_cc_time_s"] == pytest.approx(5 / 30)
     assert stats["champ_b_cc_time_s"] == pytest.approx(7 / 30)
@@ -320,11 +348,14 @@ def test_html_pages_render(pg_sync, client):
     duo_detail = client.get("/duo/jgl_mid/1/2")
     assert duo_detail.status_code == 200
     assert "Meilleurs supports" in duo_detail.text  # roles=jgl_mid → 3e rôle libre = support
-    # Pas de tableaux gold/objectifs/combat & vision sur la page duo : stats de
-    # trio complet, pas propres à ce duo seul (retour utilisateur, 2026-07-13).
-    assert "Avantage gold" not in duo_detail.text
-    assert "Objectifs" not in duo_detail.text
-    assert "Combat & vision" not in duo_detail.text
+    # Avantage gold/Objectifs/Combat/Vision affichés aussi sur la page duo
+    # (retour utilisateur, 2026-07-19) : stats d'équipe dans les games de ce
+    # duo pour les 3 paires historiques (via match_trio_stats, comme le trio),
+    # vraiment décomposées à 2 membres pour les 7 nouvelles (match_role_stats).
+    assert "Avantage gold du trio" in duo_detail.text  # roles=jgl_mid → paire historique
+    assert "Objectifs" in duo_detail.text
+    assert "Combat" in duo_detail.text
+    assert "Héraut" in duo_detail.text
 
 
 def test_champion_page_shows_baseline_partners_and_trios(pg_sync, client):

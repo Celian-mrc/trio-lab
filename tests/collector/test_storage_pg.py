@@ -118,10 +118,11 @@ async def test_insert_match_writes_role_stats(pg_conn):
     assert (await cur.fetchone())[0] == 10  # 5 rôles × 2 équipes
 
     cur = await pg_conn.execute(
-        "SELECT champion_id, gold_10, cc_time_s FROM match_role_stats"
-        " WHERE team_id = 100 AND role = 'JUNGLE'"
+        "SELECT champion_id, gold_10, cc_time_s, damage, first_blood, kp_pre15"
+        " FROM match_role_stats WHERE team_id = 100 AND role = 'JUNGLE'"
     )
-    assert await cur.fetchone() == (2, 1020, 4)
+    # Builder : pas de kill avant 15 min ni de first blood par défaut.
+    assert await cur.fetchone() == (2, 1020, 4, 2000, False, None)
 
     # Idempotent (ON CONFLICT) : rejouer ne duplique rien.
     await storage.insert_match(pg_conn, row, participants, trio_stats, events, role_stats)
