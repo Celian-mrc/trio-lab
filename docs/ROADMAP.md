@@ -274,14 +274,18 @@ gagner") avec les données déjà en place.
 
 Phase 8 close pour l'instant (draft, insights, flex) — prochaine idée à définir.
 
-**Gap constaté en marge de cette révision (2026-07-19, non traité ici)** :
-`agg_matchup`/`score_matchup` sont vides en prod alors que le code
-(`stats/aggregate.py` + `synergy/matchups.py`) est déployé depuis le commit
-`4762304` et que `match_participants` a bien 2,1M lignes retenues pour le
-patch courant (16.14) — un run manuel de la requête d'agrégation confirme
-162 396 lignes attendues. Le service 24/24 tourne pourtant (`agg_trio`/
-`agg_duo` du même patch sont à jour), donc `aggregate.refresh` s'exécute
-mais `agg_matchup` reste à 0 : cause probable, service Railway du collecteur
-pas redéployé depuis ce commit (à vérifier côté Railway). Conséquence :
-`/draft` (contre ennemi + sécurité blind pick) tourne uniquement sur la
-synergie tant que ce n'est pas corrigé.
+**Gap constaté en marge de cette révision (2026-07-19)** : `agg_matchup`/
+`score_matchup` étaient vides en prod alors que le code (`stats/aggregate.py`
++ `synergy/matchups.py`) est déployé depuis le commit `4762304` et que
+`match_participants` avait bien 2,1M lignes retenues pour le patch courant
+(16.14). Cause non confirmée (le service 24/24 tourne, `agg_trio`/`agg_duo`
+du même patch étaient à jour — probable redéploiement Railway du
+collecteur manquant après ce commit, à vérifier côté Railway par Célian).
+**Corrigé le jour même par backfill manuel** : `stats.aggregate.refresh('16.14')`
+(162 558 lignes `agg_matchup` — pas la peine sur 16.13, `match_participants`
+déjà purgé pour ce patch, un refresh l'aurait effacé sans pouvoir le
+reconstruire) puis `synergy.matchups.refresh` sur la fenêtre 16.14+16.13
+(217 246 lignes `score_matchup`). À surveiller : si `agg_matchup` reste à 0
+après le passage au patch suivant (16.15), c'est que le service ne
+recalcule toujours pas ce agrégat tout seul — il faudra alors vraiment
+creuser côté Railway plutôt que re-backfiller à la main à chaque patch.
