@@ -743,3 +743,48 @@ def test_insights_page_shows_ordered_factors(pg_sync, client):
     # l'ordre suit FEATURES, pas la valeur de l'odds ratio.
     assert resp.text.index("Avantage gold") < resp.text.index("Âme de dragon")
     assert "Pas assez de games derrière au gold" in resp.text  # population 'behind_gold15' vide
+
+
+def test_flex_page_detects_off_role_resource_deviation(pg_sync, client):
+    """Champion 1 : Top (300 games, principal) + Support (150 games, 33 % —
+    rôle secondaire non anecdotique). Son gold@15 en Support (5200, sur 40
+    games récentes) dépasse la moyenne du rôle (mix avec le champion 2, qui
+    ne joue QUE support à 4400) — doit remonter dans /flex."""
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    pg_sync.execute(
+        "INSERT INTO agg_champion (patch, platform, role, champion_id, games, wins)"
+        " VALUES ('16.13', 'euw1', 'TOP', 1, 300, 150)"
+    )
+    pg_sync.execute(
+        "INSERT INTO agg_champion (patch, platform, role, champion_id, games, wins)"
+        " VALUES ('16.13', 'euw1', 'UTILITY', 1, 150, 70)"
+    )
+    for champ_id, gold_15, count in ((1, 5200, 40), (2, 4400, 40)):
+        for i in range(count):
+            match_id = f"FLEX_{champ_id}_{i}"
+            pg_sync.execute(
+                "INSERT INTO matches (match_id, platform, patch, game_version, queue_id,"
+                " game_creation, game_duration_s, winning_team)"
+                " VALUES (%s, 'euw1', '16.13', '16.13.1', 420, now(), 1800, 100)",
+                (match_id,),
+            )
+            pg_sync.execute(
+                "INSERT INTO match_role_stats (match_id, team_id, role, champion_id, win,"
+                " gold_15, dmg_per_gold) VALUES (%s, 100, 'UTILITY', %s, true, %s, 1.5)",
+                (match_id, champ_id, gold_15),
+            )
+    resp = client.get("/flex")
+    assert resp.status_code == 200
+    assert "Lee Sin" in resp.text  # champion_id=1 dans l'index de test
+    assert "Top" in resp.text
+    assert "Support" in resp.text
+    # Part des games en support : 150 / (300+150) = 33.3 %.
+    assert "33.3 %" in resp.text
+    # Gold@15 support (5200) vs moyenne du rôle (40×5200+40×4400)/80 = 4800 :
+    # ratio = 5200/4800 ≈ 1.08.
+    assert "×1.08" in resp.text

@@ -87,6 +87,25 @@ WIN_FACTOR_LABELS = {
     "soul_taken": "Âme de dragon",
     "first_tower": "Première tour",
 }
+# Détecteur de picks flex (Phase 8) : rôles Riot → libellé, pour l'affichage
+# de /flex (contrairement à ROLE_LABELS, qui indexe sur les codes courts).
+RIOT_ROLE_LABELS = {
+    "TOP": "Top",
+    "JUNGLE": "Jungle",
+    "MIDDLE": "Mid",
+    "BOTTOM": "ADC",
+    "UTILITY": "Support",
+}
+# Seuils du détecteur : un rôle secondaire compte comme « réellement joué »
+# (pas un troll pick isolé) s'il représente au moins FLEX_ROLE_SHARE_THRESHOLD
+# des games du champion (historique complet, agg_champion) ET au moins
+# FLEX_MIN_ROLE_GAMES games bruts. Le ratio ressources n'est calculé que s'il
+# y a au moins FLEX_MIN_PROFILE_GAMES lignes `match_role_stats` pour ce rôle
+# (table jeune, déployée le 19/07/2026 — le seuil est bas exprès).
+FLEX_ROLE_SHARE_THRESHOLD = 0.05
+FLEX_MIN_ROLE_GAMES = 100
+FLEX_MIN_PROFILE_GAMES = 30
+FLEX_PICKS_SHOWN = 20
 # `DUO_ROLES` (compute.py) donne les 2 rôles d'un duo en noms Riot (JUNGLE/
 # MIDDLE/UTILITY) ; ce mapping retrouve la colonne CC par membre (migration
 # 020) correspondante pour choisir laquelle des 3 valeurs trio concerne
@@ -944,6 +963,72 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             "insights.html",
             {**context, "all_factors": all_factors, "behind_factors": behind_factors},
         )
+
+    # --- Détecteur de picks flex/hybrides (Phase 8) ---
+    #
+    # Automatise la vérification manuelle faite en session sur Camille/Elise/
+    # Twitch : un champion joué dans un rôle secondaire non-anecdotique
+    # (agg_champion, historique complet) dont le profil de gold à 15 min
+    # (match_role_stats, jeune) dévie de la moyenne du rôle — signal de méta
+    # hybride (ex. bruiser/skirmisher en support), pas forcément un artefact.
+
+    def _flex_picks(conn, window: str, platform: str) -> list[dict]:
+        distribution = queries.champion_role_distribution(conn, window, platform)
+        totals: dict[int, int] = {}
+        primary_role: dict[int, str] = {}
+        primary_games: dict[int, int] = {}
+        for row in distribution:
+            cid, games = row["champion_id"], row["games"]
+            totals[cid] = totals.get(cid, 0) + games
+            if games > primary_games.get(cid, -1):
+                primary_games[cid] = games
+                primary_role[cid] = row["role"]
+
+        profiles = {
+            (r["champion_id"], r["role"]): r
+            for r in queries.role_resource_profile(
+                conn, window, platform, min_games=FLEX_MIN_PROFILE_GAMES
+            )
+        }
+        baseline = queries.role_resource_baseline(conn, window, platform)
+
+        picks: list[dict] = []
+        for row in distribution:
+            cid, role, games = row["champion_id"], row["role"], row["games"]
+            if role == primary_role[cid] or games < FLEX_MIN_ROLE_GAMES:
+                continue
+            share = games / totals[cid]
+            if share < FLEX_ROLE_SHARE_THRESHOLD:
+                continue
+            profile = profiles.get((cid, role))
+            base = baseline.get(role)
+            if profile is None or base is None or not base["avg_gold_15"]:
+                continue  # pas (encore) assez de match_role_stats pour ce rôle
+            picks.append(
+                {
+                    "champion_id": cid,
+                    "name": champ(cid).name,
+                    "role": role,
+                    "role_label": RIOT_ROLE_LABELS[role],
+                    "primary_role": primary_role[cid],
+                    "primary_role_label": RIOT_ROLE_LABELS[primary_role[cid]],
+                    "share": share,
+                    "games_role": games,
+                    "profile_n": profile["n"],
+                    "gold_ratio": profile["avg_gold_15"] / base["avg_gold_15"],
+                    "dmg_per_gold": profile["avg_dmg_per_gold"],
+                    "baseline_dmg_per_gold": base["avg_dmg_per_gold"],
+                }
+            )
+        picks.sort(key=lambda p: abs(p["gold_ratio"] - 1), reverse=True)
+        return picks[:FLEX_PICKS_SHOWN]
+
+    @app.get("/flex", response_class=HTMLResponse)
+    def flex_page(request: Request, window: str | None = None, platform: str | None = None):
+        with request.app.state.pool.connection() as conn:
+            window, platform, context = resolve_context(conn, window, platform)
+            picks = _flex_picks(conn, window, platform)
+        return templates.TemplateResponse(request, "flex.html", {**context, "picks": picks})
 
     # --- API JSON ---
 

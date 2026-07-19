@@ -251,5 +251,14 @@ gagner") avec les données déjà en place.
       MANUEL (`python -m trio_lab.synergy.win_factors --patches X`), jamais
       dans le cycle service — même philosophie que `ccref.sync_theoretical`
       (signal de patch, pas de cycle de collecte).
-- [ ] Détecteur de picks flex/hybrides (profil gold/CC/dmg-per-gold d'un
-      champion entre ses rôles via `match_role_stats`) — pas encore construit.
+- [x] Détecteur de picks flex/hybrides (2026-07-19) : `/flex` — automatise
+      la vérification manuelle faite en session sur Camille/Elise/Twitch
+      support. Rôle secondaire non anecdotique (`agg_champion`, historique
+      complet : ≥ 5 % des games du champion ET ≥ 100 games brutes, pas un
+      troll pick isolé) dont le profil de gold à 15 min (`match_role_stats`,
+      jeune : ≥ 30 games) dévie de la moyenne du rôle. Calcul live (pas de
+      table matérialisée — requête testée ~1s sur les données de prod, pas
+      besoin). Signal de méta hybride à faire vérifier par un humain, pas une
+      alerte de bug automatique.
+
+Phase 8 close pour l'instant (draft, insights, flex) — prochaine idée à définir.

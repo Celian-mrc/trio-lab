@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Picks flex/hybrides — Trio Lab{% endblock %}
+{% block content %}
+<h1>Picks flex/hybrides</h1>
+<p class="meta">Champions joués dans un rôle secondaire non anecdotique (≥ 5 % de leurs games,
+  ≥ 100 games) dont le profil de gold à 15 min s'écarte de la moyenne du rôle — signal de méta
+  hybride (ex. un bruiser/skirmisher en support), pas forcément un artefact de données.</p>
+<p class="meta"><strong>Limite</strong> : le ratio ne porte que sur match_role_stats, déployée le
+  19/07/2026 — la profondeur grandit avec le temps, les chiffres sont encore jeunes.</p>
+
+{% if not picks %}
+<p class="empty">Rien détecté pour cette fenêtre (pas assez de données, ou pas de pick flex marquant).</p>
+{% else %}
+<table class="data">
+  <thead>
+    <tr>
+      <th>Champion</th>
+      <th>Rôle principal</th>
+      <th>Rôle secondaire</th>
+      <th data-tooltip="Part des games de ce champion jouées dans ce rôle secondaire, sur l'historique complet retenu (agg_champion)." aria-label="Part des games de ce champion jouées dans ce rôle secondaire, sur l'historique complet retenu (agg_champion).">Part des games</th>
+      <th data-tooltip="Gold moyen à 15 min de ce champion dans ce rôle, comparé à la moyenne de tous les champions dans ce rôle." aria-label="Gold moyen à 15 min de ce champion dans ce rôle, comparé à la moyenne de tous les champions dans ce rôle.">Gold@15 vs moyenne du rôle</th>
+      <th>Dégâts/gold</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for p in picks %}
+    {% set c = champ(p.champion_id) %}
+    <tr>
+      <td class="trio-cell"><span class="champ">{% if c.icon_url %}<img src="{{ c.icon_url }}" alt="" width="24" height="24">{% endif %}{{ p.name }}</span></td>
+      <td>{{ p.primary_role_label }}</td>
+      <td>{{ p.role_label }}</td>
+      <td>{{ p.share | pct }} <span class="sub">{{ p.games_role }} games</span></td>
+      <td class="{{ 'pos' if p.gold_ratio > 1 else 'neg' if p.gold_ratio < 1 }}">×{{ p.gold_ratio | num(2) }} <span class="sub">{{ p.profile_n }} games récentes</span></td>
+      <td>{{ p.dmg_per_gold | num(2) }} <span class="sub">rôle : {{ p.baseline_dmg_per_gold | num(2) }}</span></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

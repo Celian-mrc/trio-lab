@@ -425,6 +425,75 @@ def champion_role_baseline_list(
         ).fetchall()
 
 
+def champion_role_distribution(
+    conn: psycopg.Connection, window: str, platform: str, *, min_games: int = 1
+) -> list[dict]:
+    """Répartition des games d'un champion entre rôles (Phase 8, détecteur de
+    picks flex) — `agg_champion`, historique complet retenu (contrairement à
+    `match_role_stats`, jeune). Sert à distinguer le rôle principal des rôles
+    secondaires réellement joués, pas du bruit de troll pick isolé."""
+    patches = window.split("+")
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            """
+            SELECT champion_id, role, sum(games) AS games
+            FROM agg_champion
+            WHERE patch = ANY(%(patches)s)
+              AND (%(platform)s = 'all' OR platform = %(platform)s)
+            GROUP BY champion_id, role
+            HAVING sum(games) >= %(min_games)s
+            """,
+            {"patches": patches, "platform": platform, "min_games": min_games},
+        ).fetchall()
+
+
+def role_resource_profile(
+    conn: psycopg.Connection, window: str, platform: str, *, min_games: int
+) -> list[dict]:
+    """Profil ressources (gold@15, dégâts/gold) par (champion, rôle), depuis
+    `match_role_stats` (Phase 8, détecteur de picks flex) — limité à la
+    profondeur de cette table (déployée le 19/07/2026, pas d'historique
+    avant). `gold_15`/`dmg_per_gold` ne nécessitent pas de normalisation par
+    durée (contrairement à `cc_time_s`/`vision_score`), pas besoin de
+    `game_duration_s` ici."""
+    patches = window.split("+")
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            """
+            SELECT mrs.champion_id, mrs.role, count(*) AS n,
+                   avg(mrs.gold_15) AS avg_gold_15, avg(mrs.dmg_per_gold) AS avg_dmg_per_gold
+            FROM match_role_stats mrs
+            JOIN matches m USING (match_id)
+            WHERE m.patch = ANY(%(patches)s) AND mrs.gold_15 IS NOT NULL
+              AND (%(platform)s = 'all' OR m.platform = %(platform)s)
+            GROUP BY mrs.champion_id, mrs.role
+            HAVING count(*) >= %(min_games)s
+            """,
+            {"patches": patches, "platform": platform, "min_games": min_games},
+        ).fetchall()
+
+
+def role_resource_baseline(conn: psycopg.Connection, window: str, platform: str) -> dict[str, dict]:
+    """Moyennes de référence par rôle (tous champions confondus), même source
+    que `role_resource_profile` — le point de comparaison du détecteur de
+    picks flex (Phase 8)."""
+    patches = window.split("+")
+    with conn.cursor(row_factory=dict_row) as cur:
+        rows = cur.execute(
+            """
+            SELECT mrs.role, avg(mrs.gold_15) AS avg_gold_15,
+                   avg(mrs.dmg_per_gold) AS avg_dmg_per_gold
+            FROM match_role_stats mrs
+            JOIN matches m USING (match_id)
+            WHERE m.patch = ANY(%(patches)s) AND mrs.gold_15 IS NOT NULL
+              AND (%(platform)s = 'all' OR m.platform = %(platform)s)
+            GROUP BY mrs.role
+            """,
+            {"patches": patches, "platform": platform},
+        ).fetchall()
+    return {r["role"]: r for r in rows}
+
+
 def win_factors(conn: psycopg.Connection, window: str, population: str) -> list[dict]:
     """Coefficients de la régression logistique multi-variables (Phase 8,
     `synergy.win_factors`) — pas de dimension `platform` : l'analyse porte
