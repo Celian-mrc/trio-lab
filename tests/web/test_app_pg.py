@@ -40,7 +40,7 @@ def pg_sync():
             "TRUNCATE players, matches, match_fetch_journal,"
             " agg_champion, agg_duo, agg_trio,"
             " agg_trio_duration, agg_duo_duration, agg_matchup,"
-            " score_duo, score_trio, score_matchup,"
+            " score_duo, score_trio, score_matchup, score_win_factors,"
             " champion_cc_theoretical CASCADE"
         )
         yield conn
@@ -701,3 +701,45 @@ def test_draft_page_locked_slot_and_clear_link(pg_sync, client):
     # Le slot bleu jungle est verrouillé : pas de champ de recherche visible
     # pour lui (il reste en hidden dans les formulaires des autres slots).
     assert 'name="blue_jgl" list="champion-names"' not in resp.text
+
+
+def test_insights_page_empty_state(pg_sync, client):
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    resp = client.get("/insights")
+    assert resp.status_code == 200
+    assert "python -m trio_lab.synergy.win_factors" in resp.text
+
+
+def test_insights_page_shows_ordered_factors(pg_sync, client):
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    # Inséré dans le désordre : la page doit réordonner selon FEATURES, pas
+    # l'ordre SQL, et ignorer 'intercept' (jamais actionnable pour un coach).
+    for feature, coef, odds in (
+        ("soul_taken", 2.1, 8.2),
+        ("gold_diff_15", 0.96, 2.6),
+        ("intercept", -0.9, 0.4),
+    ):
+        pg_sync.execute(
+            "INSERT INTO score_win_factors (window_label, population, feature, coef,"
+            " odds_ratio, n) VALUES ('16.13', 'all', %s, %s, %s, 1000)",
+            (feature, coef, odds),
+        )
+    resp = client.get("/insights")
+    assert resp.status_code == 200
+    assert "Avantage gold à 15 min" in resp.text
+    assert "Âme de dragon" in resp.text
+    assert "×8.20" in resp.text
+    # gold_diff_15 (odds ×2.60) doit apparaître avant soul_taken (×8.20) :
+    # l'ordre suit FEATURES, pas la valeur de l'odds ratio.
+    assert resp.text.index("Avantage gold") < resp.text.index("Âme de dragon")
+    assert "Pas assez de games derrière au gold" in resp.text  # population 'behind_gold15' vide

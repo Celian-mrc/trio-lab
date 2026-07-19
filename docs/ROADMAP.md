@@ -238,7 +238,18 @@ gagner") avec les données déjà en place.
       grisée sous `DRAFT_MIN_GAMES_EFF` (50, cohérent avec le tier "moyen"),
       jamais filtrée. hx-boost (déjà en place) rend chaque pick réactif sans
       JS custom.
-- [ ] Dashboard "ce qui fait gagner" (régression logistique + comeback,
-      recherches de cette session) — pas encore exposé en page web.
+- [x] Dashboard "ce qui fait gagner" (2026-07-19) : `/insights` — régression
+      logistique multi-variables (`synergy/win_factors.py`, IRLS pure Python,
+      cohérent avec la philosophie du projet — pas de numpy/scipy pour ~10
+      variables sur quelques dizaines de milliers de lignes), matérialisée
+      dans `score_win_factors` (migration 027). Deux populations : toutes
+      les games, et celles où le trio est derrière au gold à 15 min (leviers
+      de comeback, différents — vision/efficacité ressources y pèsent 2-3x
+      plus, cf. recherches de session). Poids par patch identiques à
+      `synergy.compute` (`weights_for`), appliqués comme poids d'observation
+      dans l'IRLS, pas une repondération a posteriori. Rafraîchissement
+      MANUEL (`python -m trio_lab.synergy.win_factors --patches X`), jamais
+      dans le cycle service — même philosophie que `ccref.sync_theoretical`
+      (signal de patch, pas de cycle de collecte).
 - [ ] Détecteur de picks flex/hybrides (profil gold/CC/dmg-per-gold d'un
       champion entre ses rôles via `match_role_stats`) — pas encore construit.

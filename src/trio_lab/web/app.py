@@ -27,6 +27,7 @@ from psycopg_pool import ConnectionPool
 
 from trio_lab import config, db
 from trio_lab.synergy.compute import DUO_ROLES
+from trio_lab.synergy.win_factors import FEATURES as WIN_FACTOR_FEATURES
 from trio_lab.synergy.windows import make_window
 from trio_lab.web import champions, queries, summary
 
@@ -72,6 +73,20 @@ DRAFT_CANDIDATES_SHOWN = 15
 # games_eff la suggestion reste affichée mais visuellement atténuée — même
 # esprit que GOLD_DIFF_LOW_SAMPLE_PCT, cohérent avec le tier 'moyen' (≥ 50).
 DRAFT_MIN_GAMES_EFF = 50.0
+# Libellés lisibles pour le dashboard /insights (synergy.win_factors.FEATURES).
+WIN_FACTOR_LABELS = {
+    "gold_diff_15": "Avantage gold à 15 min",
+    "cc_per_min": "CC / min",
+    "vision_per_min": "Vision / min",
+    "damage_share": "Part de dégâts du trio",
+    "jgl_dmg_per_gold": "Dégâts/gold — jungle",
+    "mid_dmg_per_gold": "Dégâts/gold — mid",
+    "sup_dmg_per_gold": "Dégâts/gold — support",
+    "kill_participation_pre15": "Kill participation < 15 min",
+    "herald_taken": "Héraut pris",
+    "soul_taken": "Âme de dragon",
+    "first_tower": "Première tour",
+}
 # `DUO_ROLES` (compute.py) donne les 2 rôles d'un duo en noms Riot (JUNGLE/
 # MIDDLE/UTILITY) ; ce mapping retrouve la colonne CC par membre (migration
 # 020) correspondante pour choisir laquelle des 3 valeurs trio concerne
@@ -901,6 +916,33 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 "draft_roles": DRAFT_ROLES,
                 "champion_names": sorted(c.name for c in champ_index().values()),
             },
+        )
+
+    # --- Dashboard "ce qui fait gagner" (Phase 8) ---
+
+    def _ordered_win_factors(rows: list[dict]) -> list[dict]:
+        """Ordre d'affichage fixe (WIN_FACTOR_FEATURES), pas l'ordre SQL —
+        et enrichit avec le libellé lisible. `intercept` jamais affiché (pas
+        actionnable pour un coach)."""
+        by_feature = {r["feature"]: r for r in rows}
+        return [
+            {**by_feature[f], "label": WIN_FACTOR_LABELS[f]}
+            for f in WIN_FACTOR_FEATURES
+            if f in by_feature
+        ]
+
+    @app.get("/insights", response_class=HTMLResponse)
+    def insights_page(request: Request, window: str | None = None, platform: str | None = None):
+        with request.app.state.pool.connection() as conn:
+            window, platform, context = resolve_context(conn, window, platform)
+            all_factors = _ordered_win_factors(queries.win_factors(conn, window, "all"))
+            behind_factors = _ordered_win_factors(
+                queries.win_factors(conn, window, "behind_gold15")
+            )
+        return templates.TemplateResponse(
+            request,
+            "insights.html",
+            {**context, "all_factors": all_factors, "behind_factors": behind_factors},
         )
 
     # --- API JSON ---

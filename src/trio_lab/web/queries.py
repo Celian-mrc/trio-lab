@@ -425,6 +425,20 @@ def champion_role_baseline_list(
         ).fetchall()
 
 
+def win_factors(conn: psycopg.Connection, window: str, population: str) -> list[dict]:
+    """Coefficients de la régression logistique multi-variables (Phase 8,
+    `synergy.win_factors`) — pas de dimension `platform` : l'analyse porte
+    sur toutes les régions combinées (question globale, pas régionale).
+    Liste vide si `synergy.win_factors` n'a jamais tourné pour cette fenêtre
+    (rafraîchissement manuel, pas dans le cycle service)."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            "SELECT feature, coef, odds_ratio, n FROM score_win_factors"
+            " WHERE window_label = %s AND population = %s",
+            (window, population),
+        ).fetchall()
+
+
 def cc_theoretical_scores(conn: psycopg.Connection) -> dict[int, float]:
     """Score CC théorique par champion, depuis la table matérialisée (010) —
     jamais le fichier gelé : le service web ne l'embarque pas (voir Dockerfile),

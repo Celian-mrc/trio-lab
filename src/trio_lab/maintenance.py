@@ -183,7 +183,7 @@ def purge_stale_aggregates(
     return {"purged_patches": old, "agg_rows_deleted": deleted}
 
 
-_SCORE_TABLES = ("score_duo", "score_trio", "score_matchup")
+_SCORE_TABLES = ("score_duo", "score_trio", "score_matchup", "score_win_factors")
 
 
 def purge_stale_scores(
