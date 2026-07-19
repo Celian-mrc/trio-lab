@@ -401,6 +401,33 @@ def matchup_candidates(
         ).fetchall()
 
 
+def role_worst_matchups(
+    conn: psycopg.Connection, window: str, platform: str, role: str, *, min_games_eff: float
+) -> dict[int, float]:
+    """Pire matchup connu (MIN(delta)) par champion pour un rôle — signal de
+    risque « blind pick » (simulateur de draft, Phase 8) : un champion dont
+    le pire cas reste proche de 0 encaisse mal aucun contre fort, contrairement
+    à un champion avec un pire cas très négatif. Un seul aller-retour par rôle
+    (pas par champion candidat), donc utilisable sur une grille complète."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        rows = cur.execute(
+            """
+            SELECT champ_a AS candidate_champion, min(delta) AS worst_delta
+            FROM score_matchup
+            WHERE window_label = %(window)s AND platform = %(platform)s AND role = %(role)s
+              AND games_eff >= %(min_games_eff)s
+            GROUP BY champ_a
+            """,
+            {
+                "window": window,
+                "platform": platform,
+                "role": role,
+                "min_games_eff": min_games_eff,
+            },
+        ).fetchall()
+    return {r["candidate_champion"]: r["worst_delta"] for r in rows}
+
+
 def champion_role_baseline_list(
     conn: psycopg.Connection, window: str, platform: str, role: str, limit: int
 ) -> list[dict]:

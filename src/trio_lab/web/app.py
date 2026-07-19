@@ -68,21 +68,34 @@ DRAFT_ROLE_TO_TEAM_POSITION = {
 # roles de score_duo (ex. 'top_jgl') retrouvée depuis une paire de rôles
 # courts non ordonnée — inverse de DUO_ROLE_KEYS.
 _DRAFT_ROLES_BY_PAIR = {frozenset(v): k for k, v in DUO_ROLE_KEYS.items()}
-DRAFT_CANDIDATES_SHOWN = 15
+# Ordre fixe de parcours des 10 slots (avance auto après un pick, choix du
+# 1er slot vide par défaut) — retour utilisateur 2026-07-19 : interface façon
+# champ select, un seul rôle "actif" à la fois plutôt qu'une liste par slot.
+DRAFT_SLOT_ORDER = tuple(f"{side}_{role}" for side in ("blue", "red") for role in DRAFT_ROLES)
 # Seuil de grisage (pas de filtre, retour utilisateur 2026-07-19) : sous ce
 # games_eff la suggestion reste affichée mais visuellement atténuée — même
 # esprit que GOLD_DIFF_LOW_SAMPLE_PCT, cohérent avec le tier 'moyen' (≥ 50).
 DRAFT_MIN_GAMES_EFF = 50.0
+# Nombre de candidats mis en avant ("Recommandé") en tête de la grille
+# complète — le reste du roster reste visible/pickable en dessous, comme en
+# champ select LoL (retour utilisateur 2026-07-19 : jamais de liste tronquée
+# qui masque des champions).
+DRAFT_RECOMMENDED_COUNT = 12
+# Plancher de fiabilité pour le signal "sécurité blind pick" (pire matchup
+# connu) — mêmes games_eff que le tier 'moyen' des matchups (score_matchup),
+# affiché uniquement quand aucun ennemi même rôle n'est verrouillé.
+DRAFT_SAFETY_MIN_GAMES_EFF = 50.0
 # Libellés lisibles pour le dashboard /insights (synergy.win_factors.FEATURES).
 WIN_FACTOR_LABELS = {
-    "gold_diff_15": "Avantage gold à 15 min",
-    "cc_per_min": "CC / min",
-    "vision_per_min": "Vision / min",
-    "damage_share": "Part de dégâts du trio",
+    "team_gold_diff_15": "Avantage gold d'ÉQUIPE à 15 min",
+    "team_cc_per_min": "CC d'équipe / min",
+    "team_vision_per_min": "Vision d'équipe / min",
+    "jgl_cs_diff_15": "CS jungle vs adverse à 15 min",
+    "top_dmg_per_gold": "Dégâts/gold — top",
     "jgl_dmg_per_gold": "Dégâts/gold — jungle",
     "mid_dmg_per_gold": "Dégâts/gold — mid",
+    "bot_dmg_per_gold": "Dégâts/gold — adc",
     "sup_dmg_per_gold": "Dégâts/gold — support",
-    "kill_participation_pre15": "Kill participation < 15 min",
     "herald_taken": "Héraut pris",
     "soul_taken": "Âme de dragon",
     "first_tower": "Première tour",
@@ -102,10 +115,17 @@ RIOT_ROLE_LABELS = {
 # FLEX_MIN_ROLE_GAMES games bruts. Le ratio ressources n'est calculé que s'il
 # y a au moins FLEX_MIN_PROFILE_GAMES lignes `match_role_stats` pour ce rôle
 # (table jeune, déployée le 19/07/2026 — le seuil est bas exprès).
+# FLEX_MIN_DEVIATION : sous ce seuil le profil ressources est ~celui du rôle
+# (constaté sur prod : la moitié des candidats bruts sont à <3 % d'écart,
+# aucun signal réel — sans plancher la liste se noie dans du bruit proche de
+# 0, retour utilisateur 2026-07-19). Pas de plafond arbitraire sur le nombre
+# de lignes affichées : le plancher de déviation borne déjà la liste aux cas
+# qui veulent dire quelque chose (~50 sur la fenêtre courante, pas 20 tronqués
+# sur 157 candidats bruts sans que ce soit visible).
 FLEX_ROLE_SHARE_THRESHOLD = 0.05
 FLEX_MIN_ROLE_GAMES = 100
 FLEX_MIN_PROFILE_GAMES = 30
-FLEX_PICKS_SHOWN = 20
+FLEX_MIN_DEVIATION = 0.05
 # `DUO_ROLES` (compute.py) donne les 2 rôles d'un duo en noms Riot (JUNGLE/
 # MIDDLE/UTILITY) ; ce mapping retrouve la colonne CC par membre (migration
 # 020) correspondante pour choisir laquelle des 3 valeurs trio concerne
@@ -275,6 +295,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
     templates.env.globals["static_version"] = static_version
     templates.env.globals["gold_diff_bar_cap"] = GOLD_DIFF_BAR_CAP
     templates.env.globals["gold_diff_low_sample_pct"] = GOLD_DIFF_LOW_SAMPLE_PCT
+    templates.env.globals["draft_recommended_count"] = DRAFT_RECOMMENDED_COUNT
     templates.env.filters.update(
         pct=_fmt_pct,
         pct100=_fmt_pct100,
@@ -309,6 +330,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
     templates.env.globals["ROLE_LABELS"] = ROLE_LABELS
     templates.env.globals["ROLE_TO_TEAM_POSITION"] = ROLE_TO_TEAM_POSITION
     templates.env.globals["DUO_ROLE_KEYS"] = DUO_ROLE_KEYS
+    templates.env.globals["RIOT_ROLE_LABELS"] = RIOT_ROLE_LABELS
 
     def resolve_champion(name_or_id: str | None) -> int | None:
         """Filtre champion de la tier list : nom (recherche) ou id. None si vide."""
@@ -773,7 +795,14 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
     # même principe que window/platform ailleurs. Chaque pick redirige vers
     # /draft avec un paramètre de plus ; hx-boost (base.html) fait le swap.
 
-    def _draft_role_suggestions(
+    def _first_empty_slot(picks: dict) -> str | None:
+        for key in DRAFT_SLOT_ORDER:
+            side, role = key.split("_", 1)
+            if picks[side][role] is None:
+                return key
+        return None
+
+    def _draft_role_grid(
         conn,
         window: str,
         platform: str,
@@ -781,12 +810,15 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         locked_allies: list[tuple[str, int]],
         locked_enemy: int | None,
         banned: set[int],
-    ) -> list[dict]:
-        """Candidats pour un rôle vide, triés par edge = Σ synergie alliés
-        verrouillés + delta counter vs l'ennemi même rôle verrouillé — même
-        unité partout (points de WR), donc sommable sans pondération
-        arbitraire. `None` sans donnée pour une source, jamais pénalisé
-        (juste pas de contribution) — affiché en bas plutôt qu'exclu.
+    ) -> dict:
+        """Roster complet (pickable) pour le rôle actif — trié par
+        edge = Σ synergie alliés verrouillés + delta counter vs l'ennemi même
+        rôle verrouillé (même unité partout, points de WR, donc sommable sans
+        pondération arbitraire), puis par WR baseline pour les champions sans
+        edge. Contrairement à l'ancienne version, jamais de liste tronquée :
+        tout le roster reste visible/pickable, seuls les `DRAFT_RECOMMENDED_COUNT`
+        premiers sont badgés « Recommandé » (retour utilisateur 2026-07-19,
+        interface façon champ select).
         """
         edge: dict[int, float] = {}
         reliability: dict[int, float] = {}
@@ -808,47 +840,59 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             if roles_pair is None:
                 continue
             partners = queries.champion_best_partners(
-                conn, window, platform, roles_pair, ally_role, ally_champ, 200, min_tier="faible"
+                conn, window, platform, roles_pair, ally_role, ally_champ, 300, min_tier="faible"
             )
             _accumulate(partners, "synergy", "partner_champion")
 
-        if locked_enemy is not None:
+        blind = locked_enemy is None
+        if not blind:
             enemy_matchups = queries.matchup_candidates(
-                conn, window, platform, DRAFT_ROLE_TO_TEAM_POSITION[role], locked_enemy, 200
+                conn, window, platform, DRAFT_ROLE_TO_TEAM_POSITION[role], locked_enemy, 300
             )
             _accumulate(enemy_matchups, "delta", "candidate_champion")
 
-        if not edge:
-            # 1er pick du rôle : ni allié ni ennemi verrouillé, pas de
-            # synergie/counter à calculer — repli sur le WR baseline.
-            baseline = queries.champion_role_baseline_list(
-                conn, window, platform, DRAFT_ROLE_TO_TEAM_POSITION[role], DRAFT_CANDIDATES_SHOWN
+        # Sécurité "blind pick" : pire contre connu, seulement pertinent quand
+        # aucun ennemi même rôle n'est encore verrouillé (sinon le delta du
+        # counter réel prime déjà, cf. `edge`).
+        safety = (
+            queries.role_worst_matchups(
+                conn,
+                window,
+                platform,
+                DRAFT_ROLE_TO_TEAM_POSITION[role],
+                min_games_eff=DRAFT_SAFETY_MIN_GAMES_EFF,
             )
-            return [
-                {
-                    "champion_id": r["candidate_champion"],
-                    "name": champ(r["candidate_champion"]).name,
-                    "edge": None,
-                    "wr": r["wr"],
-                    "games_eff": r["games"],
-                    "low_sample": False,
-                }
-                for r in baseline
-                if r["candidate_champion"] not in banned
-            ]
+            if blind
+            else {}
+        )
 
-        ranked = sorted(edge.items(), key=lambda kv: kv[1], reverse=True)[:DRAFT_CANDIDATES_SHOWN]
-        return [
-            {
-                "champion_id": cid,
-                "name": champ(cid).name,
-                "edge": value,
-                "wr": None,
-                "games_eff": reliability[cid],
-                "low_sample": reliability[cid] < DRAFT_MIN_GAMES_EFF,
-            }
-            for cid, value in ranked
-        ]
+        baseline = queries.champion_role_baseline_list(
+            conn, window, platform, DRAFT_ROLE_TO_TEAM_POSITION[role], 500
+        )
+        wr_by_champ = {r["candidate_champion"]: r["wr"] for r in baseline}
+        games_by_champ = {r["candidate_champion"]: r["games"] for r in baseline}
+
+        roster = []
+        for cid in set(wr_by_champ) | set(edge):
+            if cid in banned:
+                continue
+            games_eff = reliability.get(cid, games_by_champ.get(cid, 0))
+            roster.append(
+                {
+                    "champion_id": cid,
+                    "name": champ(cid).name,
+                    "edge": edge.get(cid),
+                    "wr": wr_by_champ.get(cid),
+                    "games_eff": games_eff,
+                    "low_sample": games_eff < DRAFT_MIN_GAMES_EFF,
+                    "safety": safety.get(cid) if blind else None,
+                }
+            )
+        roster.sort(key=lambda r: (r["edge"] is None, -(r["edge"] or 0.0), -(r["wr"] or 0.0)))
+        for i, r in enumerate(roster):
+            r["recommended"] = i < DRAFT_RECOMMENDED_COUNT and r["edge"] is not None
+
+        return {"roster": roster, "blind": blind}
 
     @app.get("/draft", response_class=HTMLResponse)
     def draft_page(
@@ -866,6 +910,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         red_bot: str | None = None,
         red_sup: str | None = None,
         bans: str | None = None,
+        active: str | None = None,
     ):
         raw = {
             "blue": {
@@ -902,22 +947,37 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             banned = {resolve_champion(b) for b in (bans or "").split(",") if b.strip()}
             banned |= {c for roles in picks.values() for c in roles.values() if c is not None}
 
-            suggestions: dict[str, list[dict]] = {}
-            for side, other_side in (("blue", "red"), ("red", "blue")):
+            # Slot "actif" : celui dont la grille de champions est affichée —
+            # un seul à la fois (façon champ select), pas une liste par slot
+            # vide. Un param explicite invalide/déjà rempli retombe sur le
+            # 1er slot vide (ordre fixe DRAFT_SLOT_ORDER).
+            if (
+                active not in DRAFT_SLOT_ORDER
+                or picks[active.split("_", 1)[0]][active.split("_", 1)[1]] is not None
+            ):
+                active = _first_empty_slot(picks)
+            current_params["active"] = active or ""
+
+            grid = None
+            if active is not None:
+                side, role = active.split("_", 1)
+                other_side = "red" if side == "blue" else "blue"
                 locked_allies = [(r, c) for r, c in picks[side].items() if c is not None]
-                for role in DRAFT_ROLES:
-                    if picks[side][role] is not None:
-                        continue
-                    key = f"{side}_{role}"
-                    role_suggestions = _draft_role_suggestions(
-                        conn, window, platform, role, locked_allies, picks[other_side][role], banned
-                    )
-                    for s in role_suggestions:
-                        s["pick_url"] = _draft_url(**{key: s["name"]})
-                    suggestions[key] = role_suggestions
+                grid = _draft_role_grid(
+                    conn, window, platform, role, locked_allies, picks[other_side][role], banned
+                )
+                for item in grid["roster"]:
+                    # Pas d'override `active` explicite : une fois ce slot
+                    # rempli, le calcul ci-dessus retombe naturellement sur
+                    # le slot vide suivant — avance automatique.
+                    item["pick_url"] = _draft_url(**{active: item["name"]}, active="")
 
             slot_urls = {
-                f"{side}_{role}": _draft_url(**{f"{side}_{role}": ""})
+                f"{side}_{role}": (
+                    _draft_url(**{f"{side}_{role}": ""}, active=f"{side}_{role}")
+                    if picks[side][role] is not None
+                    else _draft_url(active=f"{side}_{role}")
+                )
                 for side in ("blue", "red")
                 for role in DRAFT_ROLES
             }
@@ -930,7 +990,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 "picks": picks,
                 "bans_raw": bans or "",
                 "banned": banned,
-                "suggestions": suggestions,
+                "active": active,
+                "grid": grid,
                 "slot_urls": slot_urls,
                 "draft_roles": DRAFT_ROLES,
                 "champion_names": sorted(c.name for c in champ_index().values()),
@@ -939,29 +1000,38 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
 
     # --- Dashboard "ce qui fait gagner" (Phase 8) ---
 
-    def _ordered_win_factors(rows: list[dict]) -> list[dict]:
-        """Ordre d'affichage fixe (WIN_FACTOR_FEATURES), pas l'ordre SQL —
-        et enrichit avec le libellé lisible. `intercept` jamais affiché (pas
+    def _combined_win_factors(all_rows: list[dict], behind_rows: list[dict]) -> list[dict]:
+        """Une ligne par feature (ordre fixe WIN_FACTOR_FEATURES, pas l'ordre
+        SQL), avec les 2 populations côte à côte — jamais 2 tableaux séparés :
+        même ligne = même feature, garanti, pas juste par coïncidence d'ordre
+        (retour utilisateur 2026-07-19). `intercept` jamais affiché (pas
         actionnable pour un coach)."""
-        by_feature = {r["feature"]: r for r in rows}
+        all_by_feature = {r["feature"]: r for r in all_rows}
+        behind_by_feature = {r["feature"]: r for r in behind_rows}
         return [
-            {**by_feature[f], "label": WIN_FACTOR_LABELS[f]}
+            {
+                "feature": f,
+                "label": WIN_FACTOR_LABELS[f],
+                "all": all_by_feature.get(f),
+                "behind": behind_by_feature.get(f),
+            }
             for f in WIN_FACTOR_FEATURES
-            if f in by_feature
+            if f in all_by_feature or f in behind_by_feature
         ]
 
     @app.get("/insights", response_class=HTMLResponse)
     def insights_page(request: Request, window: str | None = None, platform: str | None = None):
         with request.app.state.pool.connection() as conn:
             window, platform, context = resolve_context(conn, window, platform)
-            all_factors = _ordered_win_factors(queries.win_factors(conn, window, "all"))
-            behind_factors = _ordered_win_factors(
-                queries.win_factors(conn, window, "behind_gold15")
-            )
+            all_rows = queries.win_factors(conn, window, "all")
+            behind_rows = queries.win_factors(conn, window, "behind_gold15")
+        factors = _combined_win_factors(all_rows, behind_rows)
+        all_n = all_rows[0]["n"] if all_rows else 0
+        behind_n = behind_rows[0]["n"] if behind_rows else 0
         return templates.TemplateResponse(
             request,
             "insights.html",
-            {**context, "all_factors": all_factors, "behind_factors": behind_factors},
+            {**context, "factors": factors, "all_n": all_n, "behind_n": behind_n},
         )
 
     # --- Détecteur de picks flex/hybrides (Phase 8) ---
@@ -972,7 +1042,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
     # (match_role_stats, jeune) dévie de la moyenne du rôle — signal de méta
     # hybride (ex. bruiser/skirmisher en support), pas forcément un artefact.
 
-    def _flex_picks(conn, window: str, platform: str) -> list[dict]:
+    def _flex_picks(conn, window: str, platform: str, *, role: str | None) -> list[dict]:
         distribution = queries.champion_role_distribution(conn, window, platform)
         totals: dict[int, int] = {}
         primary_role: dict[int, str] = {}
@@ -994,41 +1064,66 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
 
         picks: list[dict] = []
         for row in distribution:
-            cid, role, games = row["champion_id"], row["role"], row["games"]
-            if role == primary_role[cid] or games < FLEX_MIN_ROLE_GAMES:
+            cid, row_role, games = row["champion_id"], row["role"], row["games"]
+            if role and row_role != role:
+                continue
+            if row_role == primary_role[cid] or games < FLEX_MIN_ROLE_GAMES:
                 continue
             share = games / totals[cid]
             if share < FLEX_ROLE_SHARE_THRESHOLD:
                 continue
-            profile = profiles.get((cid, role))
-            base = baseline.get(role)
+            profile = profiles.get((cid, row_role))
+            base = baseline.get(row_role)
             if profile is None or base is None or not base["avg_gold_15"]:
                 continue  # pas (encore) assez de match_role_stats pour ce rôle
+            gold_ratio = profile["avg_gold_15"] / base["avg_gold_15"]
+            deviation = abs(gold_ratio - 1)
+            if deviation < FLEX_MIN_DEVIATION:
+                continue  # profil ~= la moyenne du rôle : pas un vrai signal hybride
+            name = champ(cid).name
+            direction = "au-dessus" if gold_ratio > 1 else "en dessous"
             picks.append(
                 {
                     "champion_id": cid,
-                    "name": champ(cid).name,
-                    "role": role,
-                    "role_label": RIOT_ROLE_LABELS[role],
+                    "name": name,
+                    "role": row_role,
+                    "role_label": RIOT_ROLE_LABELS[row_role],
                     "primary_role": primary_role[cid],
                     "primary_role_label": RIOT_ROLE_LABELS[primary_role[cid]],
                     "share": share,
                     "games_role": games,
+                    "games_total": totals[cid],
                     "profile_n": profile["n"],
-                    "gold_ratio": profile["avg_gold_15"] / base["avg_gold_15"],
+                    "gold_ratio": gold_ratio,
+                    "deviation": deviation,
+                    "direction": direction,
                     "dmg_per_gold": profile["avg_dmg_per_gold"],
                     "baseline_dmg_per_gold": base["avg_dmg_per_gold"],
+                    "sentence": (
+                        f"{name} joue {RIOT_ROLE_LABELS[row_role]} dans {100 * share:.0f} %"
+                        f" de ses games ({games}/{totals[cid]}) — profil de gold"
+                        f" {100 * deviation:.0f} % {direction} de la moyenne du rôle."
+                    ),
                 }
             )
-        picks.sort(key=lambda p: abs(p["gold_ratio"] - 1), reverse=True)
-        return picks[:FLEX_PICKS_SHOWN]
+        picks.sort(key=lambda p: p["deviation"], reverse=True)
+        return picks
 
     @app.get("/flex", response_class=HTMLResponse)
-    def flex_page(request: Request, window: str | None = None, platform: str | None = None):
+    def flex_page(
+        request: Request,
+        window: str | None = None,
+        platform: str | None = None,
+        role: str | None = None,
+    ):
+        if role and role not in RIOT_ROLE_LABELS:
+            raise HTTPException(404, f"rôle inconnu : {role!r}")
         with request.app.state.pool.connection() as conn:
             window, platform, context = resolve_context(conn, window, platform)
-            picks = _flex_picks(conn, window, platform)
-        return templates.TemplateResponse(request, "flex.html", {**context, "picks": picks})
+            picks = _flex_picks(conn, window, platform, role=role)
+        return templates.TemplateResponse(
+            request, "flex.html", {**context, "picks": picks, "role": role or ""}
+        )
 
     # --- API JSON ---
 

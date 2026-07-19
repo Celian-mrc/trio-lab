@@ -664,27 +664,34 @@ def test_draft_page_combines_synergy_and_counter(pg_sync, client):
         " VALUES ('16.13', 'euw1', 'MIDDLE', 2, 4, 60, 60.0, 0.55, 0.02, 0.02, 0.3, 0.7, 'moyen')"
     )
 
+    # Grille = celle du seul slot "actif" (façon champ select) — le mettre
+    # explicitement sur blue_mid pour tester ces suggestions.
     # 1er pick, aucun allié/ennemi verrouillé : repli sur le WR baseline.
-    resp = client.get("/draft")
+    resp = client.get("/draft", params={"active": "blue_mid"})
     assert resp.status_code == 200
     assert "Ahri" in resp.text
     assert "55.0 % WR" in resp.text
 
     # Allié jungle verrouillé (Lee Sin) : suggestion mid par synergie seule.
-    resp = client.get("/draft", params={"blue_jgl": "Lee Sin"})
+    resp = client.get("/draft", params={"blue_jgl": "Lee Sin", "active": "blue_mid"})
     assert resp.status_code == 200
     assert "+8.0 %" in resp.text  # synergy .08
 
     # + ennemi mid verrouillé (Vi) : edge cumulé synergie + counter.
-    resp = client.get("/draft", params={"blue_jgl": "Lee Sin", "red_mid": "Vi"})
+    resp = client.get(
+        "/draft", params={"blue_jgl": "Lee Sin", "red_mid": "Vi", "active": "blue_mid"}
+    )
     assert resp.status_code == 200
     assert "+10.0 %" in resp.text  # .08 + .02
 
-    # Ban : Ahri (seule candidate connue pour mid) disparaît des suggestions,
+    # Ban : Ahri (seule candidate connue pour mid) disparaît de la grille,
     # y compris du repli baseline.
-    resp = client.get("/draft", params={"blue_jgl": "Lee Sin", "red_mid": "Vi", "bans": "Ahri"})
+    resp = client.get(
+        "/draft",
+        params={"blue_jgl": "Lee Sin", "red_mid": "Vi", "bans": "Ahri", "active": "blue_mid"},
+    )
     assert resp.status_code == 200
-    assert "Aucune suggestion" in resp.text
+    assert "Aucun champion disponible" in resp.text
 
 
 def test_draft_page_locked_slot_and_clear_link(pg_sync, client):
@@ -703,6 +710,71 @@ def test_draft_page_locked_slot_and_clear_link(pg_sync, client):
     assert 'name="blue_jgl" list="champion-names"' not in resp.text
 
 
+def test_draft_page_active_slot_defaults_then_advances_after_pick(pg_sync, client):
+    """Interface façon champ select (retour utilisateur 2026-07-19) : un seul
+    slot "actif" à la fois. Sans param `active`, c'est le 1er slot vide
+    (ordre fixe blue_top puis blue_jgl...). Un pick dans le slot actif
+    avance automatiquement vers le slot vide suivant."""
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    resp = client.get("/draft")
+    assert resp.status_code == 200
+    assert "Blue — Top" in resp.text
+
+    # Un pick verrouillé ailleurs (blue_jgl) sans `active` explicite : le
+    # 1er slot vide reste blue_top (l'ordre ignore les slots déjà remplis).
+    resp = client.get("/draft", params={"blue_jgl": "Lee Sin"})
+    assert resp.status_code == 200
+    assert "Blue — Top" in resp.text
+
+    # blue_top rempli : le slot actif par défaut avance à blue_mid (jgl
+    # aussi rempli, sup/bot suivent après mid dans l'ordre des rôles).
+    resp = client.get("/draft", params={"blue_jgl": "Lee Sin", "blue_top": "Thresh"})
+    assert resp.status_code == 200
+    assert "Blue — Mid" in resp.text
+
+
+def test_draft_page_blind_pick_shows_worst_matchup_safety(pg_sync, client):
+    """Sécurité blind pick (retour utilisateur 2026-07-19, clarification :
+    « un blind pick est un pick qui a peu de counter, ou du moins des
+    counters qui n'ont pas un énorme winrate contre ce champion ») : quand
+    aucun ennemi même rôle n'est verrouillé, la grille affiche le pire
+    matchup connu de chaque champion (MIN(delta), score_matchup)."""
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    pg_sync.execute(
+        "INSERT INTO agg_champion (patch, platform, role, champion_id, games, wins)"
+        " VALUES ('16.13', 'euw1', 'JUNGLE', 1, 100, 50)"
+    )
+    pg_sync.execute(
+        "INSERT INTO score_matchup (window_label, platform, role, champ_a, champ_b, games,"
+        " games_eff, wr, delta_raw, delta, ci_low, ci_high, tier)"
+        " VALUES ('16.13', 'euw1', 'JUNGLE', 1, 5, 60, 60.0, 0.40, -0.1, -0.1, -0.3, 0.1, 'moyen'),"
+        "        ('16.13', 'euw1', 'JUNGLE', 1, 6, 60, 60.0, 0.48, -0.02, -0.02, -0.2,"
+        " 0.2, 'moyen')"
+    )
+    resp = client.get("/draft", params={"active": "blue_jgl"})
+    assert resp.status_code == 200
+    assert 'class="badge-blind"' in resp.text
+    assert "pire contre -10.0 %" in resp.text  # le pire des deux contres (-0.1 < -0.02)
+
+    # Un ennemi jungle verrouillé : la synergie/contre réel prime, la
+    # sécurité blind pick disparaît (elle ne dit rien sur CET adversaire).
+    resp = client.get("/draft", params={"active": "blue_jgl", "red_jgl": "Orianna"})
+    assert resp.status_code == 200
+    assert 'class="badge-blind"' not in resp.text
+    assert "pire contre" not in resp.text
+    assert "pire contre" not in resp.text
+
+
 def test_insights_page_empty_state(pg_sync, client):
     pg_sync.execute(
         "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
@@ -715,34 +787,45 @@ def test_insights_page_empty_state(pg_sync, client):
     assert "python -m trio_lab.synergy.win_factors" in resp.text
 
 
-def test_insights_page_shows_ordered_factors(pg_sync, client):
+def test_insights_page_shows_aligned_combined_table(pg_sync, client):
     pg_sync.execute(
         "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
         " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
         " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
         " 0.0, 0.0, 1.0, 'faible')"
     )
-    # Inséré dans le désordre : la page doit réordonner selon FEATURES, pas
-    # l'ordre SQL, et ignorer 'intercept' (jamais actionnable pour un coach).
-    for feature, coef, odds in (
-        ("soul_taken", 2.1, 8.2),
-        ("gold_diff_15", 0.96, 2.6),
-        ("intercept", -0.9, 0.4),
-    ):
+    # Inséré dans le désordre, et 'behind_gold15' n'a qu'une partie des
+    # features (jgl_cs_diff_15 manquant) : la page doit quand même aligner
+    # chaque feature sur la même ligne dans les 2 colonnes, ordre FEATURES
+    # fixe, 'intercept' jamais affiché (pas actionnable pour un coach).
+    rows = (
+        ("all", "soul_taken", 2.1, 8.2),
+        ("all", "team_gold_diff_15", 0.96, 2.6),
+        ("all", "jgl_cs_diff_15", 0.05, 1.05),
+        ("all", "intercept", -0.9, 0.4),
+        ("behind_gold15", "soul_taken", 2.3, 10.0),
+        ("behind_gold15", "team_gold_diff_15", 0.48, 1.61),
+    )
+    for population, feature, coef, odds in rows:
         pg_sync.execute(
             "INSERT INTO score_win_factors (window_label, population, feature, coef,"
-            " odds_ratio, n) VALUES ('16.13', 'all', %s, %s, %s, 1000)",
-            (feature, coef, odds),
+            " odds_ratio, n) VALUES ('16.13', %s, %s, %s, %s, 1000)",
+            (population, feature, coef, odds),
         )
     resp = client.get("/insights")
     assert resp.status_code == 200
-    assert "Avantage gold à 15 min" in resp.text
+    assert "équipe complète des 5 rôles" in resp.text
+    assert "ÉQUIPE à 15 min" in resp.text  # apostrophe échappée en HTML (d&#39;ÉQUIPE)
+    assert "CS jungle vs adverse à 15 min" in resp.text
     assert "Âme de dragon" in resp.text
     assert "×8.20" in resp.text
-    # gold_diff_15 (odds ×2.60) doit apparaître avant soul_taken (×8.20) :
-    # l'ordre suit FEATURES, pas la valeur de l'odds ratio.
+    assert "×10.00" in resp.text
+    # team_gold_diff_15 doit apparaître avant soul_taken : l'ordre suit
+    # FEATURES, pas la valeur de l'odds ratio.
     assert resp.text.index("Avantage gold") < resp.text.index("Âme de dragon")
-    assert "Pas assez de games derrière au gold" in resp.text  # population 'behind_gold15' vide
+    # jgl_cs_diff_15 n'a une valeur QUE pour 'all' : la ligne existe quand
+    # même (alignement garanti, pas de ligne manquante), valeur affichée.
+    assert "×1.05" in resp.text
 
 
 def test_flex_page_detects_off_role_resource_deviation(pg_sync, client):
@@ -788,3 +871,52 @@ def test_flex_page_detects_off_role_resource_deviation(pg_sync, client):
     # Gold@15 support (5200) vs moyenne du rôle (40×5200+40×4400)/80 = 4800 :
     # ratio = 5200/4800 ≈ 1.08.
     assert "×1.08" in resp.text
+    # Phrase en langage clair, pas juste des chiffres bruts (retour utilisateur).
+    assert "Lee Sin joue Support dans 33 % de ses games (150/450)" in resp.text
+    # Filtre par rôle : Support seulement.
+    resp_role = client.get("/flex", params={"role": "UTILITY"})
+    assert resp_role.status_code == 200
+    assert "Lee Sin" in resp_role.text
+    resp_wrong_role = client.get("/flex", params={"role": "TOP"})
+    assert "Lee Sin" not in resp_wrong_role.text  # son rôle secondaire est Support, pas Top
+    assert client.get("/flex", params={"role": "INVALID"}).status_code == 404
+
+
+def test_flex_page_hides_deviation_below_threshold(pg_sync, client):
+    """Un profil quasi identique à la moyenne du rôle (<5 % d'écart) n'est
+    pas un vrai signal hybride — ne doit pas apparaître (retour utilisateur :
+    la liste se noyait dans du bruit proche de 0 sans ce plancher)."""
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    pg_sync.execute(
+        "INSERT INTO agg_champion (patch, platform, role, champion_id, games, wins)"
+        " VALUES ('16.13', 'euw1', 'TOP', 1, 300, 150)"
+    )
+    pg_sync.execute(
+        "INSERT INTO agg_champion (patch, platform, role, champion_id, games, wins)"
+        " VALUES ('16.13', 'euw1', 'UTILITY', 1, 150, 70)"
+    )
+    # Champion 1 en support : gold_15 = 4520, quasi identique à la moyenne
+    # du rôle (champion 2 seul, 4500) — écart < 1 %, sous le seuil de 5 %.
+    for champ_id, gold_15, count in ((1, 4520, 40), (2, 4500, 40)):
+        for i in range(count):
+            match_id = f"NOFLEX_{champ_id}_{i}"
+            pg_sync.execute(
+                "INSERT INTO matches (match_id, platform, patch, game_version, queue_id,"
+                " game_creation, game_duration_s, winning_team)"
+                " VALUES (%s, 'euw1', '16.13', '16.13.1', 420, now(), 1800, 100)",
+                (match_id,),
+            )
+            pg_sync.execute(
+                "INSERT INTO match_role_stats (match_id, team_id, role, champion_id, win,"
+                " gold_15, dmg_per_gold) VALUES (%s, 100, 'UTILITY', %s, true, %s, 1.5)",
+                (match_id, champ_id, gold_15),
+            )
+    resp = client.get("/flex")
+    assert resp.status_code == 200
+    assert "0 pick" in resp.text
+    assert "Lee Sin" not in resp.text

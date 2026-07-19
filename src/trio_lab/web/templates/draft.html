@@ -2,9 +2,17 @@
 {% block title %}Simulateur de draft — Trio Lab{% endblock %}
 {% block content %}
 <h1>Simulateur de draft</h1>
-<p class="meta">État de la draft dans l'URL (partage le lien pour reprendre où tu en es). Suggestions
-  = synergie avec les alliés déjà posés + contre l'adversaire même rôle (mêmes données que les pages
-  Trios/Duos) — un candidat sans historique commun reste affiché, juste sans avantage chiffré.</p>
+<p class="meta">Simule un draft complet façon champ select : verrouille les picks des deux équipes,
+  rôle par rôle. Le rôle actif est surligné à gauche/droite ; la grille ci-dessous liste
+  <strong>tous les champions du rôle</strong>, triés par valeur ajoutée par rapport à ce qui est déjà
+  posé — synergie avec les alliés verrouillés + contre l'adversaire même rôle s'il est déjà connu. Les
+  {{ draft_recommended_count }} premiers sont marqués « Recommandé » ; le reste du roster reste
+  cliquable, rien n'est masqué. État entièrement dans l'URL : partage le lien pour reprendre où tu en
+  es.</p>
+<p class="meta"><strong>Blind pick</strong> : tant qu'aucun adversaire même rôle n'est verrouillé, le
+  tri ne porte que sur la synergie côté allié (pas de contre à calculer) — la grille affiche alors le
+  pire matchup connu de chaque champion (le contre le plus défavorable parmi ceux recensés), pour
+  repérer les picks à risque avant de les locker.</p>
 
 <form method="get" action="/draft" class="filters">
   <label>Fenêtre
@@ -20,63 +28,105 @@
   {% for side in ('blue', 'red') %}{% for role in draft_roles %}
   <input type="hidden" name="{{ side }}_{{ role }}" value="{{ champ(picks[side][role]).name if picks[side][role] else '' }}">
   {% endfor %}{% endfor %}
-  <label>Bans <input name="bans" value="{{ bans_raw }}" list="champion-names" placeholder="séparés par des virgules"></label>
+  <input type="hidden" name="active" value="{{ active or '' }}">
+  <input type="hidden" name="bans" value="{{ bans_raw }}">
   <button type="submit">Appliquer</button>
 </form>
 <datalist id="champion-names">
   {% for name in champion_names %}<option value="{{ name }}">{% endfor %}
 </datalist>
 
+<div class="draft-bans">
+  <span class="draft-bans-label">Bans</span>
+  {% for cid in banned if cid not in picks.blue.values() and cid not in picks.red.values() %}
+  {% set c = champ(cid) %}
+  <span class="champ draft-ban-chip">{% if c.icon_url %}<img src="{{ c.icon_url }}" alt="" width="20" height="20">{% endif %}{{ c.name }}</span>
+  {% endfor %}
+  <form method="get" action="/draft" class="draft-ban-form">
+    {% for side in ('blue', 'red') %}{% for role in draft_roles %}
+    <input type="hidden" name="{{ side }}_{{ role }}" value="{{ champ(picks[side][role]).name if picks[side][role] else '' }}">
+    {% endfor %}{% endfor %}
+    <input type="hidden" name="active" value="{{ active or '' }}">
+    <input type="hidden" name="window" value="{{ window }}">
+    <input type="hidden" name="platform" value="{{ platform }}">
+    <input name="bans" value="{{ bans_raw }}" list="champion-names" placeholder="ajouter un ban, séparés par des virgules">
+    <button type="submit">OK</button>
+  </form>
+</div>
+
 <div class="draft-board">
   {% for side, label in (('blue', 'Blue'), ('red', 'Red')) %}
   <section class="draft-side">
     <h2>{{ label }}</h2>
     {% for role in draft_roles %}
+    {% set key = side ~ '_' ~ role %}
     {% set champion_id = picks[side][role] %}
-    <div class="draft-slot">
+    <div class="draft-slot {{ 'active' if key == active }}">
       <div class="draft-slot-role">{{ ROLE_LABELS[role] }}</div>
       {% if champion_id %}
-        {% set c = champ(champion_id) %}
-        <div class="champ big draft-locked">
-          {% if c.icon_url %}<img src="{{ c.icon_url }}" alt="" width="32" height="32">{% endif %}
-          {{ c.name }}
-          <a class="draft-clear" href="{{ slot_urls[side ~ '_' ~ role] }}" title="Retirer ce pick">✕</a>
-        </div>
+      {% set c = champ(champion_id) %}
+      <a class="champ big draft-locked" href="{{ slot_urls[key] }}" title="Retirer ce pick et resélectionner">
+        {% if c.icon_url %}<img src="{{ c.icon_url }}" alt="" width="32" height="32">{% endif %}
+        {{ c.name }}
+        <span class="draft-clear">✕</span>
+      </a>
       {% else %}
-        <form method="get" action="/draft" class="draft-pick-form">
-          {% for s2 in ('blue', 'red') %}{% for r2 in draft_roles %}
-          {% if not (s2 == side and r2 == role) %}
-          <input type="hidden" name="{{ s2 }}_{{ r2 }}" value="{{ champ(picks[s2][r2]).name if picks[s2][r2] else '' }}">
-          {% endif %}
-          {% endfor %}{% endfor %}
-          <input type="hidden" name="bans" value="{{ bans_raw }}">
-          <input type="hidden" name="window" value="{{ window }}">
-          <input type="hidden" name="platform" value="{{ platform }}">
-          <input name="{{ side }}_{{ role }}" list="champion-names" placeholder="chercher un champion…">
-        </form>
-        <ul class="draft-suggestions">
-          {% for s in suggestions.get(side ~ '_' ~ role, []) %}
-          {% set sc = champ(s.champion_id) %}
-          <li class="{{ 'low-sample' if s.low_sample }}">
-            <a href="{{ s.pick_url }}">
-              {% if sc.icon_url %}<img src="{{ sc.icon_url }}" alt="" width="20" height="20">{% endif %}
-              {{ sc.name }}
-            </a>
-            {% if s.edge is not none %}
-            <span class="{{ 'pos' if s.edge > 0 else 'neg' if s.edge < 0 }}" data-tooltip="Σ synergie avec les alliés déjà posés + contre l'adversaire même rôle" aria-label="Σ synergie avec les alliés déjà posés + contre l'adversaire même rôle">{{ s.edge | signed_pct }}</span>
-            {% else %}
-            <span class="meta" data-tooltip="Aucun allié/ennemi encore posé pour ce rôle : tri par winrate individuel" aria-label="Aucun allié/ennemi encore posé pour ce rôle : tri par winrate individuel">{{ s.wr | pct }} WR</span>
-            {% endif %}
-            <span class="meta">{{ s.games_eff | num(0) }} eff.</span>
-          </li>
-          {% else %}
-          <li class="empty">Aucune suggestion.</li>
-          {% endfor %}
-        </ul>
+      <a class="draft-slot-empty" href="{{ slot_urls[key] }}">
+        {{ 'En cours de sélection…' if key == active else 'Cliquer pour choisir' }}
+      </a>
       {% endif %}
     </div>
     {% endfor %}
   </section>
   {% endfor %}
 </div>
+
+<section class="draft-grid-panel">
+  {% if grid %}
+  {% set active_side, active_role = active.split('_', 1) %}
+  <div class="draft-grid-header">
+    <h2>{{ 'Blue' if active_side == 'blue' else 'Red' }} — {{ ROLE_LABELS[active_role] }}</h2>
+    {% if grid.blind %}<span class="badge-blind" data-tooltip="Aucun adversaire même rôle verrouillé : tri par synergie alliés uniquement, pire contre connu affiché par champion" aria-label="Aucun adversaire même rôle verrouillé : tri par synergie alliés uniquement, pire contre connu affiché par champion">Blind pick</span>{% endif %}
+  </div>
+  <form method="get" action="/draft" class="draft-pick-form">
+    {% for s2 in ('blue', 'red') %}{% for r2 in draft_roles %}
+    {% if s2 ~ '_' ~ r2 != active %}
+    <input type="hidden" name="{{ s2 }}_{{ r2 }}" value="{{ champ(picks[s2][r2]).name if picks[s2][r2] else '' }}">
+    {% endif %}
+    {% endfor %}{% endfor %}
+    <input type="hidden" name="active" value="{{ active }}">
+    <input type="hidden" name="bans" value="{{ bans_raw }}">
+    <input type="hidden" name="window" value="{{ window }}">
+    <input type="hidden" name="platform" value="{{ platform }}">
+    <input name="{{ active }}" list="champion-names" placeholder="chercher un champion…">
+  </form>
+  {% if not grid.roster %}
+  <p class="empty">Aucun champion disponible (tous bannis/pris pour ce rôle).</p>
+  {% else %}
+  <div class="champ-grid">
+    {% for r in grid.roster %}
+    {% set c = champ(r.champion_id) %}
+    <a class="champ-tile {{ 'recommended' if r.recommended }} {{ 'low-sample' if r.low_sample }}" href="{{ r.pick_url }}">
+      {% if c.icon_url %}<img src="{{ c.icon_url }}" alt="" width="40" height="40">{% endif %}
+      <span class="champ-tile-name">{{ r.name }}</span>
+      {% if r.edge is not none %}
+      <span class="{{ 'pos' if r.edge > 0 else 'neg' if r.edge < 0 }}" data-tooltip="Σ synergie avec les alliés déjà posés + contre l'adversaire même rôle" aria-label="Σ synergie avec les alliés déjà posés + contre l'adversaire même rôle">{{ r.edge | signed_pct }}</span>
+      {% elif r.wr is not none %}
+      <span class="meta">{{ r.wr | pct }} WR</span>
+      {% endif %}
+      {% if grid.blind %}
+      {% if r.safety is not none %}
+      <span class="sub neg">pire contre {{ r.safety | signed_pct }}</span>
+      {% else %}
+      <span class="sub meta">pas de contre notable</span>
+      {% endif %}
+      {% endif %}
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% else %}
+  <p class="empty">Draft complète — retire un pick à gauche/droite pour continuer.</p>
+  {% endif %}
+</section>
 {% endblock %}

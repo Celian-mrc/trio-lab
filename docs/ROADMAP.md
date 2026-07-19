@@ -225,40 +225,63 @@ LoLDraftAI, METAsrc Counter Picker) : trio-lab reste le seul à faire de la
 synergie de TRIO, mais peut couvrir le reste (draft, méta, "ce qui fait
 gagner") avec les données déjà en place.
 
-- [x] Simulateur de draft interactif (2026-07-19) : `/draft` — état
-      entièrement dans l'URL (query params, pas de session serveur, même
-      principe que window/platform), 5 rôles × 2 équipes + bans. Pour
-      chaque slot vide : edge = Σ synergie avec les alliés déjà posés
-      (`champion_best_partners`, existant) + delta counter vs l'ennemi même
-      rôle (`queries.matchup_candidates`, nouveau, symétrique de
-      `champion_best_partners`) — même unité (points de WR) donc sommable
-      sans pondération arbitraire. 1er pick d'un rôle (rien de verrouillé) :
-      repli sur le WR baseline (`champion_role_baseline_list`, nouveau).
-      Candidat sans donnée commune : contribution 0, jamais exclu. Fiabilité
-      grisée sous `DRAFT_MIN_GAMES_EFF` (50, cohérent avec le tier "moyen"),
-      jamais filtrée. hx-boost (déjà en place) rend chaque pick réactif sans
-      JS custom.
-- [x] Dashboard "ce qui fait gagner" (2026-07-19) : `/insights` — régression
-      logistique multi-variables (`synergy/win_factors.py`, IRLS pure Python,
-      cohérent avec la philosophie du projet — pas de numpy/scipy pour ~10
-      variables sur quelques dizaines de milliers de lignes), matérialisée
-      dans `score_win_factors` (migration 027). Deux populations : toutes
-      les games, et celles où le trio est derrière au gold à 15 min (leviers
-      de comeback, différents — vision/efficacité ressources y pèsent 2-3x
-      plus, cf. recherches de session). Poids par patch identiques à
-      `synergy.compute` (`weights_for`), appliqués comme poids d'observation
-      dans l'IRLS, pas une repondération a posteriori. Rafraîchissement
-      MANUEL (`python -m trio_lab.synergy.win_factors --patches X`), jamais
-      dans le cycle service — même philosophie que `ccref.sync_theoretical`
-      (signal de patch, pas de cycle de collecte).
-- [x] Détecteur de picks flex/hybrides (2026-07-19) : `/flex` — automatise
-      la vérification manuelle faite en session sur Camille/Elise/Twitch
-      support. Rôle secondaire non anecdotique (`agg_champion`, historique
-      complet : ≥ 5 % des games du champion ET ≥ 100 games brutes, pas un
-      troll pick isolé) dont le profil de gold à 15 min (`match_role_stats`,
-      jeune : ≥ 30 games) dévie de la moyenne du rôle. Calcul live (pas de
-      table matérialisée — requête testée ~1s sur les données de prod, pas
-      besoin). Signal de méta hybride à faire vérifier par un humain, pas une
-      alerte de bug automatique.
+- [x] Simulateur de draft interactif (2026-07-19, refonte façon champ select
+      le même jour suite au retour « je ne comprends pas comment ça
+      fonctionne ») : `/draft` — état entièrement dans l'URL (query params,
+      pas de session serveur), 5 rôles × 2 équipes + bans. Un seul slot
+      "actif" à la fois (`active` en query param, 1er slot vide par défaut,
+      avance automatiquement après un pick — `DRAFT_SLOT_ORDER`) : la grille
+      du slot actif liste TOUT le roster disponible du rôle (pas de liste
+      tronquée), trié par edge = Σ synergie avec les alliés déjà posés
+      (`champion_best_partners`) + delta counter vs l'ennemi même rôle
+      (`queries.matchup_candidates`) — même unité (points de WR) donc
+      sommable sans pondération arbitraire ; les `DRAFT_RECOMMENDED_COUNT`
+      (12) premiers sont badgés "Recommandé", le reste reste cliquable. 1er
+      pick d'un rôle (rien de verrouillé) : repli sur le WR baseline
+      (`champion_role_baseline_list`). Candidat sans donnée commune :
+      contribution nulle, jamais exclu. Fiabilité grisée sous
+      `DRAFT_MIN_GAMES_EFF` (50), jamais filtrée. **Sécurité blind pick**
+      (retour utilisateur : « un blind pick est un pick qui a peu de
+      counter, ou dont les counters n'ont pas un énorme WR contre lui ») :
+      quand aucun ennemi même rôle n'est verrouillé, chaque candidat affiche
+      son pire matchup connu (`queries.role_worst_matchups`, MIN(delta) sur
+      `score_matchup`, un seul aller-retour par rôle). hx-boost rend chaque
+      pick réactif sans JS custom.
+- [x] Dashboard "ce qui fait gagner" (2026-07-19, reconstruit le même jour
+      suite au retour « pourquoi ça ne parle que du trio jgl/mid/sup ? ») :
+      `/insights` — régression logistique multi-variables
+      (`synergy/win_factors.py`, IRLS pure Python), matérialisée dans
+      `score_win_factors` (migration 027), désormais sur l'**équipe complète
+      des 5 rôles** (`match_role_stats`, pas seulement jgl/mid/sup) : gold
+      d'équipe, CC/vision d'équipe, CS jungle vs adverse à 15 min, dégâts/gold
+      par rôle (top/jgl/mid/adc/support), objectifs. `damage_share` et
+      `kill_participation_pre15` abandonnés (pas d'interprétation team-wide
+      valable). Deux populations (toutes games / derrière au gold à 15 min)
+      affichées dans un même tableau, une ligne par feature dans un ordre
+      fixe (`_combined_win_factors`) — jamais deux tableaux qui peuvent
+      désaligner. Rafraîchissement MANUEL
+      (`python -m trio_lab.synergy.win_factors --patches X`).
+- [x] Détecteur de picks flex/hybrides (2026-07-19, seuils revus le même
+      jour suite au retour « il y a peu de flex picks ») : `/flex` — rôle
+      secondaire non anecdotique (`agg_champion`, historique complet : ≥ 5 %
+      des games du champion ET ≥ 100 games brutes) dont le profil de gold à
+      15 min (`match_role_stats`, ≥ 30 games) dévie de la moyenne du rôle
+      d'au moins `FLEX_MIN_DEVIATION` (5 % — plancher de significativité,
+      remplace un ancien plafond arbitraire de 20 résultats affichés qui
+      masquait silencieusement 137 candidats réels sur 157). Phrase en
+      langage clair par ligne + filtre par rôle secondaire. Calcul live (pas
+      de table matérialisée, ~1s sur prod).
 
 Phase 8 close pour l'instant (draft, insights, flex) — prochaine idée à définir.
+
+**Gap constaté en marge de cette révision (2026-07-19, non traité ici)** :
+`agg_matchup`/`score_matchup` sont vides en prod alors que le code
+(`stats/aggregate.py` + `synergy/matchups.py`) est déployé depuis le commit
+`4762304` et que `match_participants` a bien 2,1M lignes retenues pour le
+patch courant (16.14) — un run manuel de la requête d'agrégation confirme
+162 396 lignes attendues. Le service 24/24 tourne pourtant (`agg_trio`/
+`agg_duo` du même patch sont à jour), donc `aggregate.refresh` s'exécute
+mais `agg_matchup` reste à 0 : cause probable, service Railway du collecteur
+pas redéployé depuis ce commit (à vérifier côté Railway). Conséquence :
+`/draft` (contre ennemi + sécurité blind pick) tourne uniquement sur la
+synergie tant que ce n'est pas corrigé.

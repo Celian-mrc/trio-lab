@@ -3,54 +3,43 @@
 {% block content %}
 <h1>Ce qui fait gagner</h1>
 <p class="meta">Régression logistique multi-variables sur les games de la fenêtre (toutes régions
-  combinées) : effet propre de chaque stat en contrôlant les autres — pas une simple corrélation
-  brute. Odds ratio ×N = N fois plus de chances de gagner (variables continues : pour +1 écart-type ;
-  booléennes : présent vs absent). ×1 = aucun effet, sous 1 = effet négatif.</p>
+  combinées, <strong>équipe complète des 5 rôles</strong> — top/jungle/mid/adc/support, pas
+  seulement jungle/mid/support) : effet propre de chaque stat en contrôlant les autres, pas une
+  simple corrélation brute. Odds ratio ×N = N fois plus de chances de gagner (variables continues :
+  pour +1 écart-type ; booléennes : présent vs absent). ×1 = aucun effet, sous 1 = effet négatif.</p>
 <p class="meta"><strong>Limites</strong> : données solo queue Emerald+, pas scrims/pro — les
   tendances early (gold, objectifs) transfèrent généralement bien, les choix de champions bien
-  moins. Certains signaux (plaques, CS jungle) sont en partie définitionnels du gold lui-même :
-  corrélation, pas forcément causalité pure.</p>
+  moins. Certains signaux (CS jungle) sont en partie définitionnels du gold lui-même : corrélation,
+  pas forcément causalité pure.</p>
 
-{% if not all_factors %}
+{% if not factors %}
 <p class="empty">Pas encore calculé pour cette fenêtre ({{ window }}) — lancer
   <code>python -m trio_lab.synergy.win_factors --patches {{ window }}</code> pour la matérialiser.</p>
 {% else %}
-<div class="stat-grid">
-  <div class="card">
-    <h3>Population complète <span class="meta">({{ all_factors[0].n }} games)</span></h3>
-    <table class="narrow kv">
-      <thead><tr><th>Facteur</th><th>Odds ratio</th></tr></thead>
-      <tbody>
-        {% for f in all_factors %}
-        <tr>
-          <td>{{ f.label }}</td>
-          <td class="{{ 'pos' if f.odds_ratio > 1 else 'neg' if f.odds_ratio < 1 }}">×{{ f.odds_ratio | num(2) }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-
-  <div class="card">
-    <h3>Derrière au gold à 15 min <span class="meta">({{ behind_factors[0].n if behind_factors else 0 }} games)</span></h3>
-    <p class="meta">Leviers de comeback — mesurés uniquement sur les games où le trio est derrière ;
-      diffèrent de la population complète (vision et efficacité ressources y pèsent nettement plus).</p>
-    {% if behind_factors %}
-    <table class="narrow kv">
-      <thead><tr><th>Facteur</th><th>Odds ratio</th></tr></thead>
-      <tbody>
-        {% for f in behind_factors %}
-        <tr>
-          <td>{{ f.label }}</td>
-          <td class="{{ 'pos' if f.odds_ratio > 1 else 'neg' if f.odds_ratio < 1 }}">×{{ f.odds_ratio | num(2) }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    {% else %}
-    <p class="empty">Pas assez de games derrière au gold sur cette fenêtre.</p>
-    {% endif %}
-  </div>
-</div>
+<table class="data">
+  <thead>
+    <tr>
+      <th>Facteur</th>
+      <th>Population complète <span class="meta">({{ all_n }} games)</span></th>
+      <th>Derrière au gold à 15 min <span class="meta">({{ behind_n }} games)</span></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for f in factors %}
+    <tr>
+      <td>{{ f.label }}</td>
+      <td class="{{ 'pos' if f.all and f.all.odds_ratio > 1 else 'neg' if f.all and f.all.odds_ratio < 1 }}">
+        {{ '×' + (f.all.odds_ratio | num(2)) if f.all else '—' }}
+      </td>
+      <td class="{{ 'pos' if f.behind and f.behind.odds_ratio > 1 else 'neg' if f.behind and f.behind.odds_ratio < 1 }}">
+        {{ '×' + (f.behind.odds_ratio | num(2)) if f.behind else '—' }}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<p class="meta">Colonne « Derrière au gold » : leviers de comeback, mesurés uniquement sur les
+  games où l'équipe est derrière — diffèrent de la population complète (vision et efficacité
+  ressources y pèsent nettement plus).</p>
 {% endif %}
 {% endblock %}

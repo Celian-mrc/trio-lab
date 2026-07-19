@@ -1,16 +1,24 @@
 """Régression logistique multi-variables : qu'est-ce qui fait gagner ?
 
-Matérialise l'analyse menée en session (2026-07-19) sur match_trio_stats,
-productionisée : mêmes features, même méthode (IRLS — Newton-Raphson pour la
-logistique — pure Python, cohérent avec la philosophie du projet, pas de
-numpy/scipy pour un ajustement à ~10 variables sur quelques dizaines de
-milliers de lignes).
+Matérialise l'analyse menée en session (2026-07-19), productionisée : IRLS —
+Newton-Raphson pour la logistique — pure Python, cohérent avec la philosophie
+du projet, pas de numpy/scipy pour un ajustement à ~12 variables sur
+quelques dizaines de milliers de lignes.
+
+Stats d'ÉQUIPE COMPLÈTE (5 rôles), pas seulement jgl/mid/sup : contrairement
+à la première version (qui lisait `match_trio_stats`, limité au trio),
+`_fetch_rows` agrège `match_role_stats` (les 5 rôles) par équipe — un coach
+raisonne en gold/vision/CC d'ÉQUIPE, pas d'un sous-ensemble de 3 joueurs sur
+5 (retour utilisateur, 2026-07-19). `damage_share` et `kill_participation`
+(spécifiques au trio, pas de sens au niveau équipe complète — la part de
+l'équipe dans les dégâts de l'équipe vaut toujours 100 %) sont retirées ;
+`jgl_cs_diff_15` (déjà calculé, team-level malgré son nom) est ajoutée.
 
 Deux populations, deux jeux de coefficients :
-- « all » : toutes les games (patch_window courant, cas complets).
-- « behind_gold15 » : games où le trio est derrière au gold à 15 min —
+- « all » : toutes les games (fenêtre courante, cas complets).
+- « behind_gold15 » : games où l'ÉQUIPE est derrière au gold à 15 min —
   leviers de comeback, mesurés différemment de la population complète
-  (vision/efficacité ressources y pèsent 2-3x plus, cf. recherche session).
+  (vision/efficacité ressources y pèsent plus, cf. recherche session).
 
 Poids par patch : mêmes poids que `synergy.compute`/`windows.PatchWindow`
 (pas de coupure de rework — aucune variable ici n'est liée à un champion
@@ -19,7 +27,9 @@ précis), appliqués comme poids d'observation dans l'IRLS (`w_i = poids_patch
 
 Rafraîchissement MANUEL (`python -m trio_lab.synergy.win_factors`), jamais
 dans le cycle service : un facteur de victoire est un signal de patch, pas de
-cycle de collecte — même philosophie que `ccref.sync_theoretical`.
+cycle de collecte — même philosophie que `ccref.sync_theoretical`. Dépend de
+`match_role_stats` (déployée le 19/07/2026, historique plus court que
+`match_trio_stats`) : volumétrie qui grandit avec le temps.
 """
 
 from __future__ import annotations
@@ -39,14 +49,15 @@ logger = logging.getLogger(__name__)
 # comme « effet pour +1 écart-type ». Booléennes (herald/soul/first_tower) :
 # laissées 0/1, coefficient = effet de 0 → 1 directement.
 FEATURES = (
-    "gold_diff_15",
-    "cc_per_min",
-    "vision_per_min",
-    "damage_share",
+    "team_gold_diff_15",
+    "team_cc_per_min",
+    "team_vision_per_min",
+    "jgl_cs_diff_15",
+    "top_dmg_per_gold",
     "jgl_dmg_per_gold",
     "mid_dmg_per_gold",
+    "bot_dmg_per_gold",
     "sup_dmg_per_gold",
-    "kill_participation_pre15",
     "herald_taken",
     "soul_taken",
     "first_tower",
@@ -54,31 +65,56 @@ FEATURES = (
 CONTINUOUS = frozenset(FEATURES) - {"herald_taken", "soul_taken", "first_tower"}
 DEFAULT_MIN_ROWS = 200  # sous ce seuil, l'ajustement est trop instable pour être publié
 
+# Colonnes dmg_per_gold par rôle, dérivées par pivot (FILTER) d'une seule
+# ligne match_role_stats par (match, équipe) — évite un GROUP BY par rôle.
+_ROLE_DMG_PER_GOLD_SQL = ", ".join(
+    f"max(dmg_per_gold) FILTER (WHERE role = '{riot_role}') AS {feature}"
+    for riot_role, feature in (
+        ("TOP", "top_dmg_per_gold"),
+        ("JUNGLE", "jgl_dmg_per_gold"),
+        ("MIDDLE", "mid_dmg_per_gold"),
+        ("BOTTOM", "bot_dmg_per_gold"),
+        ("UTILITY", "sup_dmg_per_gold"),
+    )
+)
+
 
 def _fetch_rows(conn: psycopg.Connection, patches: list[str], *, behind_only: bool) -> list[dict]:
-    where = (
-        "t.gold_diff_15 IS NOT NULL AND t.jgl_dmg_per_gold IS NOT NULL"
-        " AND t.mid_dmg_per_gold IS NOT NULL AND t.sup_dmg_per_gold IS NOT NULL"
-        " AND t.damage_share IS NOT NULL AND t.kill_participation_pre15 IS NOT NULL"
-        " AND m.patch = ANY(%(patches)s)"
+    dpg_not_null = " AND ".join(
+        f"ta.{f} IS NOT NULL"
+        for f in ("top_dmg_per_gold", "jgl_dmg_per_gold", "mid_dmg_per_gold")
+        + ("bot_dmg_per_gold", "sup_dmg_per_gold")
     )
+    where = f"m.patch = ANY(%(patches)s) AND {dpg_not_null} AND mt.jgl_cs_diff_15 IS NOT NULL"
     if behind_only:
-        where += " AND t.gold_diff_15 < 0"
+        where += " AND (ta.gold_15 - ea.gold_15) < 0"
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
         cur.execute(
             f"""
-            SELECT m.patch, t.win,
-                   t.gold_diff_15,
-                   t.cc_time_s / (m.game_duration_s / 60.0) AS cc_per_min,
-                   t.vision_score / (m.game_duration_s / 60.0) AS vision_per_min,
-                   t.damage_share,
-                   t.jgl_dmg_per_gold, t.mid_dmg_per_gold, t.sup_dmg_per_gold,
-                   t.kill_participation_pre15,
-                   t.herald_taken, t.soul_taken, t.first_tower
-            FROM match_trio_stats t
-            JOIN matches m USING (match_id)
-            WHERE {where}
-            """,  # noqa: S608 — `where` est une liste blanche fixe, jamais interpolée
+            WITH team_agg AS (
+                SELECT match_id, team_id,
+                       sum(gold_15) AS gold_15,
+                       sum(cc_time_s) AS cc_time_s,
+                       sum(vision_score) AS vision_score,
+                       {_ROLE_DMG_PER_GOLD_SQL},
+                       count(*) AS n_roles
+                FROM match_role_stats
+                WHERE gold_15 IS NOT NULL
+                GROUP BY match_id, team_id
+            )
+            SELECT m.patch, mt.win,
+                   ta.gold_15 - ea.gold_15 AS team_gold_diff_15,
+                   ta.cc_time_s / (m.game_duration_s / 60.0) AS team_cc_per_min,
+                   ta.vision_score / (m.game_duration_s / 60.0) AS team_vision_per_min,
+                   ta.top_dmg_per_gold, ta.jgl_dmg_per_gold, ta.mid_dmg_per_gold,
+                   ta.bot_dmg_per_gold, ta.sup_dmg_per_gold,
+                   mt.jgl_cs_diff_15, mt.herald_taken, mt.soul_taken, mt.first_tower
+            FROM team_agg ta
+            JOIN team_agg ea ON ea.match_id = ta.match_id AND ea.team_id <> ta.team_id
+            JOIN matches m ON m.match_id = ta.match_id
+            JOIN match_trio_stats mt ON mt.match_id = ta.match_id AND mt.team_id = ta.team_id
+            WHERE ta.n_roles = 5 AND ea.n_roles = 5 AND {where}
+            """,  # noqa: S608 — `where`/`_ROLE_DMG_PER_GOLD_SQL` sont des listes blanches fixes
             {"patches": patches},
         )
         return cur.fetchall()
@@ -207,9 +243,6 @@ def _fit_population(
 _INSERT_SQL = """
     INSERT INTO score_win_factors (window_label, population, feature, coef, odds_ratio, n)
     VALUES (%(window_label)s, %(population)s, %(feature)s, %(coef)s, %(odds_ratio)s, %(n)s)
-    ON CONFLICT (window_label, population, feature)
-    DO UPDATE SET coef = EXCLUDED.coef, odds_ratio = EXCLUDED.odds_ratio, n = EXCLUDED.n,
-                  computed_at = now()
 """
 
 
@@ -218,7 +251,15 @@ def refresh(
 ) -> dict[str, int]:
     """Ajuste les 2 régressions (population complète, derrière au gold@15) et
     matérialise dans `score_win_factors`. Retourne le nombre de lignes écrites
-    par population (0 si sous le seuil `min_rows`, pas d'erreur)."""
+    par population (0 si sous le seuil `min_rows`, pas d'erreur).
+
+    DELETE + INSERT (pas UPSERT) : la table est minuscule (~2×13 lignes par
+    fenêtre) et `FEATURES` change parfois d'une session à l'autre (ex. ajout
+    de jgl_cs_diff_15) — un UPSERT laisserait les anciennes features orphelines
+    en base indéfiniment, contrairement à score_duo/score_trio où l'UPSERT
+    évite un vrai problème de volumétrie (cf. mémoire supabase-disk-growth) :
+    ce n'est pas la même échelle, DELETE+INSERT est plus simple et plus sûr ici.
+    """
     counts: dict[str, int] = {}
     with psycopg.connect(db.require_dsn(dsn)) as conn:
         rows_to_write: list[dict] = []
@@ -229,6 +270,7 @@ def refresh(
             if fitted:
                 rows_to_write.extend(fitted)
         with conn.transaction(), conn.cursor() as cur:
+            cur.execute("DELETE FROM score_win_factors WHERE window_label = %s", (window.label,))
             if rows_to_write:
                 cur.executemany(_INSERT_SQL, rows_to_write)
     logger.info("win_factors fenêtre %s rafraîchis : %s", window.label, counts)
