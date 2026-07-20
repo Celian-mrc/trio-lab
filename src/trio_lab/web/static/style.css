@@ -136,6 +136,8 @@ a.champ.big:hover { color: var(--accent); }
 .role-jgl { color: #86efac; }
 .role-mid { color: #7dd3fc; }
 .role-sup { color: #fcd34d; }
+.role-top { color: #fca5a5; }
+.role-bot { color: #d8b4fe; }
 
 /* --- Badges & couleurs --- */
 .pos { color: var(--pos); }
