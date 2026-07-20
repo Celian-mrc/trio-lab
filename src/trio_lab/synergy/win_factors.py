@@ -20,7 +20,8 @@ reflète surtout l'archétype du champion (un tank/support a un dégâts/gold
 structurellement bas — ce n'est pas une contre-performance) plutôt qu'un
 signal de performance actionnable par un coach ; remplacer par un dégâts/
 minute aurait été pire (redondant avec l'avantage gold déjà dans le modèle).
-Diagnostic de colinéarité (VIF par régression auxiliaire, `_compute_vif`)
+Diagnostic de colinéarité (VIF par régression auxiliaire, `_linalg.compute_vif`,
+partagé avec `gold_factors.py`)
 calculé à chaque ajustement sur les features continues restantes, loggé
 (jamais bloquant) ; `ridge` de l'IRLS augmenté automatiquement si un VIF
 dépasse 5 (stabilise les coefficients sans les mettre à zéro, cf. littérature
@@ -53,6 +54,7 @@ import math
 import psycopg
 
 from trio_lab import config, db
+from trio_lab.synergy import _linalg
 from trio_lab.synergy.windows import PatchWindow, make_window
 
 logger = logging.getLogger(__name__)
@@ -71,12 +73,6 @@ FEATURES = (
 )
 CONTINUOUS = frozenset(FEATURES) - {"herald_taken", "soul_taken", "first_tower"}
 DEFAULT_MIN_ROWS = 200  # sous ce seuil, l'ajustement est trop instable pour être publié
-# Seuil d'alerte VIF (variance inflation factor) standard en régression :
-# > 5 signale une colinéarité qui gonfle les erreurs-types des coefficients
-# concernés (pas leur valeur ponctuelle) — au-delà, le ridge est renforcé.
-VIF_ALERT_THRESHOLD = 5.0
-DEFAULT_RIDGE = 1e-6  # stabilisation numérique pure, pas une vraie régularisation
-VIF_RIDGE = 1.0  # régularisation réelle, appliquée seulement si un VIF dépasse le seuil
 
 
 def _fetch_rows(conn: psycopg.Connection, patches: list[str], *, behind_only: bool) -> list[dict]:
@@ -144,65 +140,6 @@ def _design_matrix(
     return x_rows, y, row_weights
 
 
-def _solve(matrix: list[list[float]], b: list[float]) -> list[float]:
-    """Résolution par élimination de Gauss avec pivot partiel — matrice p×p,
-    p ≈ 12 (intercept + FEATURES) : trivial en pure Python à cette taille."""
-    n = len(b)
-    aug = [row[:] + [b[i]] for i, row in enumerate(matrix)]
-    for col in range(n):
-        pivot = max(range(col, n), key=lambda r: abs(aug[r][col]))
-        aug[col], aug[pivot] = aug[pivot], aug[col]
-        pv = aug[col][col]
-        for j in range(col, n + 1):
-            aug[col][j] /= pv
-        for r in range(n):
-            if r != col and aug[r][col] != 0.0:
-                factor = aug[r][col]
-                for j in range(col, n + 1):
-                    aug[r][j] -= factor * aug[col][j]
-    return [aug[i][n] for i in range(n)]
-
-
-def _compute_vif(x_rows: list[list[float]], target_cols: list[int]) -> dict[int, float]:
-    """VIF (variance inflation factor) par régression auxiliaire OLS non
-    pondérée : VIF_j = 1 / (1 − R²_j), où R²_j vient de la régression de la
-    colonne j sur toutes les autres colonnes du design matrix (intercept
-    inclus, colonne 0). Diagnostic seulement, jamais bloquant — cf. module
-    docstring (seuil d'alerte `VIF_ALERT_THRESHOLD`, renforce le ridge)."""
-    n = len(x_rows)
-    p = len(x_rows[0])
-    vifs: dict[int, float] = {}
-    for j in target_cols:
-        other_cols = [c for c in range(p) if c != j]
-        xtx = [[0.0] * len(other_cols) for _ in other_cols]
-        xty = [0.0] * len(other_cols)
-        target_vals = [x_rows[i][j] for i in range(n)]
-        target_mean = sum(target_vals) / n
-        ss_tot = sum((v - target_mean) ** 2 for v in target_vals)
-        for i in range(n):
-            xi = [x_rows[i][c] for c in other_cols]
-            yj = x_rows[i][j]
-            for a in range(len(other_cols)):
-                xty[a] += xi[a] * yj
-                for b_ in range(len(other_cols)):
-                    xtx[a][b_] += xi[a] * xi[b_]
-        # Stabilisation numérique (même esprit que `DEFAULT_RIDGE` de l'IRLS,
-        # pas une vraie régularisation) : sans elle, une feature CONSTANTE
-        # parmi `other_cols` (ex. une stat maintenue fixe dans un jeu de
-        # test) rend la matrice normale singulière (pivot nul).
-        for a in range(len(other_cols)):
-            xtx[a][a] += DEFAULT_RIDGE
-        beta = _solve(xtx, xty)
-        ss_res = 0.0
-        for i in range(n):
-            xi = [x_rows[i][c] for c in other_cols]
-            pred = sum(b * x for b, x in zip(beta, xi, strict=True))
-            ss_res += (x_rows[i][j] - pred) ** 2
-        r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
-        vifs[j] = 1.0 / (1.0 - r2) if r2 < 0.999 else math.inf
-    return vifs
-
-
 def _fit_logistic_irls(
     x_rows: list[list[float]],
     y: list[float],
@@ -233,7 +170,7 @@ def _fit_logistic_irls(
                     xtwx[a][b_] += wxa * xi[b_]
         for a in range(p):
             xtwx[a][a] += ridge
-        beta_new = _solve(xtwx, xtwz)
+        beta_new = _linalg.solve(xtwx, xtwz)
         diff = max(abs(beta_new[i] - beta[i]) for i in range(p))
         beta = beta_new
         if diff < 1e-7:
@@ -259,30 +196,30 @@ def _fit_population(
     x_rows, y, row_weights = _design_matrix(rows, means, stds, weights)
 
     continuous_cols = [i + 1 for i, f in enumerate(FEATURES) if f in CONTINUOUS]
-    vifs = _compute_vif(x_rows, continuous_cols)
+    vifs = _linalg.compute_vif(x_rows, continuous_cols)
     max_vif = max(vifs.values(), default=0.0)
     population = "behind_gold15" if behind_only else "all"
-    if max_vif > VIF_ALERT_THRESHOLD:
+    if max_vif > _linalg.VIF_ALERT_THRESHOLD:
         offenders = {
-            FEATURES[c - 1]: round(v, 1) for c, v in vifs.items() if v > VIF_ALERT_THRESHOLD
+            FEATURES[c - 1]: round(v, 1) for c, v in vifs.items() if v > _linalg.VIF_ALERT_THRESHOLD
         }
-        ridge = VIF_RIDGE
+        ridge = _linalg.VIF_RIDGE
         logger.warning(
             "win_factors %s (%s) : VIF > %.0f détecté %s, ridge renforcé à %.1f",
             window.label,
             population,
-            VIF_ALERT_THRESHOLD,
+            _linalg.VIF_ALERT_THRESHOLD,
             offenders,
             ridge,
         )
     else:
-        ridge = DEFAULT_RIDGE
+        ridge = _linalg.DEFAULT_RIDGE
         logger.info(
             "win_factors %s (%s) : VIF max %.2f (sous le seuil %.0f)",
             window.label,
             population,
             max_vif,
-            VIF_ALERT_THRESHOLD,
+            _linalg.VIF_ALERT_THRESHOLD,
         )
 
     beta = _fit_logistic_irls(x_rows, y, row_weights, ridge=ridge)

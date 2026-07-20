@@ -40,7 +40,7 @@ def pg_sync():
             "TRUNCATE players, matches, match_fetch_journal,"
             " agg_champion, agg_duo, agg_trio,"
             " agg_trio_duration, agg_duo_duration, agg_matchup,"
-            " score_duo, score_trio, score_matchup, score_win_factors,"
+            " score_duo, score_trio, score_matchup, score_win_factors, score_gold_factors,"
             " champion_cc_theoretical CASCADE"
         )
         yield conn
@@ -877,6 +877,41 @@ def test_insights_page_shows_aligned_combined_table(pg_sync, client):
     # dans ce jeu de données, donc pas de conversion pour cette colonne —
     # ne doit pas planter, juste ne rien afficher pour cette cellule.
     assert "29 % → 77 %" in resp.text
+
+
+def test_insights_page_shows_gold_factors_section(pg_sync, client):
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    rows = (
+        (None, "_r2_draft_only", 0.62),
+        (None, "_r2_full", 0.68),
+        ("draft", "team_baseline_wr", 247.0),
+        ("draft", "team_matchup_delta", 5.0),
+        ("draft", "team_trio_synergy", -3.0),
+        ("execution", "jgl_cs_diff_15", 92.0),
+        ("execution", "first_blood_team", -12.0),
+    )
+    for block, feature, coef in rows:
+        pg_sync.execute(
+            "INSERT INTO score_gold_factors (window_label, block, feature, coef, n)"
+            " VALUES ('16.13', %s, %s, %s, 5000)",
+            (block, feature, coef),
+        )
+    resp = client.get("/insights")
+    assert resp.status_code == 200
+    assert "Qu'est-ce qui construit cet avantage au gold" in resp.text
+    assert "62 %" in resp.text  # R² draft seul
+    assert "68 %" in resp.text  # R² complet
+    assert "Force brute des picks (WR baseline)" in resp.text
+    assert "+247 gold" in resp.text
+    assert "-12 gold" in resp.text
+    # team_baseline_wr (bloc draft) doit apparaître avant jgl_cs_diff_15
+    # (bloc exécution) : ordre fixe GOLD_FACTOR_FEATURES.
+    assert resp.text.index("Force brute des picks") < resp.text.index("CS jungle vs adverse")
 
 
 def test_flex_page_detects_off_role_resource_deviation(pg_sync, client):

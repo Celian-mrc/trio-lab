@@ -28,6 +28,8 @@ from psycopg_pool import ConnectionPool
 
 from trio_lab import config, db
 from trio_lab.synergy.compute import DUO_ROLES
+from trio_lab.synergy.gold_factors import BLOCK_OF as GOLD_FACTOR_BLOCK_OF
+from trio_lab.synergy.gold_factors import FEATURES as GOLD_FACTOR_FEATURES
 from trio_lab.synergy.win_factors import FEATURES as WIN_FACTOR_FEATURES
 from trio_lab.synergy.windows import make_window
 from trio_lab.web import champions, queries, summary
@@ -102,6 +104,15 @@ WIN_FACTOR_LABELS = {
     "herald_taken": "Héraut pris",
     "soul_taken": "Âme de dragon",
     "first_tower": "Première tour",
+}
+# Libellés lisibles pour la section "qu'est-ce qui construit l'avantage au
+# gold" de /insights (synergy.gold_factors.FEATURES).
+GOLD_FACTOR_LABELS = {
+    "team_baseline_wr": "Force brute des picks (WR baseline)",
+    "team_matchup_delta": "Avantage de matchup (vs même rôle adverse)",
+    "team_trio_synergy": "Synergie du trio jungle/mid/support",
+    "jgl_cs_diff_15": "CS jungle vs adverse à 15 min",
+    "first_blood_team": "Premier sang",
 }
 # Détecteur de picks flex (Phase 8) : rôles Riot → libellé, pour l'affichage
 # de /flex (contrairement à ROLE_LABELS, qui indexe sur les codes courts).
@@ -1065,19 +1076,53 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             if f in all_by_feature or f in behind_by_feature
         ]
 
+    def _ordered_gold_factors(rows: list[dict]) -> list[dict]:
+        """Une ligne par feature (ordre fixe GOLD_FACTOR_FEATURES), avec son
+        bloc (draft/exécution) pour le regroupement visuel — les lignes de
+        diagnostic `_r2_draft_only`/`_r2_full` sont exclues ici, extraites à
+        part par l'appelant."""
+        by_feature = {r["feature"]: r for r in rows}
+        return [
+            {
+                "feature": f,
+                "label": GOLD_FACTOR_LABELS[f],
+                "block": GOLD_FACTOR_BLOCK_OF[f],
+                "row": by_feature[f],
+            }
+            for f in GOLD_FACTOR_FEATURES
+            if f in by_feature
+        ]
+
     @app.get("/insights", response_class=HTMLResponse)
     def insights_page(request: Request, window: str | None = None, platform: str | None = None):
         with request.app.state.pool.connection() as conn:
             window, platform, context = resolve_context(conn, window, platform)
             all_rows = queries.win_factors(conn, window, "all")
             behind_rows = queries.win_factors(conn, window, "behind_gold15")
+            gold_rows = queries.gold_factors(conn, window)
         factors = _combined_win_factors(all_rows, behind_rows)
         all_n = all_rows[0]["n"] if all_rows else 0
         behind_n = behind_rows[0]["n"] if behind_rows else 0
+
+        gold_by_feature = {r["feature"]: r for r in gold_rows}
+        gold_factors_list = _ordered_gold_factors(gold_rows)
+        gold_n = gold_rows[0]["n"] if gold_rows else 0
+        r2_draft_only = gold_by_feature.get("_r2_draft_only")
+        r2_full = gold_by_feature.get("_r2_full")
+
         return templates.TemplateResponse(
             request,
             "insights.html",
-            {**context, "factors": factors, "all_n": all_n, "behind_n": behind_n},
+            {
+                **context,
+                "factors": factors,
+                "all_n": all_n,
+                "behind_n": behind_n,
+                "gold_factors": gold_factors_list,
+                "gold_n": gold_n,
+                "r2_draft_only": r2_draft_only["coef"] if r2_draft_only else None,
+                "r2_full": r2_full["coef"] if r2_full else None,
+            },
         )
 
     # --- Détecteur de picks flex/hybrides (Phase 8) ---

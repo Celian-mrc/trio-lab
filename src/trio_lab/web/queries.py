@@ -553,6 +553,20 @@ def win_factors(conn: psycopg.Connection, window: str, population: str) -> list[
         ).fetchall()
 
 
+def gold_factors(conn: psycopg.Connection, window: str) -> list[dict]:
+    """Coefficients du modèle "qu'est-ce qui construit l'avantage au gold"
+    (Phase 8, `synergy.gold_factors`) — pas de dimension `platform`, même
+    raisonnement que `win_factors`. Inclut les lignes de diagnostic
+    `_r2_draft_only`/`_r2_full` (feature spéciale, `coef` porte le R²) :
+    l'appelant les sépare des vraies features avant affichage. Liste vide si
+    `synergy.gold_factors` n'a jamais tourné pour cette fenêtre."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            "SELECT block, feature, coef, n FROM score_gold_factors WHERE window_label = %s",
+            (window,),
+        ).fetchall()
+
+
 def cc_theoretical_scores(conn: psycopg.Connection) -> dict[int, float]:
     """Score CC théorique par champion, depuis la table matérialisée (010) —
     jamais le fichier gelé : le service web ne l'embarque pas (voir Dockerfile),

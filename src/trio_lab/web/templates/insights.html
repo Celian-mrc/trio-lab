@@ -56,4 +56,52 @@
   games où l'équipe est derrière — les facteurs qui pèsent le plus n'y sont pas forcément les mêmes
   que face à une partie équilibrée.</p>
 {% endif %}
+
+<h2>Qu'est-ce qui construit cet avantage au gold ?</h2>
+<p class="meta">Le tableau au-dessus dit « avoir du gold prédit la victoire » — vrai, mais peu utile
+  en soi, un coach le sait déjà : le gold n'est pas un levier, c'est un résumé de tout ce qui s'est
+  déjà passé. Celui-ci répond à la vraie question : d'où vient cet avantage ? Deux temps, dans l'ordre
+  chronologique réel d'une game — le <strong>DRAFT</strong> (avant la partie : force des picks,
+  matchup, synergie du trio) puis le <strong>JEU EN LANE</strong> (0-15 min : CS jungle, premier
+  sang).</p>
+<p class="meta"><strong>Comment lire</strong> : chaque ligne montre l'effet sur le gold à 15 min,
+  toutes choses égales par ailleurs (isolé des autres facteurs). Les facteurs continus (force des
+  picks, matchup, synergie, CS jungle) sont lus « pour un écart type au-dessus de la moyenne » ; le
+  premier sang est un effet direct oui/non.</p>
+
+{% if not gold_factors %}
+<p class="empty">Pas encore calculé pour cette fenêtre ({{ window }}) — lancer
+  <code>python -m trio_lab.synergy.gold_factors --patches {{ window }}</code> pour la matérialiser.</p>
+{% else %}
+<p class="meta">Sur {{ gold_n }} games : le <strong>draft</strong> à lui seul explique
+  {{ r2_draft_only | pct(0) }} de la variance de l'avantage au gold à 15 min. Ajouter le
+  <strong>jeu en lane</strong> monte à {{ r2_full | pct(0) }} — soit {{ (r2_full - r2_draft_only) | pct(0) }}
+  apportés par l'exécution au-delà de ce que le draft explique déjà.</p>
+<table class="data">
+  <thead>
+    <tr>
+      <th>Facteur</th>
+      <th>Bloc</th>
+      <th>Effet sur le gold à 15 min</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for f in gold_factors %}
+    <tr>
+      <td>{{ f.label }}</td>
+      <td class="meta">{{ 'Draft' if f.block == 'draft' else 'Jeu en lane (0-15 min)' }}</td>
+      <td class="{{ 'pos' if f.row.coef > 0 else 'neg' if f.row.coef < 0 }}">
+        {{ f.row.coef | signed_int }} gold
+        <span class="sub">{{ 'par écart-type' if f.feature != 'first_blood_team' else 'premier sang pris' }}</span>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<p class="meta"><strong>Limites</strong> : le bloc « jeu en lane » est volontairement réduit à ce qui
+  a une vraie coupure à 15 min dans les données (CS jungle, premier sang) — héraut, premier drake et
+  vision n'en ont pas encore une (calculés sur la partie entière), les inclure ici créerait une
+  causalité inversée. Corrélation, pas causalité garantie : le skill des joueurs influence à la fois
+  le jeu en lane et le gold, aucune régression ne sépare parfaitement les deux.</p>
+{% endif %}
 {% endblock %}

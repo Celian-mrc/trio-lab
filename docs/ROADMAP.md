@@ -285,15 +285,43 @@ gagner") avec les données déjà en place.
       désaligner. Rafraîchissement MANUEL
       (`python -m trio_lab.synergy.win_factors --patches X`).
 
-**Chantier en cours (20/07/2026, phase 2 de l'audit)** : un second modèle,
-en amont de celui-ci, prédisant `gold_diff_15` (continu) à partir du DRAFT
-(WR baseline + delta matchup + synergie trio jgl/mid/sup — top/bot sans
-synergie native pour l'instant, cf. mémoire) et des comportements précoces
-0-15 min (CS jungle, kill participation, first blood, objectifs, vision) —
-répond à « qu'est-ce qui CONSTRUIT l'avantage au gold », question que le
-modèle actuel ne peut pas poser (le gold y est un médiateur, pas un levier).
-Architecture validée (modèle unique à 2 blocs, pas de cascade — biais des
-"generated regressors", Pagan 1984), pas encore codé.
+- [x] Modèle "qu'est-ce qui construit l'avantage au gold" (2026-07-20, phase
+      2 de l'audit méthodologique) : nouvelle section sur `/insights`,
+      `synergy/gold_factors.py` — OLS pondéré (forme fermée, pas d'IRLS,
+      cible continue), matérialisé dans `score_gold_factors` (migration
+      028). En amont de `win_factors` (qui prédit la victoire à partir du
+      gold ; ici on prédit `gold_diff_15` lui-même — répond à « qu'est-ce
+      qui CONSTRUIT l'avantage », pas seulement « avoir l'avantage prédit
+      la victoire », question quasi tautologique que le modèle précédent
+      ne pouvait pas poser). Un seul modèle à 2 blocs temporellement
+      ordonnés (pas de cascade — biais des "generated regressors", Pagan
+      1984), R²(draft seul) et R²(complet) rapportés séparément (2 fits
+      imbriqués) pour montrer ce que chaque étape ajoute :
+      - **Draft** : `team_baseline_wr` (WR des picks, `agg_champion` AU
+        PATCH de la game — pas la fenêtre), `team_matchup_delta`
+        (`score_matchup`, moyenné sur les rôles disponibles),
+        `team_trio_synergy` (`score_trio`, jgl/mid/sup seulement — top/bot
+        sans synergie native pour l'instant, cf. mémoire trio-lab).
+        3 scores agrégés au lieu du one-hot sur ~170 champions × 5 rôles
+        (target/mean encoding régularisé, Micci-Barreca 2001).
+      - **Exécution 0-15 min** : `jgl_cs_diff_15`, `first_blood_team`
+        (`match_role_stats.first_blood` agrégé par OR, `coalesce` à false
+        pour les games antérieures à la migration 025 sans rétro-remplissage).
+        Volontairement PAS herald/soul/vision : aucune coupure à 15 min
+        dans le schéma actuel (calculés sur la partie entière) — les
+        inclure créerait une causalité inversée. `match_objective_events`
+        (timeline brute) est purgé après ingestion : impossible de
+        rétro-corriger, extension future (migration + `stats/extract.py`).
+      - Diagnostic VIF + ridge adaptatif : extrait dans `synergy/_linalg.py`
+        (module partagé avec `win_factors.py`, même Gauss/VIF, plus
+        `fit_weighted_ols`/`weighted_r_squared` pour l'OLS).
+      Résultat sur 16.14+16.13 (118k lignes) : R²(draft seul) ≈ 1,9 %,
+      R²(complet) ≈ 26,2 % — le draft explique très peu de l'avantage au
+      gold à 15 min, l'exécution précoce (CS jungle, premier sang) domine
+      largement. Cohérent avec la littérature citée dans l'audit (picks
+      seuls proches du hasard en LoL, features in-game très supérieures).
+      Piège Postgres identique à `win_factors` rencontré et contourné
+      (`enable_nestloop = off`, cf. mémoire).
 - [x] Détecteur de picks flex/hybrides (2026-07-19, seuils revus le même
       jour suite au retour « il y a peu de flex picks ») : `/flex` — rôle
       secondaire non anecdotique (`agg_champion`, historique complet : ≥ 5 %
