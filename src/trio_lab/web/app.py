@@ -503,7 +503,9 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
     # sort/dir : listes séparées par des virgules (tri multi-colonnes façon
     # tableur), validées à la main par `parse_sort` — pas de pattern Query
     # unique, la forme n'est plus une simple valeur whitelistée.
-    _DUO_ROLES_PATTERN = f"^({'|'.join(queries.DUO_ROLES)})$"
+    # "all" (retour utilisateur 2026-07-20) : mélange les 10 paires, pour
+    # filtrer par seuil sans devoir choisir un couple de rôles.
+    _DUO_ROLES_PATTERN = f"^({'|'.join(queries.DUO_ROLES)}|all)$"
 
     @app.get("/", response_class=HTMLResponse)
     def tierlist_page(
@@ -592,15 +594,21 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         max_raw = threshold_raw(request, prefix="max")
         min_thresholds = parse_thresholds(min_raw)
         max_thresholds = parse_thresholds(max_raw)
+        all_roles = roles == "all"
+        # champ_a/champ_b sont des recherches PAR RÔLE ("champion en jungle" vs
+        # "champion en mid") : sans rôle fixé, ni l'un ni l'autre n'a de sens
+        # (quel slot serait "champ_a" pour un mix top_bot/jgl_sup/...?) —
+        # ignorés côté serveur si présents dans l'URL plutôt que de filtrer
+        # sur une colonne qui ne veut plus rien dire.
         with request.app.state.pool.connection() as conn:
             window, platform, context = resolve_context(conn, window, platform)
             result = queries.duo_tierlist(
                 conn,
                 window,
                 platform,
-                roles,
-                champ_a_id=resolve_champion(champ_a),
-                champ_b_id=resolve_champion(champ_b),
+                None if all_roles else roles,
+                champ_a_id=None if all_roles else resolve_champion(champ_a),
+                champ_b_id=None if all_roles else resolve_champion(champ_b),
                 min_games=min_games,
                 min_tier=min_tier,
                 min_values=min_thresholds,
@@ -616,8 +624,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 **context,
                 **result,
                 "roles": roles,
-                "champ_a_search": champ_a or "",
-                "champ_b_search": champ_b or "",
+                "champ_a_search": "" if all_roles else champ_a or "",
+                "champ_b_search": "" if all_roles else champ_b or "",
                 "min_games": min_games,
                 "min_tier": min_tier,
                 "min_values": min_raw,
@@ -628,8 +636,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                     window=window,
                     platform=platform,
                     roles=roles,
-                    champ_a=champ_a or "",
-                    champ_b=champ_b or "",
+                    champ_a="" if all_roles else champ_a or "",
+                    champ_b="" if all_roles else champ_b or "",
                     min_games=min_games,
                     min_tier=min_tier,
                 ),
@@ -1499,15 +1507,16 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         page: int = Query(1, ge=1),
     ):
         sorts, dirs = parse_sort(sort, direction, queries.DUO_SORTS)
+        all_roles = roles == "all"
         with request.app.state.pool.connection() as conn:
             window, platform, _ = resolve_context(conn, window, platform)
             result = queries.duo_tierlist(
                 conn,
                 window,
                 platform,
-                roles,
-                champ_a_id=resolve_champion(champ_a),
-                champ_b_id=resolve_champion(champ_b),
+                None if all_roles else roles,
+                champ_a_id=None if all_roles else resolve_champion(champ_a),
+                champ_b_id=None if all_roles else resolve_champion(champ_b),
                 min_games=min_games,
                 min_tier=min_tier,
                 min_values=parse_thresholds(threshold_raw(request, prefix="min")),

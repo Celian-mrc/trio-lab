@@ -328,6 +328,73 @@ def test_api_duo_detail_for_extended_role_pair(pg_sync, client):
     assert "/duo/top_jgl/1/2" in duos_page.text
 
 
+def _seed_mixed_role_duos(conn) -> None:
+    """3 duos sur 3 paires de rôles DIFFÉRENTES (retour utilisateur 2026-07-20 :
+    filtrer par seuil sans devoir choisir une paire) — WR variée pour tester
+    le filtre par seuil en même temps que le mélange."""
+    conn.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    rows = (
+        ("jgl_mid", 1, 2, 0.60),
+        ("top_bot", 4, 5, 0.45),
+        ("bot_sup", 6, 7, 0.70),
+    )
+    for roles, champ_a, champ_b, wr in rows:
+        conn.execute(
+            "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
+            " games_eff, wr, synergy, ci_low, ci_high, tier)"
+            " VALUES ('16.13', 'euw1', %s, %s, %s, 60, 60.0, %s, 0.0, 0.3, 0.7, 'moyen')",
+            (roles, champ_a, champ_b, wr),
+        )
+
+
+def test_duos_page_all_roles_mixes_every_pair(pg_sync, client):
+    """`roles=all` (retour utilisateur : chercher "peu importe les rôles")
+    retourne les 3 paires ensemble, la colonne Duo affiche le bon rôle pour
+    chaque ligne (pas figé sur la paire sélectionnée)."""
+    _seed_mixed_role_duos(pg_sync)
+    payload = client.get("/api/duos", params={"roles": "all"}).json()
+    assert sorted((r["roles"], r["champ_a"], r["champ_b"]) for r in payload["rows"]) == [
+        ("bot_sup", 6, 7),
+        ("jgl_mid", 1, 2),
+        ("top_bot", 4, 5),
+    ]
+
+    # Sans "all", une seule paire à la fois (comportement inchangé).
+    payload = client.get("/api/duos", params={"roles": "jgl_mid"}).json()
+    assert [(r["roles"], r["champ_a"]) for r in payload["rows"]] == [("jgl_mid", 1)]
+
+
+def test_duos_page_all_roles_combines_with_threshold_filters(pg_sync, client):
+    """Le vrai cas d'usage : filtrer par seuil SANS choisir de paire — doit
+    fonctionner exactement comme avec une paire fixée."""
+    _seed_mixed_role_duos(pg_sync)
+    payload = client.get("/api/duos", params={"roles": "all", "min_wr": "50"}).json()
+    assert sorted(r["roles"] for r in payload["rows"]) == ["bot_sup", "jgl_mid"]
+
+
+def test_duos_page_all_roles_ignores_role_specific_champion_search(pg_sync, client):
+    """champ_a/champ_b sont des recherches PAR RÔLE : sans rôle fixé, elles ne
+    veulent plus rien dire — ignorées plutôt que de filtrer sur une colonne
+    dont le sens change selon la ligne (pas de 404/crash)."""
+    _seed_mixed_role_duos(pg_sync)
+    resp = client.get("/duos", params={"roles": "all", "champ_a": "Lee Sin", "champ_b": "Ahri"})
+    assert resp.status_code == 200
+    assert "3 duos" in resp.text  # les 3 lignes restent visibles, pas filtrées
+
+
+def test_duos_page_all_roles_hides_role_specific_search_fields(pg_sync, client):
+    _seed_mixed_role_duos(pg_sync)
+    html = client.get("/duos", params={"roles": "all"}).text
+    assert 'name="champ_a"' not in html
+    assert 'name="champ_b"' not in html
+    assert '<option value="all" selected>' in html
+
+
 def test_html_pages_render(pg_sync, client):
     _seed_scores(pg_sync)
     _seed_matches(pg_sync)

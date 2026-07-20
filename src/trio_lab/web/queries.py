@@ -186,7 +186,7 @@ def duo_tierlist(
     conn: psycopg.Connection,
     window: str,
     platform: str,
-    roles: str,
+    roles: str | None,
     *,
     champ_a_id: int | None = None,
     champ_b_id: int | None = None,
@@ -198,31 +198,37 @@ def duo_tierlist(
     direction: Sequence[str] = ("desc",),
     page: int = 1,
 ) -> dict:
-    """Une page de tier list des duos d'un couple de rôles.
+    """Une page de tier list des duos d'un couple de rôles — ou, `roles=None`
+    (retour utilisateur 2026-07-20), toutes les paires mélangées : chercher
+    par seuil "peu importe les rôles" sans devoir en choisir une. `roles` est
+    déjà renvoyée par ligne (`SELECT roles, ...` ci-dessous), donc l'affichage
+    par combo reste correct même mélangé — seule la clause WHERE change.
 
     `champ_a_id`/`champ_b_id` : indépendants et combinables, dans l'ordre des
     rôles de `roles` (ex. jgl_mid → champ_a=jungle, champ_b=mid) — même
-    principe que `trio_tierlist`.
+    principe que `trio_tierlist`. Non applicables si `roles` est None (quel
+    rôle serait champ_a ?) — laissés à `None` par l'appelant dans ce cas.
     """
-    if roles not in DUO_ROLES:
+    if roles is not None and roles not in DUO_ROLES:
         raise ValueError(f"roles inconnu : {roles!r}")
     order_clause = _order_by_clause(sort, direction, DUO_SORTS)
     where = [
         "window_label = %(window)s",
         "platform = %(platform)s",
-        "roles = %(roles)s",
         "games >= %(min_games)s",
         "tier = ANY(%(tiers)s)",
     ]
     params: dict = {
         "window": window,
         "platform": platform,
-        "roles": roles,
         "min_games": min_games,
         "tiers": list(_TIER_AT_LEAST[min_tier]),
         "offset": (max(page, 1) - 1) * PER_PAGE,
         "per_page": PER_PAGE,
     }
+    if roles is not None:
+        where.append("roles = %(roles)s")
+        params["roles"] = roles
     where.extend(_threshold_clauses(min_values, max_values, DUO_SORTS, params))
     for col, champion_id in (("champ_a", champ_a_id), ("champ_b", champ_b_id)):
         if champion_id is not None:

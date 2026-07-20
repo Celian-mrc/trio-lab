@@ -16,7 +16,8 @@
     </select>
   </label>
   <label>Rôles
-    <select name="roles">
+    <select name="roles" data-tooltip="Mélange les 10 paires : pour filtrer par seuil sans choisir un couple de rôles précis (retour utilisateur 2026-07-20)." aria-label="Mélange les 10 paires : pour filtrer par seuil sans choisir un couple de rôles précis.">
+      <option value="all" {{ 'selected' if roles == 'all' }}>Tous les rôles</option>
       <option value="jgl_mid" {{ 'selected' if roles == 'jgl_mid' }}>Jungle + Mid</option>
       <option value="jgl_sup" {{ 'selected' if roles == 'jgl_sup' }}>Jungle + Support</option>
       <option value="mid_sup" {{ 'selected' if roles == 'mid_sup' }}>Mid + Support</option>
@@ -29,6 +30,7 @@
       <option value="bot_sup" {{ 'selected' if roles == 'bot_sup' }}>ADC + Support</option>
     </select>
   </label>
+  {% if roles != 'all' %}
   {% set role_a, role_b = DUO_ROLE_KEYS[roles] %}
   <label>{{ ROLE_LABELS[role_a] }}
     <input name="champ_a" list="champion-names" value="{{ champ_a_search }}" placeholder="tous">
@@ -36,6 +38,7 @@
   <label>{{ ROLE_LABELS[role_b] }}
     <input name="champ_b" list="champion-names" value="{{ champ_b_search }}" placeholder="tous">
   </label>
+  {% endif %}
   <datalist id="champion-names">
     {% for name in champion_names %}<option value="{{ name }}">{% endfor %}
   </datalist>
@@ -54,7 +57,7 @@
 </form>
 
 {% set is_trio_duo = roles in ('jgl_mid', 'jgl_sup', 'mid_sup') %}
-<p class="meta">{{ total }} duos — page {{ page }} / {{ ((total - 1) // per_page) + 1 if total else 1 }} — cliquer un en-tête pour trier, re-cliquer pour inverser, Maj-clic pour ajouter un critère de tri supplémentaire (comme Excel/Sheets) — stats = parties de ce duo{{ ', quel que soit le 3e membre' if is_trio_duo else '' }}</p>
+<p class="meta">{{ total }} duos — page {{ page }} / {{ ((total - 1) // per_page) + 1 if total else 1 }} — cliquer un en-tête pour trier, re-cliquer pour inverser, Maj-clic pour ajouter un critère de tri supplémentaire (comme Excel/Sheets) — stats = parties de ce duo{{ ', quel que soit le 3e membre' if is_trio_duo else '' }}{{ ' — 10 paires de rôles mélangées, la colonne Duo indique laquelle pour chaque ligne' if roles == 'all' else '' }}</p>
 
 {% macro sort_link(key, label) %}
 {% set idx = sorts.index(key) if key in sorts else -1 %}
