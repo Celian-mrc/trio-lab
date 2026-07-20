@@ -597,6 +597,58 @@ def test_min_value_filters_work_on_any_sortable_column(pg_sync, client):
     assert sorted(r["jgl_champion"] for r in payload["rows"]) == [411, 412, 413]
 
 
+def _seed_gold15_range_trios(conn) -> None:
+    """3 trios avec un gold@15 très différent (retour utilisateur 2026-07-20 :
+    filtrer par plage, pas juste un plancher — ex. trouver les combos qui
+    restent bons même en retard, gold@15 au plus 0)."""
+    rows = (
+        (421, -900),  # nettement en retard
+        (422, -100),  # légèrement en retard
+        (423, 700),  # nettement en avance
+    )
+    for jgl, gold15 in rows:
+        conn.execute(
+            "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+            " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+            " ci_low, ci_high, tier, gold_diff_15)"
+            " VALUES ('16.13', 'euw1', %s, 920, 921, 50, 50.0, 0.5, 0.0, 0.0, 0.0,"
+            " 0.3, 0.7, 'moyen', %s)",
+            (jgl, gold15),
+        )
+
+
+def test_max_value_filter_applies_upper_bound(pg_sync, client):
+    """`max_gold15` filtre "au plus X", symétrique de `min_gold15` — répond au
+    retour utilisateur : filtrer un plafond, pas seulement un plancher."""
+    _seed_gold15_range_trios(pg_sync)
+    payload = client.get("/api/trios", params={"max_gold15": "0"}).json()
+    assert sorted(r["jgl_champion"] for r in payload["rows"]) == [421, 422]
+    payload = client.get("/api/trios", params={"max_gold15": "-500"}).json()
+    assert [r["jgl_champion"] for r in payload["rows"]] == [421]
+
+
+def test_min_and_max_value_filters_combine_into_a_range(pg_sync, client):
+    """min et max sur la même colonne, en même temps : une vraie plage."""
+    _seed_gold15_range_trios(pg_sync)
+    payload = client.get("/api/trios", params={"min_gold15": "-500", "max_gold15": "0"}).json()
+    assert [r["jgl_champion"] for r in payload["rows"]] == [422]
+
+
+def test_max_value_filters_accept_empty_string_not_422(pg_sync, client):
+    _seed_threshold_trios(pg_sync)
+    response = client.get("/api/trios", params={"max_wr": "", "max_gold15": ""})
+    assert response.status_code == 200
+    assert len(response.json()["rows"]) == 3
+    assert client.get("/", params={"max_wr": "", "max_cc": ""}).status_code == 200
+
+
+def test_max_value_filters_reject_out_of_range_or_invalid(pg_sync, client):
+    _seed_scores(pg_sync)
+    assert client.get("/api/trios", params={"max_wr": "150"}).status_code == 404
+    assert client.get("/api/trios", params={"max_wr": "-5"}).status_code == 404
+    assert client.get("/api/trios", params={"max_cc": "abc"}).status_code == 404
+
+
 def test_threshold_filter_tooltip_on_span_not_label(pg_sync, client):
     """L'icône ⓘ (CSS ::after) se place après le DERNIER enfant de l'élément
     portant `data-tooltip` : sur un <label> contenant aussi l'<input>, elle
@@ -606,7 +658,7 @@ def test_threshold_filter_tooltip_on_span_not_label(pg_sync, client):
     _seed_scores(pg_sync)
     html = client.get("/").text
     assert "<label data-tooltip=" not in html
-    assert 'span data-tooltip="Ne montre que les combos avec au moins ce WR' in html
+    assert 'span data-tooltip="Ne montre que les combos dans cette plage de WR' in html
 
 
 def test_threshold_filter_only_active_fields_visible_by_default(pg_sync, client):
@@ -622,6 +674,17 @@ def test_threshold_filter_only_active_fields_visible_by_default(pg_sync, client)
     assert '<label class="threshold-field" data-key="synergy" hidden>' in html
     assert '<option value="wr" hidden>' in html
     assert '<option value="synergy" >' in html
+
+
+def test_threshold_filter_max_alone_also_activates_the_field(pg_sync, client):
+    """min et max sont indépendants (retour utilisateur 2026-07-20) : un
+    `max_wr` seul (pas de `min_wr`) doit aussi révéler le champ, pas juste
+    min — et les 2 sous-champs affichent chacun leur propre valeur."""
+    _seed_scores(pg_sync)
+    html = client.get("/", params={"max_wr": "70"}).text
+    assert '<label class="threshold-field" data-key="wr" >' in html
+    assert 'name="min_wr" value=""' in html
+    assert 'name="max_wr" value="70"' in html
 
 
 def test_api_status_reports_collection(pg_sync, client):

@@ -47,7 +47,7 @@
       {% endfor %}
     </select>
   </label>
-  {{ threshold_fields(min_values) }}
+  {{ threshold_fields(min_values, max_values) }}
   <input type="hidden" name="sort" value="{{ sort }}">
   <input type="hidden" name="dir" value="{{ direction }}">
   <button type="submit">Filtrer</button>

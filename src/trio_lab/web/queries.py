@@ -96,19 +96,28 @@ def _order_by_clause(
     return ", ".join(parts)
 
 
-def _min_value_clauses(
-    min_values: dict[str, float] | None, sort_map: dict[str, str], params: dict
+def _threshold_clauses(
+    min_values: dict[str, float] | None,
+    max_values: dict[str, float] | None,
+    sort_map: dict[str, str],
+    params: dict,
 ) -> list[str]:
-    """Clauses `colonne >= seuil` (filtre "au moins X", ex. WR min., CC min.),
-    mêmes clés que le tri (whitelist `sort_map`, jamais interpolées brutes) —
-    trouver les combos bons sur plusieurs axes à la fois (retour utilisateur,
-    2026-07-13) : un tri multi-colonnes ne suffit pas quand la 1re colonne est
-    presque toujours unique (ex. synergie), un filtre par seuils si."""
+    """Clauses `colonne >= min` / `colonne <= max` (filtre "au moins X" /
+    "au plus X", combinables par colonne — ex. WR entre 45 et 55, retour
+    utilisateur 2026-07-20), mêmes clés que le tri (whitelist `sort_map`,
+    jamais interpolées brutes) — trouver les combos bons sur plusieurs axes
+    à la fois (retour utilisateur, 2026-07-13) : un tri multi-colonnes ne
+    suffit pas quand la 1re colonne est presque toujours unique (ex.
+    synergie), un filtre par seuils si."""
     where = []
     for key, value in (min_values or {}).items():
         param_name = f"min_{key}"
         params[param_name] = value
         where.append(f"{sort_map[key]} >= %({param_name})s")
+    for key, value in (max_values or {}).items():
+        param_name = f"max_{key}"
+        params[param_name] = value
+        where.append(f"{sort_map[key]} <= %({param_name})s")
     return where
 
 
@@ -123,6 +132,7 @@ def trio_tierlist(
     min_games: int = 0,
     min_tier: str = "faible",
     min_values: dict[str, float] | None = None,  # ex. {"wr": .52, "cc": 4.0}
+    max_values: dict[str, float] | None = None,  # ex. {"wr": .60, "gold15": 0.0}
     sort: Sequence[str] = ("synergy",),
     direction: Sequence[str] = ("desc",),
     page: int = 1,
@@ -143,7 +153,7 @@ def trio_tierlist(
         "per_page": PER_PAGE,
     }
     where.append("tier = ANY(%(tiers)s)")
-    where.extend(_min_value_clauses(min_values, TRIO_SORTS, params))
+    where.extend(_threshold_clauses(min_values, max_values, TRIO_SORTS, params))
     for role, champion_id in (
         ("jgl", jgl_champion_id),
         ("mid", mid_champion_id),
@@ -183,6 +193,7 @@ def duo_tierlist(
     min_games: int = 0,
     min_tier: str = "faible",
     min_values: dict[str, float] | None = None,  # ex. {"wr": .52, "cc": 4.0}
+    max_values: dict[str, float] | None = None,  # ex. {"wr": .60, "gold15": 0.0}
     sort: Sequence[str] = ("synergy",),
     direction: Sequence[str] = ("desc",),
     page: int = 1,
@@ -212,7 +223,7 @@ def duo_tierlist(
         "offset": (max(page, 1) - 1) * PER_PAGE,
         "per_page": PER_PAGE,
     }
-    where.extend(_min_value_clauses(min_values, DUO_SORTS, params))
+    where.extend(_threshold_clauses(min_values, max_values, DUO_SORTS, params))
     for col, champion_id in (("champ_a", champ_a_id), ("champ_b", champ_b_id)):
         if champion_id is not None:
             params[col] = champion_id

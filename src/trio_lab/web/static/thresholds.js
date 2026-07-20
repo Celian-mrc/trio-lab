@@ -32,8 +32,9 @@ document.addEventListener("click", function (event) {
   var field = form.querySelector('.threshold-field[data-key="' + key + '"]');
   if (field) {
     field.hidden = true;
-    var input = field.querySelector("input");
-    if (input) input.value = "";
+    field.querySelectorAll("input").forEach(function (input) {
+      input.value = "";
+    });
   }
   var select = form.querySelector("[data-add-threshold]");
   var option = select && select.querySelector('option[value="' + key + '"]');

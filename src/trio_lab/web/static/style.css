@@ -79,6 +79,10 @@ h2 { font-size: 1rem; letter-spacing: -0.01em; margin-top: 1.75rem; }
    `display:flex` : sans l'override suivant, [hidden] serait ignoré. */
 .filters .threshold-field[hidden] { display: none; }
 .filters .threshold-field { position: relative; padding-right: 0.2rem; }
+/* Plage min/max (retour utilisateur 2026-07-20) : les 2 champs d'une même
+   colonne côte à côte, plus étroits qu'un seul input plein format. */
+.filters .threshold-range { display: flex; gap: 0.3rem; }
+.filters .threshold-range input[type="number"] { width: 3.6rem; }
 .filters .remove-threshold {
   position: absolute; top: -0.4rem; right: -0.4rem;
   width: 1.1rem; height: 1.1rem; min-height: 0; padding: 0;

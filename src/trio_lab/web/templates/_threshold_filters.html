@@ -1,42 +1,53 @@
-{# Filtres par seuil "au moins X", une entrée par colonne triable (sauf
-   `games`, qui a son propre champ dédié) — whitelist identique côté serveur
-   à `app._THRESHOLD_SPECS`/`queries.TRIO_SORTS`. Partagé entre tierlist.html
-   et duos.html pour ne pas dupliquer les 13 champs deux fois.
+{# Filtres par seuil "entre min et max" (retour utilisateur 2026-07-20 : un
+   plancher seul ne permet pas de filtrer "gold@15 au plus 0", ex. trouver
+   les combos qui restent bons même en retard), une entrée par colonne
+   triable (sauf `games`, qui a son propre champ dédié) — whitelist
+   identique côté serveur à `app._THRESHOLD_SPECS`/`queries.TRIO_SORTS`.
+   Partagé entre tierlist.html et duos.html pour ne pas dupliquer les 13
+   champs deux fois.
 
    Un seul champ actif est visible par défaut (repliés, cf. static/thresholds.js
    pour l'ajout/retrait) : les montrer tous vides d'un coup était illisible
    (retour utilisateur, 2026-07-14). Le sélecteur "+ ajouter" révèle le champ
-   demandé ; "✕" le vide et le cache — les 13 `<input name="min_*">` restent
-   dans le DOM (juste masqués), la soumission du formulaire n'envoie donc que
-   des valeurs vides pour les filtres inactifs, sans changement côté serveur.
+   demandé (ses 2 sous-champs min/max) ; "✕" les vide et les cache — les 13
+   `<label name="min_*"/"max_*">` restent dans le DOM (juste masqués), la
+   soumission du formulaire n'envoie donc que des valeurs vides pour les
+   filtres inactifs, sans changement côté serveur. Un champ est considéré
+   actif si min OU max a une valeur (les 2 sont indépendants et optionnels).
 
    Le tooltip est porté par un <span> autour du seul texte du label (pas le
-   <label> entier, qui contient aussi l'<input> : l'icône ⓘ se place après le
-   DERNIER enfant de l'élément data-tooltip, donc après l'input si elle était
-   sur le label — retour utilisateur, 2026-07-13). #}
-{% macro threshold_fields(min_values) %}
+   <label> entier, qui contient aussi les <input> : l'icône ⓘ se place après
+   le DERNIER enfant de l'élément data-tooltip, donc après les inputs si elle
+   était sur le label — retour utilisateur, 2026-07-13). #}
+{% macro threshold_fields(min_values, max_values) %}
 {% set fields = [
-  ("wr", "WR min. (%)", "au moins ce WR", {"min": 0, "max": 100, "step": 0.1}),
-  ("synergy", "Synergie min. (%)", "au moins cette synergie (peut être négatif)", {"step": 0.1}),
-  ("gold5", "Gold@5 min.", "au moins cet écart d’or à 5 min (peut être négatif)", {"step": 1}),
-  ("gold10", "Gold@10 min.", "au moins cet écart d’or à 10 min (peut être négatif)", {"step": 1}),
-  ("gold15", "Gold@15 min.", "au moins cet écart d’or à 15 min (peut être négatif)", {"step": 1}),
-  ("vision", "Vision/min min.", "au moins ce score de vision par minute", {"min": 0, "step": 0.1}),
-  ("drakes", "Drakes/min min.", "au moins ce nombre de drakes pris par minute", {"min": 0, "step": 0.01}),
-  ("soul", "Taux d’âme min. (%)", "au moins ce taux d’obtention de l’âme", {"min": 0, "max": 100, "step": 1}),
-  ("herald", "Taux de héraut min. (%)", "au moins ce taux de prise du héraut", {"min": 0, "max": 100, "step": 1}),
-  ("tower1", "Taux 1re tour min. (%)", "au moins ce taux de première tour", {"min": 0, "max": 100, "step": 1}),
-  ("cc", "CC/min min.", "au moins ce CC/min (empirique, pas lissé)", {"min": 0, "step": 0.1}),
-  ("cc_blend", "CC lissé min.", "au moins ce CC lissé sur 100", {"min": 0, "max": 100, "step": 1}),
-  ("scaling", "Scaling min. (%)", "au moins cette pente de scaling (peut être négatif)", {"step": 0.1}),
+  ("wr", "WR (%)", {"min": 0, "max": 100, "step": 0.1}),
+  ("synergy", "Synergie (%)", {"step": 0.1}),
+  ("gold5", "Gold@5", {"step": 1}),
+  ("gold10", "Gold@10", {"step": 1}),
+  ("gold15", "Gold@15", {"step": 1}),
+  ("vision", "Vision/min", {"min": 0, "step": 0.1}),
+  ("drakes", "Drakes/min", {"min": 0, "step": 0.01}),
+  ("soul", "Taux d’âme (%)", {"min": 0, "max": 100, "step": 1}),
+  ("herald", "Taux de héraut (%)", {"min": 0, "max": 100, "step": 1}),
+  ("tower1", "Taux 1re tour (%)", {"min": 0, "max": 100, "step": 1}),
+  ("cc", "CC/min", {"min": 0, "step": 0.1}),
+  ("cc_blend", "CC lissé", {"min": 0, "max": 100, "step": 1}),
+  ("scaling", "Scaling (%)", {"step": 0.1}),
 ] %}
-{% for key, label, what, attrs in fields %}
-<label class="threshold-field" data-key="{{ key }}" {% if not min_values[key] %}hidden{% endif %}>
-  <span data-tooltip="Ne montre que les combos avec {{ what }} — combinable avec les autres seuils min. pour trouver les combos bons sur plusieurs axes à la fois (le tri seul ne suffit pas si la 1re colonne triée est presque toujours unique)." aria-label="Ne montre que les combos avec {{ what }}.">{{ label }}</span>
-  <input type="number" name="min_{{ key }}" value="{{ min_values[key] }}"
-    {% if 'min' in attrs %}min="{{ attrs.min }}"{% endif %}
-    {% if 'max' in attrs %}max="{{ attrs.max }}"{% endif %}
-    step="{{ attrs.step }}">
+{% for key, label, attrs in fields %}
+<label class="threshold-field" data-key="{{ key }}" {% if not min_values[key] and not max_values[key] %}hidden{% endif %}>
+  <span data-tooltip="Ne montre que les combos dans cette plage de {{ label }} — min et max sont indépendants (renseigner l’un ou l’autre suffit), combinable avec les autres seuils pour trouver les combos bons sur plusieurs axes à la fois." aria-label="Ne montre que les combos dans cette plage de {{ label }}.">{{ label }}</span>
+  <span class="threshold-range">
+    <input type="number" name="min_{{ key }}" value="{{ min_values[key] }}" placeholder="min"
+      {% if 'min' in attrs %}min="{{ attrs.min }}"{% endif %}
+      {% if 'max' in attrs %}max="{{ attrs.max }}"{% endif %}
+      step="{{ attrs.step }}">
+    <input type="number" name="max_{{ key }}" value="{{ max_values[key] }}" placeholder="max"
+      {% if 'min' in attrs %}min="{{ attrs.min }}"{% endif %}
+      {% if 'max' in attrs %}max="{{ attrs.max }}"{% endif %}
+      step="{{ attrs.step }}">
+  </span>
   <button type="button" class="remove-threshold" data-key="{{ key }}" aria-label="Retirer le filtre {{ label }}">✕</button>
 </label>
 {% endfor %}
@@ -44,8 +55,8 @@
   <span>Filtre par seuil</span>
   <select data-add-threshold>
     <option value="">+ ajouter une colonne…</option>
-    {% for key, label, what, attrs in fields %}
-    <option value="{{ key }}" {% if min_values[key] %}hidden{% endif %}>{{ label }}</option>
+    {% for key, label, attrs in fields %}
+    <option value="{{ key }}" {% if min_values[key] or max_values[key] %}hidden{% endif %}>{{ label }}</option>
     {% endfor %}
   </select>
 </label>

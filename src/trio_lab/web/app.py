@@ -442,16 +442,18 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         "scaling": (True, -100, 100),
     }
 
-    def threshold_raw(request: Request) -> dict[str, str]:
-        """Valeurs brutes des filtres de seuil (chaînes telles que soumises,
-        `""` si absent) — repeuplent les champs du formulaire après filtrage."""
-        return {key: request.query_params.get(f"min_{key}", "") for key in _THRESHOLD_SPECS}
+    def threshold_raw(request: Request, *, prefix: str) -> dict[str, str]:
+        """Valeurs brutes des filtres de seuil pour `prefix` ("min" ou "max",
+        retour utilisateur 2026-07-20 : filtrer par plage, pas juste un
+        plancher) — chaînes telles que soumises, `""` si absent, repeuplent
+        les champs du formulaire après filtrage."""
+        return {key: request.query_params.get(f"{prefix}_{key}", "") for key in _THRESHOLD_SPECS}
 
-    def min_values(raw: dict[str, str]) -> dict[str, float]:
-        """Filtres « au moins X » combinables, sur toutes les colonnes triables
-        — trouver les combos bons sur plusieurs axes à la fois, ce que le tri
-        seul ne permet pas quand la 1re colonne triée est presque toujours
-        unique (retour utilisateur, 2026-07-13)."""
+    def parse_thresholds(raw: dict[str, str]) -> dict[str, float]:
+        """Filtres « au moins X » / « au plus X » combinables, sur toutes les
+        colonnes triables — trouver les combos bons sur plusieurs axes à la
+        fois, ce que le tri seul ne permet pas quand la 1re colonne triée est
+        presque toujours unique (retour utilisateur, 2026-07-13)."""
         values: dict[str, float] = {}
         for key, (is_percent, ge, le) in _THRESHOLD_SPECS.items():
             parsed = _parse_optional_float(raw.get(key), ge=ge, le=le)
@@ -459,13 +461,14 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 values[key] = parsed / 100.0 if is_percent else parsed
         return values
 
-    def filters_qs(thresholds_raw: dict[str, str], **base: object) -> str:
+    def filters_qs(min_raw: dict[str, str], max_raw: dict[str, str], **base: object) -> str:
         """Querystring des filtres actifs (calculée côté Python, pas en Jinja
         `{% set %}` dans une boucle : la variable ne survivrait pas à la
         boucle) — réutilisée par la pagination et les liens de tri pour ne
         jamais perdre un filtre en changeant de page ou de tri."""
         params = dict(base)
-        params.update({f"min_{k}": v for k, v in thresholds_raw.items()})
+        params.update({f"min_{k}": v for k, v in min_raw.items()})
+        params.update({f"max_{k}": v for k, v in max_raw.items()})
         return urlencode(params)
 
     def resolve_context(conn, window: str | None, platform: str | None) -> tuple[str, str, dict]:
@@ -517,8 +520,10 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         page: int = Query(1, ge=1),
     ):
         sorts, dirs = parse_sort(sort, direction, queries.TRIO_SORTS)
-        thresholds_raw = threshold_raw(request)
-        thresholds = min_values(thresholds_raw)
+        min_raw = threshold_raw(request, prefix="min")
+        max_raw = threshold_raw(request, prefix="max")
+        min_thresholds = parse_thresholds(min_raw)
+        max_thresholds = parse_thresholds(max_raw)
         with request.app.state.pool.connection() as conn:
             window, platform, context = resolve_context(conn, window, platform)
             result = queries.trio_tierlist(
@@ -530,7 +535,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 sup_champion_id=resolve_champion(sup),
                 min_games=min_games,
                 min_tier=min_tier,
-                min_values=thresholds,
+                min_values=min_thresholds,
+                max_values=max_thresholds,
                 sort=sorts,
                 direction=dirs,
                 page=page,
@@ -546,9 +552,11 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 "sup_search": sup or "",
                 "min_games": min_games,
                 "min_tier": min_tier,
-                "min_values": thresholds_raw,
+                "min_values": min_raw,
+                "max_values": max_raw,
                 "filters_qs": filters_qs(
-                    thresholds_raw,
+                    min_raw,
+                    max_raw,
                     window=window,
                     platform=platform,
                     jgl=jgl or "",
@@ -580,8 +588,10 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         page: int = Query(1, ge=1),
     ):
         sorts, dirs = parse_sort(sort, direction, queries.DUO_SORTS)
-        thresholds_raw = threshold_raw(request)
-        thresholds = min_values(thresholds_raw)
+        min_raw = threshold_raw(request, prefix="min")
+        max_raw = threshold_raw(request, prefix="max")
+        min_thresholds = parse_thresholds(min_raw)
+        max_thresholds = parse_thresholds(max_raw)
         with request.app.state.pool.connection() as conn:
             window, platform, context = resolve_context(conn, window, platform)
             result = queries.duo_tierlist(
@@ -593,7 +603,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 champ_b_id=resolve_champion(champ_b),
                 min_games=min_games,
                 min_tier=min_tier,
-                min_values=thresholds,
+                min_values=min_thresholds,
+                max_values=max_thresholds,
                 sort=sorts,
                 direction=dirs,
                 page=page,
@@ -609,9 +620,11 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 "champ_b_search": champ_b or "",
                 "min_games": min_games,
                 "min_tier": min_tier,
-                "min_values": thresholds_raw,
+                "min_values": min_raw,
+                "max_values": max_raw,
                 "filters_qs": filters_qs(
-                    thresholds_raw,
+                    min_raw,
+                    max_raw,
                     window=window,
                     platform=platform,
                     roles=roles,
@@ -1446,7 +1459,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 sup_champion_id=resolve_champion(sup),
                 min_games=min_games,
                 min_tier=min_tier,
-                min_values=min_values(threshold_raw(request)),
+                min_values=parse_thresholds(threshold_raw(request, prefix="min")),
+                max_values=parse_thresholds(threshold_raw(request, prefix="max")),
                 sort=sorts,
                 direction=dirs,
                 page=page,
@@ -1496,7 +1510,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 champ_b_id=resolve_champion(champ_b),
                 min_games=min_games,
                 min_tier=min_tier,
-                min_values=min_values(threshold_raw(request)),
+                min_values=parse_thresholds(threshold_raw(request, prefix="min")),
+                max_values=parse_thresholds(threshold_raw(request, prefix="max")),
                 sort=sorts,
                 direction=dirs,
                 page=page,
