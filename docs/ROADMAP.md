@@ -204,6 +204,23 @@ avec le même niveau de détail que les pages trio/duo existantes.
       Nashor/tours/plaques) restés team-level partout, structurellement non
       attribuables à un sous-ensemble de joueurs (`match_objective_events`
       n'a pas de tueur identifié, seulement un `team_id`).
+- [x] **Bug corrigé (2026-07-20, retour utilisateur)** : le choix ci-dessus
+      pour les 3 paires historiques ("zéro nouveau calcul, affichées telles
+      quelles") s'est révélé être un vrai défaut, pas neutre : Gold@,
+      Vision/min et CC/min (le total, pas la répartition par membre — déjà
+      correcte) affichaient en réalité le chiffre du TRIO ENTIER, pas de la
+      paire regardée — sur la vue Jungle+Mid, le nombre incluait quand même
+      le Support. `stats/aggregate.py` (`_DUO_STAT_SUMS_SQL`) calcule
+      désormais ces 3 stats pair-spécifiques pour les 3 paires internes,
+      même principe que les 7 étendues (`_DUO_EXT_SQL`) — mais en LEFT JOIN
+      + `coalesce(..., valeur trio-wide)`, PAS en INNER JOIN comme les 7
+      étendues : `match_role_stats` a un historique bien plus court que
+      `match_trio_stats` (16.14+ seulement), un INNER JOIN aurait effacé
+      silencieusement les patchs plus anciens (16.13, 700k+ games) au
+      prochain refresh (même piège que `agg_matchup`, cf. mémoire
+      `agg-matchup-backfill-gap`) — retombe sur l'ancien calcul trio-wide
+      quand la donnée pair-spécifique n'existe pas, jamais de perte.
+      Objectifs (drakes/soul/héraut/tour) restent team-level, inchangés.
 - [x] **Bug corrigé (2026-07-20, retour utilisateur)** : `agg_duo_duration`
       (source du score de Scaling) était resté limité aux 3 paires internes
       au trio (jgl_mid/jgl_sup/mid_sup) — la Phase 7 avait bien élargi

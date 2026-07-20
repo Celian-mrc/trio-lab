@@ -88,19 +88,58 @@ _DUO_CC_POSITION_SQL = """
 """
 _DUO_CC_POSITION_COLUMNS = "champ_a_cc_sum, champ_a_cc_n, champ_b_cc_sum, champ_b_cc_n"
 
+# Gold/vision/CC total des 3 paires internes au trio (retour utilisateur
+# 2026-07-20) : PAIR-SPÉCIFIQUE (2 membres vs les 2 mêmes rôles adverses),
+# pas le trio entier réutilisé tel quel comme avant l'audit — même principe
+# que _DUO_EXT_SQL. `coalesce(..., t.gold_diff_5)` (etc.) retombe sur
+# l'ancien calcul trio-wide quand `match_role_stats` n'a pas la donnée
+# (LEFT JOIN, PAS INNER) : cette table a un historique bien plus court que
+# `match_trio_stats` (16.14+ seulement au 20/07/2026) — un INNER JOIN
+# effacerait silencieusement les patchs plus anciens au prochain refresh
+# (même piège que cf. mémoire `agg-matchup-backfill-gap`). Objectifs
+# (drakes/soul/herald/tour) restent team-level (t.*), inchangés — jamais
+# attribuables à 2 joueurs précis de toute façon (`_DUO_EXT_SQL` fait pareil).
+_DUO_STAT_SUMS_SQL = """
+           sum(coalesce((ra.gold_5 + rb.gold_5) - (ea.gold_5 + eb.gold_5), t.gold_diff_5)),
+           count(coalesce((ra.gold_5 + rb.gold_5) - (ea.gold_5 + eb.gold_5), t.gold_diff_5)),
+           sum(coalesce((ra.gold_10 + rb.gold_10) - (ea.gold_10 + eb.gold_10), t.gold_diff_10)),
+           count(coalesce((ra.gold_10 + rb.gold_10) - (ea.gold_10 + eb.gold_10), t.gold_diff_10)),
+           sum(coalesce((ra.gold_15 + rb.gold_15) - (ea.gold_15 + eb.gold_15), t.gold_diff_15)),
+           count(coalesce((ra.gold_15 + rb.gold_15) - (ea.gold_15 + eb.gold_15), t.gold_diff_15)),
+           sum(coalesce(ra.vision_score + rb.vision_score, t.vision_score)
+               / (m.game_duration_s / 60.0)), count(t.vision_score),
+           sum(t.drakes_taken / (m.game_duration_s / 60.0)), count(t.drakes_taken),
+           count(*) FILTER (WHERE t.soul_taken), count(t.soul_taken),
+           count(*) FILTER (WHERE t.herald_taken), count(t.herald_taken),
+           count(*) FILTER (WHERE t.first_tower), count(t.first_tower),
+           sum(coalesce(ra.cc_time_s + rb.cc_time_s, t.cc_time_s)
+               / (m.game_duration_s / 60.0)), count(t.cc_time_s)
+"""
+
 _DUO_SQL = f"""
     INSERT INTO agg_duo (patch, platform, roles, champ_a, champ_b, games, wins,
                          {_STAT_SUMS_COLUMNS}, {_DUO_CC_POSITION_COLUMNS})
     SELECT m.patch, m.platform, d.roles, d.champ_a, d.champ_b,
            count(*), count(*) FILTER (WHERE t.win),
-           {_STAT_SUMS_SQL}, {_DUO_CC_POSITION_SQL}
+           {_DUO_STAT_SUMS_SQL}, {_DUO_CC_POSITION_SQL}
     FROM match_trio_stats t
     JOIN matches m USING (match_id)
     CROSS JOIN LATERAL (VALUES
-        ('jgl_mid', t.jgl_champion, t.mid_champion, t.jgl_cc_time_s, t.mid_cc_time_s),
-        ('jgl_sup', t.jgl_champion, t.sup_champion, t.jgl_cc_time_s, t.sup_cc_time_s),
-        ('mid_sup', t.mid_champion, t.sup_champion, t.mid_cc_time_s, t.sup_cc_time_s)
-    ) AS d(roles, champ_a, champ_b, champ_a_cc_time_s, champ_b_cc_time_s)
+        ('jgl_mid', t.jgl_champion, t.mid_champion, t.jgl_cc_time_s, t.mid_cc_time_s,
+         'JUNGLE', 'MIDDLE'),
+        ('jgl_sup', t.jgl_champion, t.sup_champion, t.jgl_cc_time_s, t.sup_cc_time_s,
+         'JUNGLE', 'UTILITY'),
+        ('mid_sup', t.mid_champion, t.sup_champion, t.mid_cc_time_s, t.sup_cc_time_s,
+         'MIDDLE', 'UTILITY')
+    ) AS d(roles, champ_a, champ_b, champ_a_cc_time_s, champ_b_cc_time_s, role_a, role_b)
+    LEFT JOIN match_role_stats ra
+        ON ra.match_id = t.match_id AND ra.team_id = t.team_id AND ra.role = d.role_a
+    LEFT JOIN match_role_stats rb
+        ON rb.match_id = t.match_id AND rb.team_id = t.team_id AND rb.role = d.role_b
+    LEFT JOIN match_role_stats ea
+        ON ea.match_id = t.match_id AND ea.team_id <> t.team_id AND ea.role = d.role_a
+    LEFT JOIN match_role_stats eb
+        ON eb.match_id = t.match_id AND eb.team_id = ea.team_id AND eb.role = d.role_b
     WHERE m.patch = %(patch)s
     GROUP BY m.patch, m.platform, d.roles, d.champ_a, d.champ_b
 """

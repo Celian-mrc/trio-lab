@@ -186,6 +186,58 @@ async def test_refresh_agg_duo_ext_pairs_from_role_stats(pg_conn):
     assert await cur.fetchone() == (0, 1)
 
 
+async def test_refresh_duo_internal_pairs_use_pair_specific_gold_when_role_stats_available(
+    pg_conn,
+):
+    """jgl_mid (paire INTERNE au trio, historiquement calculée sur le trio
+    entier) : retour utilisateur 2026-07-20, doit désormais être
+    pair-spécifique (2 membres seulement) dès que match_role_stats est
+    disponible — même principe que top_jgl (paire étendue) juste au-dessus.
+    Même match qu'au-dessus (team100 gagne)."""
+    await _ingest_with_role_stats(pg_conn, "EUW1_A", winning_team=100)
+    aggregate.refresh("16.13", dsn=TEST_DSN)
+
+    cur = await pg_conn.execute(
+        "SELECT gold10_sum, gold10_n, vision_sum, vision_n, cc_sum, cc_n"
+        " FROM agg_duo WHERE roles = 'jgl_mid' AND champ_a = 2 AND champ_b = 3"
+    )
+    row = await cur.fetchone()
+    assert row is not None
+    gold10_sum, gold10_n, vision_sum, vision_n, cc_sum, cc_n = row
+    # Jungle(pid2)+Mid(pid3) SEULS vs Jungle(pid7)+Mid(pid8) adverses :
+    # (1020+1030) − (1070+1080) = −100 — PAS −150 (l'ancien calcul trio-wide
+    # aurait inclus le support, pid5 vs pid10).
+    assert (gold10_sum, gold10_n) == (pytest.approx(-100.0), 1)
+    # visionScore (builder) = pid : jungle(2)+mid(3) = 5, pas 10 (avec le
+    # support, pid5) — durée 30 min.
+    assert (vision_sum, vision_n) == (pytest.approx(5 / 30), 1)
+    # cc_time_s = pid×2 : jungle(4)+mid(6) = 10, pas 20 (avec le support,
+    # pid5×2=10).
+    assert (cc_sum, cc_n) == (pytest.approx(10 / 30), 1)
+
+
+async def test_refresh_duo_internal_pairs_fall_back_to_trio_wide_gold_without_role_stats(
+    pg_conn,
+):
+    """Sans match_role_stats (games antérieures à son déploiement, ou patch
+    dont l'historique brut a été purgé) : retombe sur l'ancien calcul
+    trio-wide (COALESCE côté SQL), ne perd JAMAIS les données historiques —
+    volontairement pas d'INNER JOIN sur match_role_stats (cf. mémoire
+    agg-matchup-backfill-gap : un INNER JOIN effacerait silencieusement
+    tous les patchs antérieurs à son déploiement au prochain refresh)."""
+    await _ingest(pg_conn, "EUW1_A", winning_team=100)  # pas de role_stats
+    aggregate.refresh("16.13", dsn=TEST_DSN)
+
+    cur = await pg_conn.execute(
+        "SELECT gold10_sum, gold10_n FROM agg_duo"
+        " WHERE roles = 'jgl_mid' AND champ_a = 2 AND champ_b = 3"
+    )
+    # (1020+1030+1050) − (1070+1080+1100) = −150 : le trio ENTIER (avec le
+    # support), pas −100 (2 membres seuls) — comportement historique
+    # préservé quand match_role_stats n'existe pas pour ce match.
+    assert await cur.fetchone() == (pytest.approx(-150.0), 1)
+
+
 async def test_refresh_agg_duo_duration_ext_pairs_from_role_stats(pg_conn):
     """Régression (retour utilisateur 2026-07-20) : agg_duo_duration
     (source du score de scaling) ne couvrait QUE les 3 paires historiques
