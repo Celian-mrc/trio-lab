@@ -321,6 +321,22 @@ def refresh(
     """
     counts: dict[str, int] = {}
     with psycopg.connect(db.require_dsn(dsn)) as conn:
+        # Le timeout par défaut du rôle applicatif est trop court pour la
+        # requête d'agrégation (jointure team_agg × 2 sur des centaines de
+        # milliers de games) — même piège déjà rencontré et corrigé dans
+        # `stats.aggregate.refresh`. `enable_nestloop = off` contourne un
+        # vrai bug de planification Postgres constaté le 20/07/2026 : le
+        # filtre `n_roles = 5` porte sur une colonne dérivée d'un agrégat
+        # (count(*) dans la CTE team_agg), que Postgres ne sait pas estimer
+        # correctement (retombe sur une sélectivité par défaut ~0,5 % —
+        # 292 lignes estimées sur ~58 000 réelles) ; sur cette sous-estimation
+        # il choisit une Nested Loop pour l'auto-jointure de team_agg
+        # (jusqu'à des milliards de comparaisons), 10+ min au lieu de ~3s en
+        # Hash Join. `ANALYZE` ne corrige pas ce cas (pas de vraies stats
+        # possibles sur une expression agrégée) — contournement stable tant
+        # que la requête n'est pas restructurée pour l'éviter autrement.
+        conn.execute("SET LOCAL statement_timeout = '5min'")
+        conn.execute("SET LOCAL enable_nestloop = off")
         rows_to_write: list[dict] = []
         for behind_only in (False, True):
             fitted = _fit_population(conn, window, behind_only=behind_only, min_rows=min_rows)
