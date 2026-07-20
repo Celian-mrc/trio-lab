@@ -1205,8 +1205,17 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         max_wr_ahead: float | None,
         min_wr_behind: float | None,
         max_wr_behind: float | None,
-    ) -> list[dict]:
+    ) -> tuple[list[dict], int]:
+        """Retourne (lignes filtrées, nombre de lignes fiables AVANT les filtres
+        par seuil) — le 2e sert à distinguer « rien de matérialisé pour cette
+        fenêtre » de « des filtres trop stricts pour les valeurs réellement
+        observées » (retour utilisateur 2026-07-20 : la page pointait vers la
+        commande de matérialisation même quand la donnée existait déjà, ex.
+        aucun champion ne dépasse 46 % de WR en retard sur la fenêtre actuelle
+        — un filtre "WR en retard min. 50" est un choix naturel mais ne peut
+        matcher aucune ligne, ce n'est pas un problème de matérialisation)."""
         rows = queries.champion_resilience(conn, window, factor, role=role)
+        reliable_count = 0
         result = []
         for r in rows:
             games_ahead, wins_ahead = r["games_ahead"], r["wins_ahead"]
@@ -1218,6 +1227,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 or games_behind < RESILIENCE_MIN_GAMES_PER_SIDE
             ):
                 continue  # écart trop bruité pour être un signal (retour utilisateur 2026-07-20)
+            reliable_count += 1
             if games_ahead + games_behind < min_games:
                 continue
             wr_ahead = wins_ahead / games_ahead
@@ -1249,7 +1259,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                     "games_behind": games_behind,
                 }
             )
-        return result
+        return result, reliable_count
 
     @app.get("/resilience", response_class=HTMLResponse)
     def resilience_page(
@@ -1287,7 +1297,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         )
         with request.app.state.pool.connection() as conn:
             window, platform, context = resolve_context(conn, window, platform)
-            rows = _resilience_rows(
+            rows, reliable_count = _resilience_rows(
                 conn,
                 window,
                 factor,
@@ -1334,6 +1344,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             {
                 **context,
                 "rows": rows,
+                "reliable_count": reliable_count,
                 "factor": factor,
                 "role": role or "",
                 "min_games": min_games,

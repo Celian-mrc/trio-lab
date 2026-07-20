@@ -402,6 +402,15 @@ gagner") avec les données déjà en place.
       min/max ajoutés (games total, écart, WR en avance/en retard),
       calculés en Python après lecture (volume trop petit pour justifier du
       SQL dédié, contrairement aux 13 colonnes de `/`/`/duos`).
+      **Bug de message corrigé le jour même** : la page vide pointait
+      toujours vers `synergy.resilience --patches ...`, y compris quand la
+      donnée existait déjà mais qu'un filtre ne matchait rien (ex. sur la
+      fenêtre 16.14+16.13, aucun champion ne dépasse 46 % de WR en retard ni
+      un écart sous 24 % — un filtre "WR en retard min. 50" est un choix
+      naturel mais ne peut structurellement rien retourner). `_resilience_rows`
+      retourne maintenant aussi le nombre de lignes fiables AVANT filtres :
+      message "pas encore calculé" seulement s'il est à 0, sinon "aucun
+      champion ne correspond à ces filtres".
 - [x] **Badges de rôle top/adc gris (2026-07-20, retour utilisateur)** :
       `.role-jgl`/`.role-mid`/`.role-sup` avaient une couleur, `.role-top`/
       `.role-bot` non — ajoutées (`style.css`).

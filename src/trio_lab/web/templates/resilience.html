@@ -65,10 +65,12 @@
   {{ resilience_min_games_per_side }} games d'un des 2 côtés exclus (écart trop bruité pour être un
   signal).</p>
 
-{% if not rows %}
-<p class="empty">Rien à afficher — pas encore calculé pour cette fenêtre ({{ window }}), pas assez
-  de games des 2 côtés, ou filtres trop stricts. Lancer
+{% if not rows and reliable_count == 0 %}
+<p class="empty">Rien à afficher — pas encore calculé pour cette fenêtre ({{ window }}), ou pas assez
+  de games des 2 côtés. Lancer
   <code>python -m trio_lab.synergy.resilience --patches {{ window }}</code> pour la matérialiser.</p>
+{% elif not rows %}
+<p class="empty">Aucun champion ne correspond à ces filtres ({{ reliable_count }} champion{{ 's' if reliable_count != 1 }} fiables sur cette fenêtre, aucun dans la plage demandée) — essaie de les élargir.</p>
 {% else %}
 <table class="data">
   <thead>

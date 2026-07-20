@@ -1125,11 +1125,32 @@ def test_resilience_page_min_max_filters(pg_sync, client):
     assert "Lee Sin" in resp.text
     assert "Vi" not in resp.text
 
-    # min_games=201 : dépasse le total des 2 (200 games chacun) — page vide.
+    # min_games=201 : dépasse le total des 2 (200 games chacun) — page vide,
+    # mais message "filtres trop stricts" (pas "pas encore calculé", retour
+    # utilisateur 2026-07-20 : les 2 champions SONT fiables, juste hors de la
+    # plage demandée — pointer vers la commande de matérialisation serait
+    # trompeur puisque la donnée existe déjà).
     resp = client.get("/resilience", params={"factor": "team_gold_diff_15", "min_games": "201"})
     assert "Lee Sin" not in resp.text
     assert "Vi" not in resp.text
+    assert "Aucun champion ne correspond à ces filtres" in resp.text
+    assert "Rien à afficher" not in resp.text
+
+
+def test_resilience_page_shows_materialization_hint_only_without_any_reliable_data(pg_sync, client):
+    """Sans aucune ligne fiable du tout (rien de matérialisé, ou pas assez de
+    games des 2 côtés partout) : le message pointe vers la commande de
+    matérialisation — distinct du cas « filtres trop stricts » ci-dessus.
+    Fenêtre matérialisée (score_trio) mais AUCUNE ligne de résilience semée."""
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    resp = client.get("/resilience", params={"factor": "team_gold_diff_15"})
     assert "Rien à afficher" in resp.text
+    assert "Aucun champion ne correspond à ces filtres" not in resp.text
 
 
 def test_flex_page_detects_off_role_resource_deviation(pg_sync, client):
