@@ -871,6 +871,12 @@ def test_insights_page_shows_aligned_combined_table(pg_sync, client):
     # jgl_cs_diff_15 n'a une valeur QUE pour 'all' : la ligne existe quand
     # même (alignement garanti, pas de ligne manquante), valeur affichée.
     assert "×1.05" in resp.text
+    # Conversion en probabilité absolue (retour utilisateur 2026-07-19) :
+    # sigmoid(intercept) → sigmoid(intercept + coef) pour 'all'/soul_taken
+    # (intercept=-0.9, coef=2.1) ; 'behind_gold15' n'a pas de ligne intercept
+    # dans ce jeu de données, donc pas de conversion pour cette colonne —
+    # ne doit pas planter, juste ne rien afficher pour cette cellule.
+    assert "29 % → 77 %" in resp.text
 
 
 def test_flex_page_detects_off_role_resource_deviation(pg_sync, client):

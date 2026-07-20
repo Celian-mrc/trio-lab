@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import secrets
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -98,11 +99,6 @@ WIN_FACTOR_LABELS = {
     "team_cc_per_min": "CC d'équipe / min",
     "team_vision_per_min": "Vision d'équipe / min",
     "jgl_cs_diff_15": "CS jungle vs adverse à 15 min",
-    "top_dmg_per_gold": "Dégâts/gold — top",
-    "jgl_dmg_per_gold": "Dégâts/gold — jungle",
-    "mid_dmg_per_gold": "Dégâts/gold — mid",
-    "bot_dmg_per_gold": "Dégâts/gold — adc",
-    "sup_dmg_per_gold": "Dégâts/gold — support",
     "herald_taken": "Héraut pris",
     "soul_taken": "Âme de dragon",
     "first_tower": "Première tour",
@@ -1026,20 +1022,44 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
 
     # --- Dashboard "ce qui fait gagner" (Phase 8) ---
 
+    def _win_prob_swing(intercept_row: dict | None, feature_row: dict | None) -> tuple | None:
+        """(P0, P1) = probabilité de victoire dans le scénario "moyen" de la
+        population (stats continues à la moyenne, aucun objectif pris) vs le
+        même scénario avec CE facteur activé (+1 écart-type si continu,
+        présent si booléen) — tout le reste inchangé. Les coefficients sont
+        déjà à l'échelle du logit, donc P1 = sigmoid(intercept + coef) sans
+        transformation supplémentaire. Lecture non technique en probabilité
+        absolue plutôt qu'en odds ratio seul (retour utilisateur 2026-07-19 :
+        un odds ratio surestime l'effet perçu quand l'issue est ~50 %, pas
+        rare — cf. Persoskie & Ferrer 2017, *Am J Prev Med* 52(2):224-228)."""
+        if intercept_row is None or feature_row is None:
+            return None
+
+        def sigmoid(x: float) -> float:
+            return 1.0 / (1.0 + math.exp(-x))
+
+        b0 = intercept_row["coef"]
+        return sigmoid(b0), sigmoid(b0 + feature_row["coef"])
+
     def _combined_win_factors(all_rows: list[dict], behind_rows: list[dict]) -> list[dict]:
         """Une ligne par feature (ordre fixe WIN_FACTOR_FEATURES, pas l'ordre
         SQL), avec les 2 populations côte à côte — jamais 2 tableaux séparés :
         même ligne = même feature, garanti, pas juste par coïncidence d'ordre
-        (retour utilisateur 2026-07-19). `intercept` jamais affiché (pas
-        actionnable pour un coach)."""
+        (retour utilisateur 2026-07-19). `intercept` jamais affiché comme
+        ligne (pas actionnable pour un coach), seulement utilisé en interne
+        pour convertir les odds ratio en probabilité absolue."""
         all_by_feature = {r["feature"]: r for r in all_rows}
         behind_by_feature = {r["feature"]: r for r in behind_rows}
+        all_intercept = all_by_feature.get("intercept")
+        behind_intercept = behind_by_feature.get("intercept")
         return [
             {
                 "feature": f,
                 "label": WIN_FACTOR_LABELS[f],
                 "all": all_by_feature.get(f),
                 "behind": behind_by_feature.get(f),
+                "all_prob": _win_prob_swing(all_intercept, all_by_feature.get(f)),
+                "behind_prob": _win_prob_swing(behind_intercept, behind_by_feature.get(f)),
             }
             for f in WIN_FACTOR_FEATURES
             if f in all_by_feature or f in behind_by_feature

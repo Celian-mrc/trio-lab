@@ -259,19 +259,41 @@ gagner") avec les données déjà en place.
       avec dix contres modérés. hx-boost rend chaque pick réactif sans JS
       custom.
 - [x] Dashboard "ce qui fait gagner" (2026-07-19, reconstruit le même jour
-      suite au retour « pourquoi ça ne parle que du trio jgl/mid/sup ? ») :
-      `/insights` — régression logistique multi-variables
-      (`synergy/win_factors.py`, IRLS pure Python), matérialisée dans
-      `score_win_factors` (migration 027), désormais sur l'**équipe complète
-      des 5 rôles** (`match_role_stats`, pas seulement jgl/mid/sup) : gold
-      d'équipe, CC/vision d'équipe, CS jungle vs adverse à 15 min, dégâts/gold
-      par rôle (top/jgl/mid/adc/support), objectifs. `damage_share` et
-      `kill_participation_pre15` abandonnés (pas d'interprétation team-wide
-      valable). Deux populations (toutes games / derrière au gold à 15 min)
-      affichées dans un même tableau, une ligne par feature dans un ordre
-      fixe (`_combined_win_factors`) — jamais deux tableaux qui peuvent
+      suite au retour « pourquoi ça ne parle que du trio jgl/mid/sup ? »,
+      puis révisé le 20/07 suite à un audit méthodologique en 2 recherches
+      approfondies — sources dans le commit) : `/insights` — régression
+      logistique multi-variables (`synergy/win_factors.py`, IRLS pure
+      Python), matérialisée dans `score_win_factors` (migration 027), sur
+      l'**équipe complète des 5 rôles** (`match_role_stats`) : gold
+      d'équipe, CC/vision d'équipe, CS jungle vs adverse à 15 min,
+      objectifs. `damage_share` et `kill_participation_pre15` abandonnés
+      dès la reconstruction du 19/07 (pas d'interprétation team-wide
+      valable). **Dégâts/gold par rôle retiré le 20/07** (audit
+      méthodologique, sources Persoskie & Ferrer 2017 *Am J Prev Med*,
+      Christiansen/Gensby/Weber 2022 *IEEE ToG* : ce ratio reflète surtout
+      l'archétype du champion — tank/support à dégâts/gold structurellement
+      bas — pas une performance actionnable). Diagnostic de colinéarité
+      (`_compute_vif`, VIF par régression auxiliaire, seuil d'alerte 5) à
+      chaque ajustement, loggé, renforce le `ridge` de l'IRLS sans jamais
+      orthogonaliser manuellement (déconseillé par la littérature citée —
+      biaise l'interprétation). Affichage en **probabilité absolue**
+      (ex. « 50 % → 78 % »), pas seulement en odds ratio (qui exagère
+      l'effet perçu quand l'issue est ~50 %, pas rare). Deux populations
+      (toutes games / derrière au gold à 15 min) affichées dans un même
+      tableau, une ligne par feature dans un ordre fixe
+      (`_combined_win_factors`) — jamais deux tableaux qui peuvent
       désaligner. Rafraîchissement MANUEL
       (`python -m trio_lab.synergy.win_factors --patches X`).
+
+**Chantier en cours (20/07/2026, phase 2 de l'audit)** : un second modèle,
+en amont de celui-ci, prédisant `gold_diff_15` (continu) à partir du DRAFT
+(WR baseline + delta matchup + synergie trio jgl/mid/sup — top/bot sans
+synergie native pour l'instant, cf. mémoire) et des comportements précoces
+0-15 min (CS jungle, kill participation, first blood, objectifs, vision) —
+répond à « qu'est-ce qui CONSTRUIT l'avantage au gold », question que le
+modèle actuel ne peut pas poser (le gold y est un médiateur, pas un levier).
+Architecture validée (modèle unique à 2 blocs, pas de cascade — biais des
+"generated regressors", Pagan 1984), pas encore codé.
 - [x] Détecteur de picks flex/hybrides (2026-07-19, seuils revus le même
       jour suite au retour « il y a peu de flex picks ») : `/flex` — rôle
       secondaire non anecdotique (`agg_champion`, historique complet : ≥ 5 %

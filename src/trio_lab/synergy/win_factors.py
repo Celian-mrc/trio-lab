@@ -14,6 +14,18 @@ raisonne en gold/vision/CC d'ÉQUIPE, pas d'un sous-ensemble de 3 joueurs sur
 l'équipe dans les dégâts de l'équipe vaut toujours 100 %) sont retirées ;
 `jgl_cs_diff_15` (déjà calculé, team-level malgré son nom) est ajoutée.
 
+`dégâts/gold` par rôle RETIRÉ (retour utilisateur 2026-07-19 + audit
+méthodologique en 2 temps, sources citées dans docs/ROADMAP.md) : ce ratio
+reflète surtout l'archétype du champion (un tank/support a un dégâts/gold
+structurellement bas — ce n'est pas une contre-performance) plutôt qu'un
+signal de performance actionnable par un coach ; remplacer par un dégâts/
+minute aurait été pire (redondant avec l'avantage gold déjà dans le modèle).
+Diagnostic de colinéarité (VIF par régression auxiliaire, `_compute_vif`)
+calculé à chaque ajustement sur les features continues restantes, loggé
+(jamais bloquant) ; `ridge` de l'IRLS augmenté automatiquement si un VIF
+dépasse 5 (stabilise les coefficients sans les mettre à zéro, cf. littérature
+sur les groupes de régresseurs corrélés).
+
 Deux populations, deux jeux de coefficients :
 - « all » : toutes les games (fenêtre courante, cas complets).
 - « behind_gold15 » : games où l'ÉQUIPE est derrière au gold à 15 min —
@@ -53,39 +65,22 @@ FEATURES = (
     "team_cc_per_min",
     "team_vision_per_min",
     "jgl_cs_diff_15",
-    "top_dmg_per_gold",
-    "jgl_dmg_per_gold",
-    "mid_dmg_per_gold",
-    "bot_dmg_per_gold",
-    "sup_dmg_per_gold",
     "herald_taken",
     "soul_taken",
     "first_tower",
 )
 CONTINUOUS = frozenset(FEATURES) - {"herald_taken", "soul_taken", "first_tower"}
 DEFAULT_MIN_ROWS = 200  # sous ce seuil, l'ajustement est trop instable pour être publié
-
-# Colonnes dmg_per_gold par rôle, dérivées par pivot (FILTER) d'une seule
-# ligne match_role_stats par (match, équipe) — évite un GROUP BY par rôle.
-_ROLE_DMG_PER_GOLD_SQL = ", ".join(
-    f"max(dmg_per_gold) FILTER (WHERE role = '{riot_role}') AS {feature}"
-    for riot_role, feature in (
-        ("TOP", "top_dmg_per_gold"),
-        ("JUNGLE", "jgl_dmg_per_gold"),
-        ("MIDDLE", "mid_dmg_per_gold"),
-        ("BOTTOM", "bot_dmg_per_gold"),
-        ("UTILITY", "sup_dmg_per_gold"),
-    )
-)
+# Seuil d'alerte VIF (variance inflation factor) standard en régression :
+# > 5 signale une colinéarité qui gonfle les erreurs-types des coefficients
+# concernés (pas leur valeur ponctuelle) — au-delà, le ridge est renforcé.
+VIF_ALERT_THRESHOLD = 5.0
+DEFAULT_RIDGE = 1e-6  # stabilisation numérique pure, pas une vraie régularisation
+VIF_RIDGE = 1.0  # régularisation réelle, appliquée seulement si un VIF dépasse le seuil
 
 
 def _fetch_rows(conn: psycopg.Connection, patches: list[str], *, behind_only: bool) -> list[dict]:
-    dpg_not_null = " AND ".join(
-        f"ta.{f} IS NOT NULL"
-        for f in ("top_dmg_per_gold", "jgl_dmg_per_gold", "mid_dmg_per_gold")
-        + ("bot_dmg_per_gold", "sup_dmg_per_gold")
-    )
-    where = f"m.patch = ANY(%(patches)s) AND {dpg_not_null} AND mt.jgl_cs_diff_15 IS NOT NULL"
+    where = "m.patch = ANY(%(patches)s) AND mt.jgl_cs_diff_15 IS NOT NULL"
     if behind_only:
         where += " AND (ta.gold_15 - ea.gold_15) < 0"
     with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
@@ -96,7 +91,6 @@ def _fetch_rows(conn: psycopg.Connection, patches: list[str], *, behind_only: bo
                        sum(gold_15) AS gold_15,
                        sum(cc_time_s) AS cc_time_s,
                        sum(vision_score) AS vision_score,
-                       {_ROLE_DMG_PER_GOLD_SQL},
                        count(*) AS n_roles
                 FROM match_role_stats
                 WHERE gold_15 IS NOT NULL
@@ -106,15 +100,13 @@ def _fetch_rows(conn: psycopg.Connection, patches: list[str], *, behind_only: bo
                    ta.gold_15 - ea.gold_15 AS team_gold_diff_15,
                    ta.cc_time_s / (m.game_duration_s / 60.0) AS team_cc_per_min,
                    ta.vision_score / (m.game_duration_s / 60.0) AS team_vision_per_min,
-                   ta.top_dmg_per_gold, ta.jgl_dmg_per_gold, ta.mid_dmg_per_gold,
-                   ta.bot_dmg_per_gold, ta.sup_dmg_per_gold,
                    mt.jgl_cs_diff_15, mt.herald_taken, mt.soul_taken, mt.first_tower
             FROM team_agg ta
             JOIN team_agg ea ON ea.match_id = ta.match_id AND ea.team_id <> ta.team_id
             JOIN matches m ON m.match_id = ta.match_id
             JOIN match_trio_stats mt ON mt.match_id = ta.match_id AND mt.team_id = ta.team_id
             WHERE ta.n_roles = 5 AND ea.n_roles = 5 AND {where}
-            """,  # noqa: S608 — `where`/`_ROLE_DMG_PER_GOLD_SQL` sont des listes blanches fixes
+            """,  # noqa: S608 — `where` est construit depuis des listes blanches fixes
             {"patches": patches},
         )
         return cur.fetchall()
@@ -171,6 +163,46 @@ def _solve(matrix: list[list[float]], b: list[float]) -> list[float]:
     return [aug[i][n] for i in range(n)]
 
 
+def _compute_vif(x_rows: list[list[float]], target_cols: list[int]) -> dict[int, float]:
+    """VIF (variance inflation factor) par régression auxiliaire OLS non
+    pondérée : VIF_j = 1 / (1 − R²_j), où R²_j vient de la régression de la
+    colonne j sur toutes les autres colonnes du design matrix (intercept
+    inclus, colonne 0). Diagnostic seulement, jamais bloquant — cf. module
+    docstring (seuil d'alerte `VIF_ALERT_THRESHOLD`, renforce le ridge)."""
+    n = len(x_rows)
+    p = len(x_rows[0])
+    vifs: dict[int, float] = {}
+    for j in target_cols:
+        other_cols = [c for c in range(p) if c != j]
+        xtx = [[0.0] * len(other_cols) for _ in other_cols]
+        xty = [0.0] * len(other_cols)
+        target_vals = [x_rows[i][j] for i in range(n)]
+        target_mean = sum(target_vals) / n
+        ss_tot = sum((v - target_mean) ** 2 for v in target_vals)
+        for i in range(n):
+            xi = [x_rows[i][c] for c in other_cols]
+            yj = x_rows[i][j]
+            for a in range(len(other_cols)):
+                xty[a] += xi[a] * yj
+                for b_ in range(len(other_cols)):
+                    xtx[a][b_] += xi[a] * xi[b_]
+        # Stabilisation numérique (même esprit que `DEFAULT_RIDGE` de l'IRLS,
+        # pas une vraie régularisation) : sans elle, une feature CONSTANTE
+        # parmi `other_cols` (ex. une stat maintenue fixe dans un jeu de
+        # test) rend la matrice normale singulière (pivot nul).
+        for a in range(len(other_cols)):
+            xtx[a][a] += DEFAULT_RIDGE
+        beta = _solve(xtx, xty)
+        ss_res = 0.0
+        for i in range(n):
+            xi = [x_rows[i][c] for c in other_cols]
+            pred = sum(b * x for b, x in zip(beta, xi, strict=True))
+            ss_res += (x_rows[i][j] - pred) ** 2
+        r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
+        vifs[j] = 1.0 / (1.0 - r2) if r2 < 0.999 else math.inf
+    return vifs
+
+
 def _fit_logistic_irls(
     x_rows: list[list[float]],
     y: list[float],
@@ -225,8 +257,35 @@ def _fit_population(
     means, stds = _standardize(rows)
     weights = window.weights_for(())  # pas de coupure de rework : aucune variable par champion
     x_rows, y, row_weights = _design_matrix(rows, means, stds, weights)
-    beta = _fit_logistic_irls(x_rows, y, row_weights)
+
+    continuous_cols = [i + 1 for i, f in enumerate(FEATURES) if f in CONTINUOUS]
+    vifs = _compute_vif(x_rows, continuous_cols)
+    max_vif = max(vifs.values(), default=0.0)
     population = "behind_gold15" if behind_only else "all"
+    if max_vif > VIF_ALERT_THRESHOLD:
+        offenders = {
+            FEATURES[c - 1]: round(v, 1) for c, v in vifs.items() if v > VIF_ALERT_THRESHOLD
+        }
+        ridge = VIF_RIDGE
+        logger.warning(
+            "win_factors %s (%s) : VIF > %.0f détecté %s, ridge renforcé à %.1f",
+            window.label,
+            population,
+            VIF_ALERT_THRESHOLD,
+            offenders,
+            ridge,
+        )
+    else:
+        ridge = DEFAULT_RIDGE
+        logger.info(
+            "win_factors %s (%s) : VIF max %.2f (sous le seuil %.0f)",
+            window.label,
+            population,
+            max_vif,
+            VIF_ALERT_THRESHOLD,
+        )
+
+    beta = _fit_logistic_irls(x_rows, y, row_weights, ridge=ridge)
     return [
         {
             "window_label": window.label,

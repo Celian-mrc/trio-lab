@@ -119,13 +119,15 @@ async def test_refresh_fits_signal_and_ignores_constant_features(pg_conn):
     assert coef > 1.0  # signal net (80 % des games correctement séparées par le signe)
     assert odds_ratio > 2.0
 
-    # Features tenues constantes dans le jeu de données (dmg/gold identique
-    # sur les 5 rôles, les 2 équipes) : aucune information, coefficient
-    # proche de 0 (colonne nulle après standardisation + ridge).
+    # Features tenues constantes dans le jeu de données (CC/vision identiques
+    # sur les 5 rôles, les 2 équipes, objectifs/CS jungle fixes) : aucune
+    # information, coefficient proche de 0 (colonne nulle après
+    # standardisation + ridge).
     cur = await pg_conn.execute(
         "SELECT feature, coef FROM score_win_factors"
         " WHERE window_label = '16.13' AND population = 'all'"
-        " AND feature IN ('team_cc_per_min', 'top_dmg_per_gold', 'herald_taken', 'jgl_cs_diff_15')"
+        " AND feature IN ('team_cc_per_min', 'team_vision_per_min', 'herald_taken',"
+        " 'jgl_cs_diff_15')"
     )
     for feature, coef in await cur.fetchall():
         assert abs(coef) < 1e-3, feature
