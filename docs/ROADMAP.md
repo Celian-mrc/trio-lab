@@ -422,6 +422,18 @@ gagner") avec les données déjà en place.
       commentaire déjà présent ailleurs dans `app.py` pour `min_tier`/champ
       search), raté ici faute de test qui simule un VRAI submit de formulaire
       (les tests précédents omettaient `role` plutôt que d'envoyer `""`).
+- [x] **`/resilience` passé en rafraîchissement automatique (2026-07-20,
+      retour utilisateur)** : jusqu'ici manuel comme `win_factors`/
+      `gold_factors` (philosophie initiale de la migration 031). Coût mesuré
+      avant de trancher : ~13s pour ~2500 lignes, négligeable face à un
+      cycle qui dure déjà plusieurs minutes (rate limit Riot) —
+      `resilience.refresh(window, dsn=dsn)` ajouté dans
+      `service.refresh_scores`, juste après `matchups.refresh`. Ajouté aussi
+      à `maintenance._SCORE_TABLES` (purge automatique par fenêtre) : elle
+      ne l'était pas, contrairement à `score_win_factors` — sans ça,
+      `score_champion_resilience` aurait accumulé une fenêtre non purgée à
+      chaque rollover de patch. `win_factors`/`gold_factors` restent
+      manuels, eux (pas demandé, pas de mesure de coût faite pour eux).
 - [x] **Badges de rôle top/adc gris (2026-07-20, retour utilisateur)** :
       `.role-jgl`/`.role-mid`/`.role-sup` avaient une couleur, `.role-top`/
       `.role-bot` non — ajoutées (`style.css`).

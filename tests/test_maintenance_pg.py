@@ -227,6 +227,25 @@ async def test_purge_scores_keeps_only_most_recent_window(pg_conn):
         assert [r[0] for r in await cur.fetchall()] == ["16.13+16.12"], table
 
 
+async def test_purge_scores_includes_champion_resilience(pg_conn):
+    """score_champion_resilience (Phase 8, résilience) : ajoutée à la purge
+    le 20/07/2026 en passant son refresh en automatique — retour utilisateur,
+    même rétention que score_trio/score_duo/score_matchup."""
+    await _seed_score_window(pg_conn, "16.12")
+    await _seed_score_window(pg_conn, "16.13+16.12")
+    for window_label in ("16.12", "16.13+16.12"):
+        await pg_conn.execute(
+            "INSERT INTO score_champion_resilience (window_label, role, champion_id, factor,"
+            " games_ahead, wins_ahead, games_behind, wins_behind)"
+            " VALUES (%s, 'JUNGLE', 1, 'team_gold_diff_15', 100, 70, 100, 60)",
+            (window_label,),
+        )
+    report = maintenance.purge_stale_scores(dsn=TEST_DSN)  # keep=1 par défaut
+    assert report == {"purged_window_labels": ["16.12"], "score_rows_deleted": 4}
+    cur = await pg_conn.execute("SELECT DISTINCT window_label FROM score_champion_resilience")
+    assert [r[0] for r in await cur.fetchall()] == ["16.13+16.12"]
+
+
 async def test_purge_scores_dry_run_deletes_nothing(pg_conn):
     await _seed_score_window(pg_conn, "16.12")
     await _seed_score_window(pg_conn, "16.13")

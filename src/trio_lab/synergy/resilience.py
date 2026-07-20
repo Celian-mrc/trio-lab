@@ -27,8 +27,11 @@ Calcul PAR APPARITION (une ligne par match/équipe/rôle, comme
 `gold_factors`), pas par match : chaque ligne porte les 3 facteurs
 TEAM-LEVEL (déjà calculés une fois par équipe) + le champion de CE rôle —
 un seul aller-retour SQL pour les 3 facteurs plutôt que 3 requêtes
-séparées. Rafraîchissement MANUEL, jamais dans le cycle service — même
-philosophie que `win_factors`/`gold_factors`.
+séparées. Rafraîchi automatiquement à chaque cycle du service 24/24
+(`collector/service.py`, depuis le 20/07/2026, retour utilisateur) : coût
+mesuré négligeable (~13s pour ~2500 lignes) face à un cycle qui dure déjà
+plusieurs minutes (rate limit Riot). `win_factors`/`gold_factors` restent
+manuels, eux.
 """
 
 from __future__ import annotations

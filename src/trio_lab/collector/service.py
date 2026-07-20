@@ -27,7 +27,7 @@ import psycopg
 from trio_lab import db, maintenance
 from trio_lab.collector import collect, patches
 from trio_lab.stats import aggregate
-from trio_lab.synergy import compute, matchups
+from trio_lab.synergy import compute, matchups, resilience
 from trio_lab.synergy.windows import PatchWindow, make_window, patch_key
 
 logger = logging.getLogger(__name__)
@@ -63,6 +63,11 @@ def refresh_scores(patch: str, dsn: str | None = None) -> None:
         return
     compute.refresh(window, dsn=dsn)
     matchups.refresh(window, dsn=dsn)
+    # Coût mesuré négligeable (~13s pour ~2500 lignes) face à un cycle de
+    # collecte qui dure déjà plusieurs minutes (rate limit Riot) — passé de
+    # manuel à automatique le 20/07/2026, retour utilisateur (cf.
+    # docs/ROADMAP.md). `min_rows` en dessous du seuil : no-op silencieux.
+    resilience.refresh(window, dsn=dsn)
     maintenance.purge_stale_scores(dsn=dsn)
 
 
