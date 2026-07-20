@@ -411,6 +411,17 @@ gagner") avec les données déjà en place.
       retourne maintenant aussi le nombre de lignes fiables AVANT filtres :
       message "pas encore calculé" seulement s'il est à 0, sinon "aucun
       champion ne correspond à ces filtres".
+      **2e bug, plus grave, trouvé en creusant le signalement utilisateur**
+      (le message ci-dessus n'expliquait pas tout : l'utilisateur avait
+      "0 champions" en cliquant Filtrer AVANT même de toucher un filtre) :
+      `<select name="role">` envoie `role=` (chaîne vide) au submit, jamais
+      une clé absente — `champion_resilience` testait `role is not None`,
+      donc choisir "tous" ajoutait silencieusement `AND role = ''` en SQL
+      (ne matche jamais rien). Corrigé par `role = role or None` juste après
+      validation dans `resilience_page`. Piège classique de ce projet (même
+      commentaire déjà présent ailleurs dans `app.py` pour `min_tier`/champ
+      search), raté ici faute de test qui simule un VRAI submit de formulaire
+      (les tests précédents omettaient `role` plutôt que d'envoyer `""`).
 - [x] **Badges de rôle top/adc gris (2026-07-20, retour utilisateur)** :
       `.role-jgl`/`.role-mid`/`.role-sup` avaient une couleur, `.role-top`/
       `.role-bot` non — ajoutées (`style.css`).

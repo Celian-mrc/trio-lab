@@ -1098,6 +1098,14 @@ def test_resilience_page_shows_per_champion_ahead_behind_gap(pg_sync, client):
         == 404
     )
 
+    # role="" (pas absent) : c'est ce qu'envoie <select name="role"> quand
+    # "tous" est sélectionné et que le formulaire est soumis — régression
+    # constatée en prod le 20/07/2026, "0 champions" dès le 1er clic sur
+    # Filtrer (avant même de toucher un filtre), causé par un `AND role = ''`
+    # ajouté silencieusement côté SQL.
+    resp = client.get("/resilience", params={"factor": "team_gold_diff_15", "role": ""})
+    assert "Lee Sin" in resp.text
+
 
 def test_resilience_page_min_max_filters(pg_sync, client):
     pg_sync.execute(

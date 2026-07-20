@@ -1282,6 +1282,14 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             raise HTTPException(404, f"facteur inconnu : {factor!r}")
         if role and role not in RIOT_ROLE_LABELS:
             raise HTTPException(404, f"rôle inconnu : {role!r}")
+        # Un <select> vide envoie `role=` (chaîne vide), pas une clé absente —
+        # `champion_resilience` teste `role is not None` : sans cette
+        # normalisation, choisir "tous" (valeur "") ajoutait silencieusement
+        # `AND role = ''` en SQL, qui ne matche jamais rien (retour
+        # utilisateur 2026-07-20 : "0 champions" dès le premier clic sur
+        # Filtrer, avant même de toucher un filtre — le <select> Rôle envoie
+        # toujours role= au submit).
+        role = role or None
         sort = sort if sort in _RESILIENCE_SORT_KEYS else "gap"
         gap_bounds = (
             _parse_optional_float(min_gap, ge=-100, le=100),
