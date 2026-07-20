@@ -92,3 +92,21 @@ def first_blood(killer: int, ts_s: int) -> dict[str, Any]:
         "timestamp": ts_s * 1000,
         "position": {"x": 7, "y": 8},
     }
+
+
+def ward_placed(creator: int, ts_s: int) -> dict[str, Any]:
+    return {
+        "type": "WARD_PLACED",
+        "creatorId": creator,
+        "wardType": "YELLOW_TRINKET",
+        "timestamp": ts_s * 1000,
+    }
+
+
+def ward_kill(killer: int, ts_s: int) -> dict[str, Any]:
+    return {
+        "type": "WARD_KILL",
+        "killerId": killer,
+        "wardType": "YELLOW_TRINKET",
+        "timestamp": ts_s * 1000,
+    }

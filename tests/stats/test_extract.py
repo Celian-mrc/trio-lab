@@ -13,7 +13,7 @@ from trio_lab.collector.parsing import ParseError
 from trio_lab.stats import extract
 
 from ..collector._builders import build_detail
-from ._builders import build_timeline, first_blood, kill, monster, tower
+from ._builders import build_timeline, first_blood, kill, monster, tower, ward_kill, ward_placed
 
 # --- trios_of ---
 
@@ -144,6 +144,44 @@ def test_grubs_herald_counters():
     assert stats[200]["grubs_taken"] == 1
     assert stats[200]["herald_taken"] is True
     assert stats[100]["herald_taken"] is False
+
+
+# --- pre15_stats (migration 030) ---
+
+
+def test_pre15_stats_ignores_objectives_after_cutoff():
+    # Héraut équipe 200 à 12:00 (avant coupure) ; drakes équipe 100 à 3:00 et
+    # 9:00 (avant) puis 16:00 (après, exclu) ; équipe 200 sans dragon.
+    events = _obj_events(
+        ("RIFT_HERALD", 200, 720),
+        ("DRAGON", 100, 180),
+        ("DRAGON", 100, 540),
+        ("DRAGON", 100, 960),  # 16:00, après la coupure à 15 min (900s)
+    )
+    timeline = build_timeline(events=[])
+    stats = extract.pre15_stats(timeline, events)
+
+    assert stats[200]["herald_taken_pre15"] is True
+    assert stats[100]["herald_taken_pre15"] is False
+    assert stats[100]["dragons_taken_pre15"] == 2
+    assert stats[200]["dragons_taken_pre15"] == 0
+
+
+def test_pre15_stats_counts_wards_before_cutoff_only():
+    # pid 2 (équipe 100) pose 2 wards avant 15 min, 1 après (exclue) ; pid 8
+    # (équipe 200) détruit 1 ward avant 15 min.
+    timeline = build_timeline(
+        events=[
+            ward_placed(2, 300),
+            ward_placed(2, 600),
+            ward_placed(2, 960),  # 16:00, après la coupure
+            ward_kill(8, 700),
+        ]
+    )
+    stats = extract.pre15_stats(timeline, events=[])
+
+    assert stats[100]["wards_pre15"] == 2
+    assert stats[200]["wards_pre15"] == 1
 
 
 # --- gold_diffs ---

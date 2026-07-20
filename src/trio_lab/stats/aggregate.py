@@ -196,6 +196,35 @@ _DUO_DURATION_SQL = f"""
              {_DURATION_BUCKET_SQL}
 """
 
+# Symétrique de _DUO_EXT_SQL (Phase 7, duo généralisé) pour les 7 paires hors
+# trio jgl/mid/sup : oubliée lors de l'extension initiale (2026-07-19 →
+# 2026-07-20, retour utilisateur) — agg_duo_duration ne couvrait QUE les 3
+# paires historiques, donc score_duo.scaling restait NULL pour les 7 autres
+# quel que soit le volume de games (ex. bot_sup à 900+ games). Juste
+# games/wins par tranche de durée : pas besoin des sommes de stats de
+# _DUO_EXT_SQL, donc pas de jointure sur l'équipe adverse ici.
+_DUO_DURATION_EXT_SQL = f"""
+    INSERT INTO agg_duo_duration (patch, platform, roles, champ_a, champ_b,
+                                  duration_bucket, games, wins)
+    SELECT m.patch, m.platform, pair.roles, ra.champion_id, rb.champion_id,
+           {_DURATION_BUCKET_SQL}, count(*), count(*) FILTER (WHERE mt.win)
+    FROM matches m
+    JOIN match_trio_stats mt ON mt.match_id = m.match_id
+    CROSS JOIN LATERAL (VALUES
+        ('top_jgl', 'TOP', 'JUNGLE'), ('top_mid', 'TOP', 'MIDDLE'),
+        ('top_bot', 'TOP', 'BOTTOM'), ('top_sup', 'TOP', 'UTILITY'),
+        ('jgl_bot', 'JUNGLE', 'BOTTOM'), ('mid_bot', 'MIDDLE', 'BOTTOM'),
+        ('bot_sup', 'BOTTOM', 'UTILITY')
+    ) AS pair(roles, role_a, role_b)
+    JOIN match_role_stats ra
+        ON ra.match_id = m.match_id AND ra.team_id = mt.team_id AND ra.role = pair.role_a
+    JOIN match_role_stats rb
+        ON rb.match_id = m.match_id AND rb.team_id = mt.team_id AND rb.role = pair.role_b
+    WHERE m.patch = %(patch)s
+    GROUP BY m.patch, m.platform, pair.roles, ra.champion_id, rb.champion_id,
+             {_DURATION_BUCKET_SQL}
+"""
+
 # agg_duo reçoit 2 INSERT (les 3 paires internes au trio depuis
 # match_trio_stats, les 7 autres depuis match_role_stats) derrière un seul
 # DELETE par patch — d'où des tuples de requêtes plutôt qu'une requête unique.
@@ -204,7 +233,7 @@ _TABLES_SQL: dict[str, tuple[str, ...]] = {
     "agg_duo": (_DUO_SQL, _DUO_EXT_SQL),
     "agg_trio": (_TRIO_SQL,),
     "agg_trio_duration": (_TRIO_DURATION_SQL,),
-    "agg_duo_duration": (_DUO_DURATION_SQL,),
+    "agg_duo_duration": (_DUO_DURATION_SQL, _DUO_DURATION_EXT_SQL),
     "agg_matchup": (_MATCHUP_SQL,),
 }
 

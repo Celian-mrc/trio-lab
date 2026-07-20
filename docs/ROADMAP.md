@@ -204,6 +204,18 @@ avec le même niveau de détail que les pages trio/duo existantes.
       Nashor/tours/plaques) restés team-level partout, structurellement non
       attribuables à un sous-ensemble de joueurs (`match_objective_events`
       n'a pas de tueur identifié, seulement un `team_id`).
+- [x] **Bug corrigé (2026-07-20, retour utilisateur)** : `agg_duo_duration`
+      (source du score de Scaling) était resté limité aux 3 paires internes
+      au trio (jgl_mid/jgl_sup/mid_sup) — la Phase 7 avait bien élargi
+      `agg_duo`/`score_duo` aux 10 paires (migration 024) mais oublié
+      `agg_duo_duration` (CHECK constraint ET requête d'agrégation), donc
+      Scaling restait NULL pour les 7 paires étendues (ex. bot_sup) quel que
+      soit le volume — constaté sur Ashe + Séraphine, 900+ games, toujours
+      NULL. `migrations/029_widen_duo_duration_roles.sql` élargit le CHECK ;
+      `stats/aggregate.py` ajoute `_DUO_DURATION_EXT_SQL` (symétrique de
+      `_DUO_EXT_SQL`, sourcée sur `match_role_stats`). Backfill possible
+      seulement pour les patchs où `match_role_stats` est encore retenu
+      (16.14 au moment du fix — 16.13 déjà purgé, comme pour `agg_matchup`).
 - [x] Counters 1v1 même rôle (2026-07-19, `migrations/026_role_matchups.sql`) :
       retour redesigné des counters Phase 4 (abandonnés en 022) — le problème
       initial était la dimension TRIO (jgl×mid×sup×ennemi×rôle, combinatoire
@@ -307,21 +319,38 @@ gagner") avec les données déjà en place.
       - **Exécution 0-15 min** : `jgl_cs_diff_15`, `first_blood_team`
         (`match_role_stats.first_blood` agrégé par OR, `coalesce` à false
         pour les games antérieures à la migration 025 sans rétro-remplissage).
-        Volontairement PAS herald/soul/vision : aucune coupure à 15 min
-        dans le schéma actuel (calculés sur la partie entière) — les
-        inclure créerait une causalité inversée. `match_objective_events`
-        (timeline brute) est purgé après ingestion : impossible de
-        rétro-corriger, extension future (migration + `stats/extract.py`).
       - Diagnostic VIF + ridge adaptatif : extrait dans `synergy/_linalg.py`
         (module partagé avec `win_factors.py`, même Gauss/VIF, plus
         `fit_weighted_ols`/`weighted_r_squared` pour l'OLS).
-      Résultat sur 16.14+16.13 (118k lignes) : R²(draft seul) ≈ 1,9 %,
-      R²(complet) ≈ 26,2 % — le draft explique très peu de l'avantage au
-      gold à 15 min, l'exécution précoce (CS jungle, premier sang) domine
+      Résultat sur 16.14+16.13 (118k lignes, avant l'ajout ci-dessous) :
+      R²(draft seul) ≈ 1,9 %, R²(complet) ≈ 26,2 % — le draft explique très
+      peu de l'avantage au gold à 15 min, l'exécution précoce domine
       largement. Cohérent avec la littérature citée dans l'audit (picks
       seuls proches du hasard en LoL, features in-game très supérieures).
       Piège Postgres identique à `win_factors` rencontré et contourné
       (`enable_nestloop = off`, cf. mémoire).
+- [x] Héraut/dragon/wards AVANT 15 min (2026-07-20, `migrations/030_pre15_objectives.sql`,
+      retour utilisateur) : `herald_taken`/`soul_taken`/`vision_score`
+      existants sur `match_trio_stats` n'ont AUCUNE coupure à 15 min
+      (calculés sur la partie entière) — inutilisables dans le bloc
+      exécution de `gold_factors` sans risquer une causalité inversée. 3
+      nouvelles colonnes, dérivées dans `stats/extract.py::pre15_stats` :
+      - `herald_taken_pre15`/`dragons_taken_pre15` (compte exact, pas de
+        `soul_pre15` — 4 drakes avant 15 min n'arrive essentiellement
+        jamais) : depuis les events de timeline déjà timestampés
+        (RIFT_HERALD/DRAGON), coupure exacte à 15 min.
+      - `wards_pre15` : Riot n'expose `visionScore` qu'en cumulé fin de
+        partie, à AUCUN timestamp intermédiaire (ni `detail` ni les frames
+        de la timeline) — impossible d'en dériver une version bornée
+        fidèle. Proxy le plus honnête : wards posées + détruites avant
+        15 min, lu directement dans les events bruts WARD_PLACED/WARD_KILL
+        de la timeline (absents de `match_objective_events`, qui ne garde
+        que les objectifs de map). Pas identique à `vision_score`.
+      Ajoutées au bloc exécution de `gold_factors.py`. **Pas de backfill
+      possible** (timeline brute jamais conservée, CLAUDE.md) — NULL sur
+      tout l'historique déjà collecté, `_FETCH_SQL` filtre sur leur
+      présence plutôt que planter ; se peuplent à partir du déploiement,
+      même situation que les 7 paires de duo étendues (Phase 7).
 - [x] Détecteur de picks flex/hybrides (2026-07-19, seuils revus le même
       jour suite au retour « il y a peu de flex picks ») : `/flex` — rôle
       secondaire non anecdotique (`agg_champion`, historique complet : ≥ 5 %

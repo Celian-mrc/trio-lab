@@ -170,7 +170,8 @@ _TRIO_STATS_SQL = """
         first_blood_trio, kill_participation_pre15, damage_share, vision_score, cc_time_s,
         jgl_cc_time_s, mid_cc_time_s, sup_cc_time_s,
         jgl_dmg_per_gold, mid_dmg_per_gold, sup_dmg_per_gold,
-        wards_placed, wards_killed, jgl_cs_diff_15
+        wards_placed, wards_killed, jgl_cs_diff_15,
+        herald_taken_pre15, dragons_taken_pre15, wards_pre15
     ) VALUES (
         %(match_id)s, %(team_id)s, %(jgl_champion)s, %(mid_champion)s, %(sup_champion)s,
         %(win)s,
@@ -184,7 +185,8 @@ _TRIO_STATS_SQL = """
         %(vision_score)s, %(cc_time_s)s,
         %(jgl_cc_time_s)s, %(mid_cc_time_s)s, %(sup_cc_time_s)s,
         %(jgl_dmg_per_gold)s, %(mid_dmg_per_gold)s, %(sup_dmg_per_gold)s,
-        %(wards_placed)s, %(wards_killed)s, %(jgl_cs_diff_15)s
+        %(wards_placed)s, %(wards_killed)s, %(jgl_cs_diff_15)s,
+        %(herald_taken_pre15)s, %(dragons_taken_pre15)s, %(wards_pre15)s
     )
     ON CONFLICT (match_id, team_id) DO NOTHING
 """

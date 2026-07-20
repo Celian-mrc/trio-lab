@@ -66,8 +66,8 @@
   sang).</p>
 <p class="meta"><strong>Comment lire</strong> : chaque ligne montre l'effet sur le gold à 15 min,
   toutes choses égales par ailleurs (isolé des autres facteurs). Les facteurs continus (force des
-  picks, matchup, synergie, CS jungle) sont lus « pour un écart type au-dessus de la moyenne » ; le
-  premier sang est un effet direct oui/non.</p>
+  picks, matchup, synergie, CS jungle, dragons, wards) sont lus « pour un écart type au-dessus de la
+  moyenne » ; premier sang et héraut sont des effets directs oui/non.</p>
 
 {% if not gold_factors %}
 <p class="empty">Pas encore calculé pour cette fenêtre ({{ window }}) — lancer
@@ -92,16 +92,18 @@
       <td class="meta">{{ 'Draft' if f.block == 'draft' else 'Jeu en lane (0-15 min)' }}</td>
       <td class="{{ 'pos' if f.row.coef > 0 else 'neg' if f.row.coef < 0 }}">
         {{ f.row.coef | signed_int }} gold
-        <span class="sub">{{ 'par écart-type' if f.feature != 'first_blood_team' else 'premier sang pris' }}</span>
+        <span class="sub">{{ 'par écart-type' if f.feature in gold_factor_continuous else 'si oui' }}</span>
       </td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
 <p class="meta"><strong>Limites</strong> : le bloc « jeu en lane » est volontairement réduit à ce qui
-  a une vraie coupure à 15 min dans les données (CS jungle, premier sang) — héraut, premier drake et
-  vision n'en ont pas encore une (calculés sur la partie entière), les inclure ici créerait une
-  causalité inversée. Corrélation, pas causalité garantie : le skill des joueurs influence à la fois
-  le jeu en lane et le gold, aucune régression ne sépare parfaitement les deux.</p>
+  a une vraie coupure à 15 min dans les données. Vision fait exception : Riot n'expose le score de
+  vision qu'en cumulé fin de partie, à aucun timestamp intermédiaire — « wards posées/détruites avant
+  15 min »
+  est le proxy le plus honnête possible, pas un équivalent exact. Corrélation, pas causalité garantie :
+  le skill des joueurs influence à la fois le jeu en lane et le gold, aucune régression ne sépare
+  parfaitement les deux.</p>
 {% endif %}
 {% endblock %}

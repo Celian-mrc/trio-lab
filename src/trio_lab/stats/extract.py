@@ -201,6 +201,47 @@ def team_objectives(events: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
     return stats
 
 
+def pre15_stats(
+    timeline: dict[str, Any], events: list[dict[str, Any]]
+) -> dict[int, dict[str, Any]]:
+    """Objectifs et vision AVANT 15 min, par équipe (migration 030) —
+    contrairement à `team_objectives`/`vision_score` (dans `combat_stats`),
+    calculés sur la partie ENTIÈRE. Sert de "comportement précoce" pour
+    `synergy.gold_factors` sans risquer une causalité inversée.
+
+    `herald_taken_pre15`/`dragons_taken_pre15` : depuis `events` (déjà
+    timestampés en `ts_s`, secondes) — pas de `soul_pre15`, 4 drakes non-elder
+    avant 15 min n'arrive essentiellement jamais.
+
+    `wards_pre15` : Riot n'expose `visionScore` qu'en cumulé fin de partie, à
+    AUCUN timestamp intermédiaire — proxy le plus honnête borné à 15 min,
+    lu directement dans les events bruts WARD_PLACED/WARD_KILL de la
+    timeline (absents de `objective_events`, qui ne garde que les objectifs
+    de map). Pas identique à `vision_score`, mais un vrai signal temporel.
+    """
+    cutoff_s = KP_WINDOW_MS // 1000
+    stats: dict[int, dict[str, Any]] = {
+        team: {"herald_taken_pre15": False, "dragons_taken_pre15": 0, "wards_pre15": 0}
+        for team in TEAMS
+    }
+    for e in events:
+        if e["ts_s"] >= cutoff_s:
+            continue
+        if e["event_type"] == "RIFT_HERALD":
+            stats[e["team_id"]]["herald_taken_pre15"] = True
+        elif e["event_type"] == "DRAGON":
+            stats[e["team_id"]]["dragons_taken_pre15"] += 1
+    for frame in timeline["info"]["frames"]:
+        for e in frame["events"]:
+            if e["timestamp"] >= KP_WINDOW_MS or e["type"] not in ("WARD_PLACED", "WARD_KILL"):
+                continue
+            pid = e.get("creatorId") if e["type"] == "WARD_PLACED" else e.get("killerId")
+            if not pid:
+                continue
+            stats[team_of(pid)]["wards_pre15"] += 1
+    return stats
+
+
 def gold_diffs(
     timeline: dict[str, Any], trios: dict[int, TrioMembers]
 ) -> dict[int, dict[str, int | None]]:
@@ -555,6 +596,7 @@ def extract_match(
     gold = gold_diffs(timeline, trios)
     combat = combat_stats(detail, timeline, trios, cc_reliability)
     jgl_cs = jungle_cs_diff(timeline, trios)
+    pre15 = pre15_stats(timeline, events)
 
     trio_rows = []
     for team in TEAMS:
@@ -571,6 +613,7 @@ def extract_match(
                 **objectives[team],
                 **combat[team],
                 "jgl_cs_diff_15": jgl_cs[team],
+                **pre15[team],
             }
         )
     event_rows = [{"match_id": match_id, **e} for e in events]

@@ -31,6 +31,8 @@ _STRONG_CHAMPS = (1, 2, 3, 4, 5)  # WR baseline 60 %
 _WEAK_CHAMPS = (21, 22, 23, 24, 25)  # WR baseline 45 %
 _BASE_GOLD_15 = 1000
 _CONSTANT_JGL_CS_DIFF = 3
+_CONSTANT_DRAGONS_PRE15 = 1
+_CONSTANT_WARDS_PRE15 = 4
 
 
 async def _seed_baselines(conn, patch: str) -> None:
@@ -57,20 +59,25 @@ async def _seed_match(
     )
     await conn.execute(
         "INSERT INTO match_trio_stats (match_id, team_id, jgl_champion, mid_champion,"
-        " sup_champion, win, herald_taken, soul_taken, first_tower, jgl_cs_diff_15)"
-        " VALUES (%s, 100, %s, %s, %s, true, false, false, false, %s),"
-        "        (%s, 200, %s, %s, %s, false, false, false, false, %s)",
+        " sup_champion, win, herald_taken, soul_taken, first_tower, jgl_cs_diff_15,"
+        " herald_taken_pre15, dragons_taken_pre15, wards_pre15)"
+        " VALUES (%s, 100, %s, %s, %s, true, false, false, false, %s, false, %s, %s),"
+        "        (%s, 200, %s, %s, %s, false, false, false, false, %s, false, %s, %s)",
         (
             match_id,
             blue[1],
             blue[2],
             blue[4],
             _CONSTANT_JGL_CS_DIFF,
+            _CONSTANT_DRAGONS_PRE15,
+            _CONSTANT_WARDS_PRE15,
             match_id,
             red[1],
             red[2],
             red[4],
             _CONSTANT_JGL_CS_DIFF,
+            _CONSTANT_DRAGONS_PRE15,
+            _CONSTANT_WARDS_PRE15,
         ),
     )
     per_role_delta = gold_diff // 5
@@ -126,17 +133,20 @@ async def test_refresh_fits_draft_signal_and_reports_r2_blocks(pg_conn):
     assert coef > 0  # WR baseline plus haut → plus de gold, signal net
 
     # Features sans information (matchup/synergie jamais semées → COALESCE
-    # à 0 partout, jgl_cs_diff_15 constant) : coefficient proche de 0.
+    # à 0 partout ; jgl_cs_diff_15, dragons_taken_pre15, wards_pre15
+    # constants ; herald_taken_pre15 toujours false, cf. _seed_match) :
+    # coefficient proche de 0.
     cur = await pg_conn.execute(
         "SELECT feature, coef FROM score_gold_factors"
         " WHERE window_label = '16.13'"
-        " AND feature IN ('team_matchup_delta', 'team_trio_synergy', 'jgl_cs_diff_15')"
+        " AND feature IN ('team_matchup_delta', 'team_trio_synergy', 'jgl_cs_diff_15',"
+        " 'herald_taken_pre15', 'dragons_taken_pre15', 'wards_pre15')"
     )
     for feature, coef in await cur.fetchall():
         assert abs(coef) < 1e-3, feature
 
     # R²(draft seul) et R²(complet) : le bloc exécution n'ajoute quasi rien
-    # (jgl_cs_diff_15 constant, first_blood_team sans corrélation au signal).
+    # (toutes ses features sont constantes ou sans corrélation au signal).
     cur = await pg_conn.execute(
         "SELECT feature, coef FROM score_gold_factors"
         " WHERE window_label = '16.13' AND feature IN ('_r2_draft_only', '_r2_full')"

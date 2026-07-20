@@ -29,6 +29,7 @@ from psycopg_pool import ConnectionPool
 from trio_lab import config, db
 from trio_lab.synergy.compute import DUO_ROLES
 from trio_lab.synergy.gold_factors import BLOCK_OF as GOLD_FACTOR_BLOCK_OF
+from trio_lab.synergy.gold_factors import CONTINUOUS as GOLD_FACTOR_CONTINUOUS
 from trio_lab.synergy.gold_factors import FEATURES as GOLD_FACTOR_FEATURES
 from trio_lab.synergy.win_factors import FEATURES as WIN_FACTOR_FEATURES
 from trio_lab.synergy.windows import make_window
@@ -113,6 +114,9 @@ GOLD_FACTOR_LABELS = {
     "team_trio_synergy": "Synergie du trio jungle/mid/support",
     "jgl_cs_diff_15": "CS jungle vs adverse à 15 min",
     "first_blood_team": "Premier sang",
+    "herald_taken_pre15": "Héraut pris avant 15 min",
+    "dragons_taken_pre15": "Dragons pris avant 15 min",
+    "wards_pre15": "Wards posées/détruites avant 15 min",
 }
 # Détecteur de picks flex (Phase 8) : rôles Riot → libellé, pour l'affichage
 # de /flex (contrairement à ROLE_LABELS, qui indexe sur les codes courts).
@@ -310,6 +314,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
     templates.env.globals["gold_diff_bar_cap"] = GOLD_DIFF_BAR_CAP
     templates.env.globals["gold_diff_low_sample_pct"] = GOLD_DIFF_LOW_SAMPLE_PCT
     templates.env.globals["draft_recommended_count"] = DRAFT_RECOMMENDED_COUNT
+    templates.env.globals["gold_factor_continuous"] = GOLD_FACTOR_CONTINUOUS
     templates.env.filters.update(
         pct=_fmt_pct,
         pct100=_fmt_pct100,

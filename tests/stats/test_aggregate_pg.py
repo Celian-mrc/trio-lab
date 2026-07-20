@@ -184,3 +184,24 @@ async def test_refresh_agg_duo_ext_pairs_from_role_stats(pg_conn):
         " WHERE roles = 'bot_sup' AND champ_a = 4 AND champ_b = 5"
     )
     assert await cur.fetchone() == (0, 1)
+
+
+async def test_refresh_agg_duo_duration_ext_pairs_from_role_stats(pg_conn):
+    """Régression (retour utilisateur 2026-07-20) : agg_duo_duration
+    (source du score de scaling) ne couvrait QUE les 3 paires historiques
+    jgl_mid/jgl_sup/mid_sup — les 7 paires étendues (ex. bot_sup) restaient
+    à 0 ligne quel que soit le volume de games, donc `scaling` toujours
+    NULL pour elles. `_DUO_DURATION_EXT_SQL` corrige ça."""
+    await _ingest_with_role_stats(pg_conn, "EUW1_A", winning_team=100)
+    aggregate.refresh("16.13", dsn=TEST_DSN)
+
+    cur = await pg_conn.execute(
+        "SELECT games, wins FROM agg_duo_duration"
+        " WHERE roles = 'bot_sup' AND champ_a = 4 AND champ_b = 5"
+    )
+    assert await cur.fetchall() == [(1, 1)]  # team100 gagne (builder)
+    cur = await pg_conn.execute(
+        "SELECT games, wins FROM agg_duo_duration"
+        " WHERE roles = 'top_jgl' AND champ_a = 1 AND champ_b = 2"
+    )
+    assert await cur.fetchall() == [(1, 1)]

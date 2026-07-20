@@ -18,19 +18,28 @@ docs/ROADMAP.md) :
    - `team_trio_synergy` : synergie du trio jgl/mid/sup posé (`score_trio`)
      — top/bot n'ont pas de synergie native pour l'instant (pas de "trio"
      les concernant), extension possible plus tard (ex. duo bot lane).
-2. EXÉCUTION PRÉCOCE (0-15 min) — volontairement réduit à ce qui a une
-   vraie coupure temporelle à 15 min dans le schéma actuel :
+2. EXÉCUTION PRÉCOCE (0-15 min) — uniquement ce qui a une vraie coupure
+   temporelle à 15 min :
    - `jgl_cs_diff_15` (`match_trio_stats`, déjà team-level malgré son nom).
    - `first_blood_team` : au moins un membre de l'équipe crédité du 1er sang
      (`match_role_stats.first_blood`, agrégé par OR — événement unique,
      toujours avant 15 min par construction).
-   herald_taken/soul_taken/vision_score n'ont AUCUNE coupure à 15 min dans
-   le schéma (calculés sur la partie entière) — les inclure ici créerait un
-   biais de causalité inversée (un héraut pris à 22 min ne peut pas causer
-   un avantage mesuré à 15 min). `match_objective_events` (timeline brute)
-   est purgé après ingestion : impossible de rétro-corriger les games déjà
-   collectées. Ajouter une vraie coupure à 15 min pour ces stats est une
-   extension future (migration + `stats/extract.py`), pas ici.
+   - `herald_taken_pre15`/`dragons_taken_pre15` (migration 030) : dérivés
+     des events de timeline (déjà timestampés) avec une coupure exacte à
+     15 min — contrairement à `herald_taken`/`soul_taken` (partie entière,
+     inclus dans win_factors, jamais ici : causalité inversée, un héraut
+     pris à 22 min ne peut pas causer un avantage mesuré à 15 min).
+   - `wards_pre15` (migration 030) : Riot n'expose `visionScore` qu'en
+     cumulé fin de partie, à AUCUN timestamp intermédiaire — proxy le plus
+     honnête borné à 15 min, nombre de wards posées + détruites (events
+     bruts WARD_PLACED/WARD_KILL de la timeline). Pas identique à
+     `vision_score`.
+   Ces 3 dernières colonnes n'ont PAS de backfill possible (timeline brute
+   jamais conservée après extraction, CLAUDE.md) : NULL sur tout
+   l'historique déjà collecté, se peuplent seulement à partir du déploiement
+   de la migration 030 — `_FETCH_SQL` les filtre sur leur présence plutôt
+   que planter, `refresh()` publie normalement (ou reste sous `min_rows` et
+   se tait) une fois assez de games fraîches accumulées.
 
 UN SEUL modèle à 2 blocs, pas 2 modèles en cascade : une cascade (draft →
 gold, puis comportements → résidu) doit résidualiser les DEUX côtés pour
@@ -62,10 +71,21 @@ from trio_lab.synergy.windows import PatchWindow, make_window
 logger = logging.getLogger(__name__)
 
 DRAFT_FEATURES = ("team_baseline_wr", "team_matchup_delta", "team_trio_synergy")
-EXECUTION_FEATURES = ("jgl_cs_diff_15", "first_blood_team")
+# herald_taken_pre15/dragons_taken_pre15/wards_pre15 (migration 030) : sur
+# match_trio_stats, sans backfill possible (timeline brute jamais conservée,
+# cf. migration) — NULL sur tout l'historique déjà collecté, se peuplent
+# seulement à partir du déploiement. `_FETCH_SQL` filtre sur leur présence
+# plutôt que planter (même principe que les 7 paires de duo étendues).
+EXECUTION_FEATURES = (
+    "jgl_cs_diff_15",
+    "first_blood_team",
+    "herald_taken_pre15",
+    "dragons_taken_pre15",
+    "wards_pre15",
+)
 FEATURES = DRAFT_FEATURES + EXECUTION_FEATURES
 BLOCK_OF = {f: "draft" for f in DRAFT_FEATURES} | {f: "execution" for f in EXECUTION_FEATURES}
-CONTINUOUS = frozenset(FEATURES) - {"first_blood_team"}
+CONTINUOUS = frozenset(FEATURES) - {"first_blood_team", "herald_taken_pre15"}
 DEFAULT_MIN_ROWS = 200  # sous ce seuil, l'ajustement est trop instable pour être publié
 
 _FETCH_SQL = """
@@ -128,7 +148,10 @@ _FETCH_SQL = """
            coalesce(ta.team_matchup_delta, 0.0) AS team_matchup_delta,
            coalesce(st.synergy, 0.0) AS team_trio_synergy,
            mt.jgl_cs_diff_15,
-           fb.first_blood_team
+           fb.first_blood_team,
+           mt.herald_taken_pre15,
+           mt.dragons_taken_pre15,
+           mt.wards_pre15
     FROM team_agg ta
     JOIN match_trio_stats mt ON mt.match_id = ta.match_id AND mt.team_id = ta.team_id
     JOIN first_blood_agg fb ON fb.match_id = ta.match_id AND fb.team_id = ta.team_id
@@ -138,6 +161,10 @@ _FETCH_SQL = """
        AND st.sup_champion = mt.sup_champion
     WHERE ta.n_roles = 5 AND ta.team_baseline_wr IS NOT NULL
       AND mt.jgl_cs_diff_15 IS NOT NULL
+      -- migration 030, pas de backfill : NULL tant que la game a été
+      -- collectée avant le déploiement — toujours les 3 ensemble (même
+      -- INSERT dans extract.pre15_stats), un seul filtre suffit.
+      AND mt.herald_taken_pre15 IS NOT NULL
 """
 
 
