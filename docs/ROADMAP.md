@@ -361,8 +361,27 @@ gagner") avec les données déjà en place.
       masquait silencieusement 137 candidats réels sur 157). Phrase en
       langage clair par ligne + filtre par rôle secondaire. Calcul live (pas
       de table matérialisée, ~1s sur prod).
+- [x] Profil de résilience par champion (2026-07-20,
+      `migrations/031_champion_resilience.sql`, retour utilisateur) : `/resilience`
+      — répond à « pas de combinaison parfaite universelle de métriques,
+      des champions différents dépendent différemment de chaque facteur »
+      (exemple qui a lancé la discussion : Nasus jungle mené au gold@15
+      dans 60 % de ses games, WR 34 % dans cet état, mais ~52 % au global).
+      `synergy/resilience.py` matérialise, PAR (rôle, champion, facteur),
+      l'écart de WR entre "en avance" et "en retard". 3 facteurs retenus
+      après vérification empirique en session (corrélations de Pearson,
+      ~50k lignes prod) pour leur signal réel ET leur indépendance
+      mutuelle : `team_gold_diff_15` (r=0,535 avec la victoire),
+      `jgl_cs_diff_15` (r=0,279 avec la victoire, r=0,456 avec le gold —
+      recoupe partiellement), `first_blood_team` (r=0,123, largement
+      indépendant). CC/min écarté malgré son indépendance du gold
+      (r=0,084) : trop faiblement corrélé à la victoire (r=0,092) pour
+      produire des écarts par champion fiables plutôt que du bruit —
+      candidat d'extension si le volume grandit. Lignes grisées sous
+      `RESILIENCE_MIN_GAMES_PER_SIDE` (30 games d'un côté), jamais
+      masquées. Même piège Postgres/contournement que win_factors/gold_factors.
 
-Phase 8 close pour l'instant (draft, insights, flex) — prochaine idée à définir.
+Phase 8 close pour l'instant (draft, insights, résilience, flex) — prochaine idée à définir.
 
 **Gap constaté en marge de cette révision (2026-07-19)** : `agg_matchup`/
 `score_matchup` étaient vides en prod alors que le code (`stats/aggregate.py`

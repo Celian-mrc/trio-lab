@@ -41,7 +41,7 @@ def pg_sync():
             " agg_champion, agg_duo, agg_trio,"
             " agg_trio_duration, agg_duo_duration, agg_matchup,"
             " score_duo, score_trio, score_matchup, score_win_factors, score_gold_factors,"
-            " champion_cc_theoretical CASCADE"
+            " score_champion_resilience, champion_cc_theoretical CASCADE"
         )
         yield conn
 
@@ -912,6 +912,44 @@ def test_insights_page_shows_gold_factors_section(pg_sync, client):
     # team_baseline_wr (bloc draft) doit apparaître avant jgl_cs_diff_15
     # (bloc exécution) : ordre fixe GOLD_FACTOR_FEATURES.
     assert resp.text.index("Force brute des picks") < resp.text.index("CS jungle vs adverse")
+
+
+def test_resilience_page_shows_per_champion_ahead_behind_gap(pg_sync, client):
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    # Champion 1 (Lee Sin) JUNGLE : très résilient (WR haut des 2 côtés,
+    # écart faible) ; champion 4 (Vi) JUNGLE : dépend fortement de l'avance
+    # (écart large) — sous le seuil de fiabilité (games < 30) pour tester le
+    # grisage sans le masquer.
+    pg_sync.execute(
+        "INSERT INTO score_champion_resilience (window_label, role, champion_id, factor,"
+        " games_ahead, wins_ahead, games_behind, wins_behind)"
+        " VALUES ('16.13', 'JUNGLE', 1, 'team_gold_diff_15', 100, 70, 100, 60),"
+        "        ('16.13', 'JUNGLE', 4, 'team_gold_diff_15', 10, 9, 10, 1)"
+    )
+    resp = client.get("/resilience", params={"factor": "team_gold_diff_15"})
+    assert resp.status_code == 200
+    assert "Lee Sin" in resp.text
+    assert "70 %" in resp.text  # WR en avance, champion 1
+    assert "60 %" in resp.text  # WR en retard, champion 1
+    # Champion 4 : sous le seuil de fiabilité des 2 côtés (10 < 30 games) —
+    # grisé (classe low-sample) SUR SA LIGNE précisément, jamais masqué.
+    vi_row = resp.text[resp.text.rindex("<tr", 0, resp.text.index("Vi")) :]
+    assert 'class="low-sample"' in vi_row.split(">", 1)[0]
+    assert "90 %" in resp.text  # WR en avance, champion 4 (9/10)
+
+    # Facteur inconnu / rôle inconnu : 404, pas un crash silencieux.
+    assert client.get("/resilience", params={"factor": "inconnu"}).status_code == 404
+    assert (
+        client.get(
+            "/resilience", params={"factor": "team_gold_diff_15", "role": "INVALID"}
+        ).status_code
+        == 404
+    )
 
 
 def test_flex_page_detects_off_role_resource_deviation(pg_sync, client):

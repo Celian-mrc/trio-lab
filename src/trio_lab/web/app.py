@@ -118,6 +118,19 @@ GOLD_FACTOR_LABELS = {
     "dragons_taken_pre15": "Dragons pris avant 15 min",
     "wards_pre15": "Wards posées/détruites avant 15 min",
 }
+# Profil de résilience par champion (Phase 8, /resilience, retour
+# utilisateur 2026-07-20) : mêmes 3 facteurs que synergy.resilience.FACTORS,
+# choisis pour leur signal réel et leur indépendance mutuelle (corrélations
+# de Pearson vérifiées en session).
+RESILIENCE_FACTOR_LABELS = {
+    "team_gold_diff_15": "Avantage gold d'équipe à 15 min",
+    "jgl_cs_diff_15": "CS jungle d'équipe à 15 min",
+    "first_blood_team": "Premier sang d'équipe",
+}
+# En dessous de ce nombre de games d'un côté (avance OU retard), l'écart de
+# WR est trop bruité pour être lu comme un signal — grisé, jamais masqué
+# (même principe que DRAFT_MIN_GAMES_EFF).
+RESILIENCE_MIN_GAMES_PER_SIDE = 30
 # Détecteur de picks flex (Phase 8) : rôles Riot → libellé, pour l'affichage
 # de /flex (contrairement à ROLE_LABELS, qui indexe sur les codes courts).
 RIOT_ROLE_LABELS = {
@@ -315,6 +328,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
     templates.env.globals["gold_diff_low_sample_pct"] = GOLD_DIFF_LOW_SAMPLE_PCT
     templates.env.globals["draft_recommended_count"] = DRAFT_RECOMMENDED_COUNT
     templates.env.globals["gold_factor_continuous"] = GOLD_FACTOR_CONTINUOUS
+    templates.env.globals["resilience_min_games_per_side"] = RESILIENCE_MIN_GAMES_PER_SIDE
     templates.env.filters.update(
         pct=_fmt_pct,
         pct100=_fmt_pct100,
@@ -350,6 +364,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
     templates.env.globals["ROLE_TO_TEAM_POSITION"] = ROLE_TO_TEAM_POSITION
     templates.env.globals["DUO_ROLE_KEYS"] = DUO_ROLE_KEYS
     templates.env.globals["RIOT_ROLE_LABELS"] = RIOT_ROLE_LABELS
+    templates.env.globals["RESILIENCE_FACTOR_LABELS"] = RESILIENCE_FACTOR_LABELS
 
     def resolve_champion(name_or_id: str | None) -> int | None:
         """Filtre champion de la tier list : nom (recherche) ou id. None si vide."""
@@ -1127,6 +1142,110 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 "gold_n": gold_n,
                 "r2_draft_only": r2_draft_only["coef"] if r2_draft_only else None,
                 "r2_full": r2_full["coef"] if r2_full else None,
+            },
+        )
+
+    # --- Profil de résilience par champion (Phase 8, retour utilisateur) ---
+    #
+    # Pas de "combinaison parfaite universelle" de métriques : un coefficient
+    # global moyenne des chemins vers la victoire très différents selon le
+    # champion (Nasus jungle mené au gold@15 dans 60 % de ses games, WR 34 %
+    # dans cet état, mais ~52 % au global). Cette page montre, PAR CHAMPION,
+    # l'écart de WR entre "en avance" et "en retard" sur chaque facteur —
+    # `synergy.resilience`.
+
+    _RESILIENCE_SORT_KEYS: dict[str, object] = {
+        "gap": lambda r: r["gap"],
+        "wr_behind": lambda r: r["wr_behind"],
+        "wr_ahead": lambda r: r["wr_ahead"],
+        "games": lambda r: r["games_ahead"] + r["games_behind"],
+    }
+    # 1er clic sur une colonne : écart croissant (le plus résilient en tête,
+    # cohérent avec le titre de la page) ; WR/games décroissants (le plus
+    # haut d'abord, plus naturel pour lire "qui performe le mieux").
+    _RESILIENCE_DEFAULT_DIR = {
+        "gap": "asc",
+        "wr_behind": "desc",
+        "wr_ahead": "desc",
+        "games": "desc",
+    }
+
+    def _resilience_rows(conn, window: str, factor: str, *, role: str | None) -> list[dict]:
+        rows = queries.champion_resilience(conn, window, factor, role=role)
+        result = []
+        for r in rows:
+            games_ahead, wins_ahead = r["games_ahead"], r["wins_ahead"]
+            games_behind, wins_behind = r["games_behind"], r["wins_behind"]
+            if games_ahead == 0 or games_behind == 0:
+                continue  # pas de comparaison possible sans les 2 côtés
+            wr_ahead = wins_ahead / games_ahead
+            wr_behind = wins_behind / games_behind
+            c = champ(r["champion_id"])
+            result.append(
+                {
+                    "champion_id": r["champion_id"],
+                    "name": c.name,
+                    "role": r["role"],
+                    "role_label": RIOT_ROLE_LABELS[r["role"]],
+                    "wr_ahead": wr_ahead,
+                    "wr_behind": wr_behind,
+                    "gap": wr_ahead - wr_behind,
+                    "games_ahead": games_ahead,
+                    "games_behind": games_behind,
+                    "low_sample": (
+                        games_ahead < RESILIENCE_MIN_GAMES_PER_SIDE
+                        or games_behind < RESILIENCE_MIN_GAMES_PER_SIDE
+                    ),
+                }
+            )
+        return result
+
+    @app.get("/resilience", response_class=HTMLResponse)
+    def resilience_page(
+        request: Request,
+        window: str | None = None,
+        platform: str | None = None,
+        factor: str = "team_gold_diff_15",
+        role: str | None = None,
+        sort: str = "gap",
+        dir: str = "asc",
+    ):
+        if factor not in RESILIENCE_FACTOR_LABELS:
+            raise HTTPException(404, f"facteur inconnu : {factor!r}")
+        if role and role not in RIOT_ROLE_LABELS:
+            raise HTTPException(404, f"rôle inconnu : {role!r}")
+        sort = sort if sort in _RESILIENCE_SORT_KEYS else "gap"
+        with request.app.state.pool.connection() as conn:
+            window, platform, context = resolve_context(conn, window, platform)
+            rows = _resilience_rows(conn, window, factor, role=role)
+        rows.sort(key=_RESILIENCE_SORT_KEYS[sort], reverse=(dir == "desc"))
+
+        def _sort_url(key: str) -> str:
+            next_dir = (
+                ("desc" if dir == "asc" else "asc") if sort == key else _RESILIENCE_DEFAULT_DIR[key]
+            )
+            params = {
+                "window": window,
+                "platform": platform,
+                "factor": factor,
+                "role": role or "",
+                "sort": key,
+                "dir": next_dir,
+            }
+            return "/resilience?" + urlencode({k: v for k, v in params.items() if v})
+
+        sort_urls = {key: _sort_url(key) for key in _RESILIENCE_SORT_KEYS}
+        return templates.TemplateResponse(
+            request,
+            "resilience.html",
+            {
+                **context,
+                "rows": rows,
+                "factor": factor,
+                "role": role or "",
+                "sort": sort,
+                "dir": dir,
+                "sort_urls": sort_urls,
             },
         )
 

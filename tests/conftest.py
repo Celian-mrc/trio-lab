@@ -47,7 +47,7 @@ async def pg_conn():
         " agg_champion, agg_duo, agg_trio,"
         " agg_trio_duration, agg_duo_duration, agg_matchup,"
         " score_duo, score_trio, score_matchup, score_win_factors, score_gold_factors,"
-        " champion_cc_theoretical CASCADE"
+        " score_champion_resilience, champion_cc_theoretical CASCADE"
     )
     try:
         yield conn

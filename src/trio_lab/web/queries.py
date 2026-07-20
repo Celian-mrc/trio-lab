@@ -567,6 +567,26 @@ def gold_factors(conn: psycopg.Connection, window: str) -> list[dict]:
         ).fetchall()
 
 
+def champion_resilience(
+    conn: psycopg.Connection, window: str, factor: str, *, role: str | None = None
+) -> list[dict]:
+    """Écarts avance/retard par champion (Phase 8, `synergy.resilience`) —
+    pas de dimension `platform`, même raisonnement que `win_factors`/
+    `gold_factors`. Liste vide si `synergy.resilience` n'a jamais tourné
+    pour cette fenêtre (rafraîchissement manuel)."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        query = (
+            "SELECT role, champion_id, games_ahead, wins_ahead, games_behind, wins_behind"
+            " FROM score_champion_resilience WHERE window_label = %(window)s"
+            " AND factor = %(factor)s"
+        )
+        params: dict[str, str] = {"window": window, "factor": factor}
+        if role is not None:
+            query += " AND role = %(role)s"
+            params["role"] = role
+        return cur.execute(query, params).fetchall()
+
+
 def cc_theoretical_scores(conn: psycopg.Connection) -> dict[int, float]:
     """Score CC théorique par champion, depuis la table matérialisée (010) —
     jamais le fichier gelé : le service web ne l'embarque pas (voir Dockerfile),

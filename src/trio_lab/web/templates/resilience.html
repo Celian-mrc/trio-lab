@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Résilience par champion — Trio Lab{% endblock %}
+{% block content %}
+<h1>Résilience par champion</h1>
+<p class="meta">Il n'y a pas de « combinaison parfaite » universelle de métriques qui mène à la
+  victoire : un facteur comme l'avance au gold à 15 min a un effet fort EN MOYENNE, mais des champions
+  différents en dépendent très différemment. Cette page montre, champion par champion, l'écart de
+  winrate entre « en avance » et « en retard » sur le facteur choisi — pour repérer qui tolère quoi
+  plutôt que d'appliquer le même seuil à tout le monde.</p>
+<p class="meta"><strong>Lecture</strong> : « en avance »/« en retard » porte sur l'ÉQUIPE entière (pas
+  seulement ce champion — pour CS jungle, ça reflète la performance du jungler de l'équipe, pas
+  forcément celle du champion affiché s'il joue un autre rôle). Écart faible = ce champion garde un
+  bon WR même dans l'état défavorable (pick résilient) ; écart large = son WR s'effondre hors de
+  l'état favorable (pick qui a besoin de cet avantage). Exemple constaté en session : Nasus jungle est
+  en retard au gold à 15 min dans 60 % de ses games (WR 34 % dans cet état) mais son WR global reste
+  ~52 % — son écart ici reste large (il profite bien d'une avance quand il l'a), ce qui se compense
+  par un très gros volume de games jouables même en retard.</p>
+
+<form method="get" action="/resilience" class="filters">
+  <label>Fenêtre
+    <select name="window">
+      {% for w in windows %}<option value="{{ w }}" {{ 'selected' if w == window }}>{{ w }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Facteur
+    <select name="factor">
+      {% for f, label in RESILIENCE_FACTOR_LABELS.items() %}
+      <option value="{{ f }}" {{ 'selected' if f == factor }}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Rôle
+    <select name="role">
+      <option value="" {{ 'selected' if not role }}>tous</option>
+      {% for r, label in RIOT_ROLE_LABELS.items() %}
+      <option value="{{ r }}" {{ 'selected' if role == r }}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <input type="hidden" name="sort" value="{{ sort }}">
+  <input type="hidden" name="dir" value="{{ dir }}">
+  <button type="submit">Filtrer</button>
+</form>
+
+<p class="meta">{{ rows | length }} champion{{ 's' if rows | length != 1 }}.</p>
+
+{% if not rows %}
+<p class="empty">Rien à afficher — pas encore calculé pour cette fenêtre ({{ window }}), ou pas assez
+  de games des 2 côtés. Lancer
+  <code>python -m trio_lab.synergy.resilience --patches {{ window }}</code> pour la matérialiser.</p>
+{% else %}
+<table class="data">
+  <thead>
+    <tr>
+      <th>Champion</th>
+      <th>Rôle</th>
+      <th><a href="{{ sort_urls.wr_behind }}" class="{{ 'active' if sort == 'wr_behind' }}">WR en retard</a></th>
+      <th><a href="{{ sort_urls.wr_ahead }}" class="{{ 'active' if sort == 'wr_ahead' }}">WR en avance</a></th>
+      <th><a href="{{ sort_urls.gap }}" class="{{ 'active' if sort == 'gap' }}">Écart</a></th>
+      <th><a href="{{ sort_urls.games }}" class="{{ 'active' if sort == 'games' }}">Games</a></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr class="{{ 'low-sample' if r.low_sample }}">
+      <td class="trio-cell">
+        <span class="champ">{% set c = champ(r.champion_id) %}{% if c.icon_url %}<img src="{{ c.icon_url }}" alt="" width="24" height="24">{% endif %}{{ r.name }}</span>
+      </td>
+      <td>{{ r.role_label }}</td>
+      <td class="{{ 'pos' if r.wr_behind >= 0.5 else 'neg' }}">
+        {{ r.wr_behind | pct(0) }}
+        <span class="sub">{{ r.games_behind }} games</span>
+      </td>
+      <td class="{{ 'pos' if r.wr_ahead >= 0.5 else 'neg' }}">
+        {{ r.wr_ahead | pct(0) }}
+        <span class="sub">{{ r.games_ahead }} games</span>
+      </td>
+      <td>{{ r.gap | pct(0) }}</td>
+      <td class="meta">{{ r.games_behind + r.games_ahead }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<p class="meta">Lignes grisées : moins de {{ resilience_min_games_per_side }} games d'un des 2 côtés —
+  écart trop bruité pour être lu comme un signal, affiché quand même plutôt que masqué.</p>
+{% endif %}
+{% endblock %}

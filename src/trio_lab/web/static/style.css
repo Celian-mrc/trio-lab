@@ -97,6 +97,7 @@ th {
   text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;
 }
 tbody tr:hover { background: color-mix(in srgb, var(--muted) 55%, transparent); }
+tbody tr.low-sample { opacity: 0.45; }
 th a { color: var(--muted-fg); text-decoration: none; }
 th a:hover { color: var(--foreground); }
 th a.active { color: var(--foreground); }
