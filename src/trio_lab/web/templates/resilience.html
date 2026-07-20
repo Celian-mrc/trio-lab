@@ -37,16 +37,37 @@
       {% endfor %}
     </select>
   </label>
+  <label>Games min. <input type="number" name="min_games" value="{{ min_games }}" min="0" step="1"></label>
+  <label>Écart (%)
+    <span class="threshold-range">
+      <input type="number" name="min_gap" value="{{ min_gap }}" placeholder="min" min="-100" max="100" step="0.1">
+      <input type="number" name="max_gap" value="{{ max_gap }}" placeholder="max" min="-100" max="100" step="0.1">
+    </span>
+  </label>
+  <label>WR en retard (%)
+    <span class="threshold-range">
+      <input type="number" name="min_wr_behind" value="{{ min_wr_behind }}" placeholder="min" min="0" max="100" step="0.1">
+      <input type="number" name="max_wr_behind" value="{{ max_wr_behind }}" placeholder="max" min="0" max="100" step="0.1">
+    </span>
+  </label>
+  <label>WR en avance (%)
+    <span class="threshold-range">
+      <input type="number" name="min_wr_ahead" value="{{ min_wr_ahead }}" placeholder="min" min="0" max="100" step="0.1">
+      <input type="number" name="max_wr_ahead" value="{{ max_wr_ahead }}" placeholder="max" min="0" max="100" step="0.1">
+    </span>
+  </label>
   <input type="hidden" name="sort" value="{{ sort }}">
   <input type="hidden" name="dir" value="{{ dir }}">
   <button type="submit">Filtrer</button>
 </form>
 
-<p class="meta">{{ rows | length }} champion{{ 's' if rows | length != 1 }}.</p>
+<p class="meta">{{ rows | length }} champion{{ 's' if rows | length != 1 }} — champions avec moins de
+  {{ resilience_min_games_per_side }} games d'un des 2 côtés exclus (écart trop bruité pour être un
+  signal).</p>
 
 {% if not rows %}
-<p class="empty">Rien à afficher — pas encore calculé pour cette fenêtre ({{ window }}), ou pas assez
-  de games des 2 côtés. Lancer
+<p class="empty">Rien à afficher — pas encore calculé pour cette fenêtre ({{ window }}), pas assez
+  de games des 2 côtés, ou filtres trop stricts. Lancer
   <code>python -m trio_lab.synergy.resilience --patches {{ window }}</code> pour la matérialiser.</p>
 {% else %}
 <table class="data">
@@ -62,7 +83,7 @@
   </thead>
   <tbody>
     {% for r in rows %}
-    <tr class="{{ 'low-sample' if r.low_sample }}">
+    <tr>
       <td class="trio-cell">
         <span class="champ">{% set c = champ(r.champion_id) %}{% if c.icon_url %}<img src="{{ c.icon_url }}" alt="" width="24" height="24">{% endif %}{{ r.name }}</span>
       </td>
@@ -81,7 +102,5 @@
     {% endfor %}
   </tbody>
 </table>
-<p class="meta">Lignes grisées : moins de {{ resilience_min_games_per_side }} games d'un des 2 côtés —
-  écart trop bruité pour être lu comme un signal, affiché quand même plutôt que masqué.</p>
 {% endif %}
 {% endblock %}

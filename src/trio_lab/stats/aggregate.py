@@ -116,12 +116,43 @@ _DUO_STAT_SUMS_SQL = """
                / (m.game_duration_s / 60.0)), count(t.cc_time_s)
 """
 
+# Diff gold@15 de l'ÉQUIPE ENTIÈRE (5 joueurs, pas seulement le trio/duo —
+# retour utilisateur 2026-07-20). Colonne dédiée team_gold15_sum/n, PAS mêlée
+# à gold15_sum (qui reste le gold du trio/duo lui-même) : sourcée sur
+# match_role_stats, qui ne couvre QUE le patch 16.14+ (pas de backfill
+# possible, cf. migrations 023/030) — NULL sur les patchs plus anciens, se
+# peuple tout seul au fil du temps. Même calcul que
+# `synergy.resilience`/`team_gold_diff_15` : somme des 5 gold_15 vs l'équipe
+# adverse au même rôle, HAVING count(*) = 5 pour exiger les 5 rôles présents
+# des 2 côtés (sinon comparaison biaisée). LEFT JOIN (comme _DUO_SQL
+# ci-dessous, jamais INNER) : une CTE, jointe une fois par requête plutôt que
+# recalculée par ligne.
+_TEAM_GOLD_CTE_SQL = """
+    team_gold_agg AS (
+        SELECT picks.match_id, picks.team_id,
+               sum(picks.gold_15) - sum(picks.enemy_gold_15) AS team_gold_diff_15
+        FROM (
+            SELECT mrs.match_id, mrs.team_id, mrs.gold_15, enemy.gold_15 AS enemy_gold_15
+            FROM match_role_stats mrs
+            JOIN match_role_stats enemy
+                ON enemy.match_id = mrs.match_id AND enemy.role = mrs.role
+               AND enemy.team_id <> mrs.team_id
+            WHERE mrs.gold_15 IS NOT NULL AND enemy.gold_15 IS NOT NULL
+        ) picks
+        GROUP BY picks.match_id, picks.team_id
+        HAVING count(*) = 5
+    )
+"""
+_TEAM_GOLD_COLUMNS = "team_gold15_sum, team_gold15_n"
+_TEAM_GOLD_SQL = "sum(tg.team_gold_diff_15), count(tg.team_gold_diff_15)"
+
 _DUO_SQL = f"""
+    WITH {_TEAM_GOLD_CTE_SQL}
     INSERT INTO agg_duo (patch, platform, roles, champ_a, champ_b, games, wins,
-                         {_STAT_SUMS_COLUMNS}, {_DUO_CC_POSITION_COLUMNS})
+                         {_STAT_SUMS_COLUMNS}, {_DUO_CC_POSITION_COLUMNS}, {_TEAM_GOLD_COLUMNS})
     SELECT m.patch, m.platform, d.roles, d.champ_a, d.champ_b,
            count(*), count(*) FILTER (WHERE t.win),
-           {_DUO_STAT_SUMS_SQL}, {_DUO_CC_POSITION_SQL}
+           {_DUO_STAT_SUMS_SQL}, {_DUO_CC_POSITION_SQL}, {_TEAM_GOLD_SQL}
     FROM match_trio_stats t
     JOIN matches m USING (match_id)
     CROSS JOIN LATERAL (VALUES
@@ -140,6 +171,7 @@ _DUO_SQL = f"""
         ON ea.match_id = t.match_id AND ea.team_id <> t.team_id AND ea.role = d.role_a
     LEFT JOIN match_role_stats eb
         ON eb.match_id = t.match_id AND eb.team_id = ea.team_id AND eb.role = d.role_b
+    LEFT JOIN team_gold_agg tg ON tg.match_id = t.match_id AND tg.team_id = t.team_id
     WHERE m.patch = %(patch)s
     GROUP BY m.patch, m.platform, d.roles, d.champ_a, d.champ_b
 """
@@ -153,8 +185,9 @@ _DUO_SQL = f"""
 # sur match_id/team_id) — stats d'équipe déjà calculées là, identiques quelle
 # que soit la paire de rôles, pas dupliquées ici.
 _DUO_EXT_SQL = f"""
+    WITH {_TEAM_GOLD_CTE_SQL}
     INSERT INTO agg_duo (patch, platform, roles, champ_a, champ_b, games, wins,
-                         {_STAT_SUMS_COLUMNS}, {_DUO_CC_POSITION_COLUMNS})
+                         {_STAT_SUMS_COLUMNS}, {_DUO_CC_POSITION_COLUMNS}, {_TEAM_GOLD_COLUMNS})
     SELECT m.patch, m.platform, pair.roles, ra.champion_id, rb.champion_id,
            count(*), count(*) FILTER (WHERE mt.win),
            sum((ra.gold_5 + rb.gold_5) - (ea.gold_5 + eb.gold_5)),
@@ -170,7 +203,8 @@ _DUO_EXT_SQL = f"""
            count(*) FILTER (WHERE mt.first_tower), count(mt.first_tower),
            sum((ra.cc_time_s + rb.cc_time_s) / (m.game_duration_s / 60.0)), count(*),
            sum(ra.cc_time_s / (m.game_duration_s / 60.0)), count(ra.cc_time_s),
-           sum(rb.cc_time_s / (m.game_duration_s / 60.0)), count(rb.cc_time_s)
+           sum(rb.cc_time_s / (m.game_duration_s / 60.0)), count(rb.cc_time_s),
+           {_TEAM_GOLD_SQL}
     FROM matches m
     JOIN match_trio_stats mt ON mt.match_id = m.match_id
     CROSS JOIN LATERAL (VALUES
@@ -187,19 +221,22 @@ _DUO_EXT_SQL = f"""
         ON ea.match_id = m.match_id AND ea.team_id <> mt.team_id AND ea.role = pair.role_a
     JOIN match_role_stats eb
         ON eb.match_id = m.match_id AND eb.team_id = ea.team_id AND eb.role = pair.role_b
+    LEFT JOIN team_gold_agg tg ON tg.match_id = m.match_id AND tg.team_id = mt.team_id
     WHERE m.patch = %(patch)s
     GROUP BY m.patch, m.platform, pair.roles, ra.champion_id, rb.champion_id
 """
 
 _TRIO_SQL = f"""
+    WITH {_TEAM_GOLD_CTE_SQL}
     INSERT INTO agg_trio (patch, platform, jgl_champion, mid_champion, sup_champion,
                           games, wins,
-                          {_STAT_SUMS_COLUMNS}, {_TRIO_CC_POSITION_COLUMNS})
+                          {_STAT_SUMS_COLUMNS}, {_TRIO_CC_POSITION_COLUMNS}, {_TEAM_GOLD_COLUMNS})
     SELECT m.patch, m.platform, t.jgl_champion, t.mid_champion, t.sup_champion,
            count(*), count(*) FILTER (WHERE t.win),
-           {_STAT_SUMS_SQL}, {_TRIO_CC_POSITION_SQL}
+           {_STAT_SUMS_SQL}, {_TRIO_CC_POSITION_SQL}, {_TEAM_GOLD_SQL}
     FROM match_trio_stats t
     JOIN matches m USING (match_id)
+    LEFT JOIN team_gold_agg tg ON tg.match_id = t.match_id AND tg.team_id = t.team_id
     WHERE m.patch = %(patch)s
     GROUP BY m.patch, m.platform, t.jgl_champion, t.mid_champion, t.sup_champion
 """

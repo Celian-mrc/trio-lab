@@ -425,6 +425,25 @@ def test_html_pages_render(pg_sync, client):
     assert "Héraut" in duo_detail.text
 
 
+def test_tierlist_and_duos_pages_show_team_gold15(pg_sync, client):
+    """Diff gold@15 de l'ÉQUIPE ENTIÈRE (migration 032, retour utilisateur
+    2026-07-20), en plus du gold@15 du trio/duo — NULL affiché comme '—'
+    quand match_role_stats n'a pas la donnée pour ce patch (colonne 2 dans
+    `_seed_scores`, jamais mise à jour)."""
+    _seed_scores(pg_sync)
+    pg_sync.execute(
+        "UPDATE score_trio SET team_gold_diff_15 = -320"
+        " WHERE jgl_champion = 1 AND mid_champion = 2 AND sup_champion = 3"
+    )
+    pg_sync.execute("UPDATE score_duo SET team_gold_diff_15 = 210 WHERE roles = 'jgl_mid'")
+    home = client.get("/")
+    assert "Gold@15 équipe" in home.text
+    assert "-320" in home.text
+    duos = client.get("/duos")
+    assert "Gold@15 équipe" in duos.text
+    assert "+210" in duos.text
+
+
 def test_champion_page_shows_baseline_partners_and_trios(pg_sync, client):
     _seed_scores(pg_sync)  # score_trio (1,2,3) + score_duo jgl_mid (1,2), tier='faible'
     _seed_matches(pg_sync)  # 2 matchs du trio (1,2,3) : champion 1 en jungle dans les 2
@@ -1053,8 +1072,8 @@ def test_resilience_page_shows_per_champion_ahead_behind_gap(pg_sync, client):
     )
     # Champion 1 (Lee Sin) JUNGLE : très résilient (WR haut des 2 côtés,
     # écart faible) ; champion 4 (Vi) JUNGLE : dépend fortement de l'avance
-    # (écart large) — sous le seuil de fiabilité (games < 30) pour tester le
-    # grisage sans le masquer.
+    # (écart large) — sous le seuil de fiabilité (games < 30), pour vérifier
+    # qu'il est exclu plutôt que grisé (retour utilisateur 2026-07-20).
     pg_sync.execute(
         "INSERT INTO score_champion_resilience (window_label, role, champion_id, factor,"
         " games_ahead, wins_ahead, games_behind, wins_behind)"
@@ -1067,10 +1086,8 @@ def test_resilience_page_shows_per_champion_ahead_behind_gap(pg_sync, client):
     assert "70 %" in resp.text  # WR en avance, champion 1
     assert "60 %" in resp.text  # WR en retard, champion 1
     # Champion 4 : sous le seuil de fiabilité des 2 côtés (10 < 30 games) —
-    # grisé (classe low-sample) SUR SA LIGNE précisément, jamais masqué.
-    vi_row = resp.text[resp.text.rindex("<tr", 0, resp.text.index("Vi")) :]
-    assert 'class="low-sample"' in vi_row.split(">", 1)[0]
-    assert "90 %" in resp.text  # WR en avance, champion 4 (9/10)
+    # n'apparaît plus du tout dans la page (exclu, pas juste grisé).
+    assert "Vi" not in resp.text
 
     # Facteur inconnu / rôle inconnu : 404, pas un crash silencieux.
     assert client.get("/resilience", params={"factor": "inconnu"}).status_code == 404
@@ -1080,6 +1097,39 @@ def test_resilience_page_shows_per_champion_ahead_behind_gap(pg_sync, client):
         ).status_code
         == 404
     )
+
+
+def test_resilience_page_min_max_filters(pg_sync, client):
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    # Lee Sin (champ 1) : résilient, écart faible (70 % vs 60 %, gap 10 %).
+    # Vi (champ 4) : dépendant de l'avance, écart large (90 % vs 20 %, gap 70 %).
+    pg_sync.execute(
+        "INSERT INTO score_champion_resilience (window_label, role, champion_id, factor,"
+        " games_ahead, wins_ahead, games_behind, wins_behind)"
+        " VALUES ('16.13', 'JUNGLE', 1, 'team_gold_diff_15', 100, 70, 100, 60),"
+        "        ('16.13', 'JUNGLE', 4, 'team_gold_diff_15', 100, 90, 100, 20)"
+    )
+    # max_gap=30 : ne garde que Lee Sin (gap 10 %), exclut Vi (gap 70 %).
+    resp = client.get("/resilience", params={"factor": "team_gold_diff_15", "max_gap": "30"})
+    assert resp.status_code == 200
+    assert "Lee Sin" in resp.text
+    assert "Vi" not in resp.text
+
+    # min_wr_behind=50 : ne garde que Lee Sin (WR en retard 60 %), exclut Vi (20 %).
+    resp = client.get("/resilience", params={"factor": "team_gold_diff_15", "min_wr_behind": "50"})
+    assert "Lee Sin" in resp.text
+    assert "Vi" not in resp.text
+
+    # min_games=201 : dépasse le total des 2 (200 games chacun) — page vide.
+    resp = client.get("/resilience", params={"factor": "team_gold_diff_15", "min_games": "201"})
+    assert "Lee Sin" not in resp.text
+    assert "Vi" not in resp.text
+    assert "Rien à afficher" in resp.text
 
 
 def test_flex_page_detects_off_role_resource_deviation(pg_sync, client):

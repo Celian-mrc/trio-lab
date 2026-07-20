@@ -66,10 +66,16 @@ SCALING_MIN_BUCKETS = 3
 
 # Stat de score → paire (somme, dénominateur) d'agg_trio/agg_duo. Chaque stat
 # a son propre n : gold_diff_10 est NULL si la partie finit avant 10 min.
+# team_gold_diff_15 : diff de gold@15 de l'ÉQUIPE ENTIÈRE (5 joueurs, retour
+# utilisateur 2026-07-20), pas seulement le trio/duo (gold_diff_15) — sourcée
+# sur match_role_stats (migration 032), sans historique profond (patch 16.14+
+# seulement) : n reste souvent à 0 sur les patchs plus anciens de la fenêtre,
+# `_weighted_stats` retombe alors sur None (jamais d'erreur).
 STAT_PAIRS: dict[str, tuple[str, str]] = {
     "gold_diff_5": ("gold5_sum", "gold5_n"),
     "gold_diff_10": ("gold10_sum", "gold10_n"),
     "gold_diff_15": ("gold15_sum", "gold15_n"),
+    "team_gold_diff_15": ("team_gold15_sum", "team_gold15_n"),
     "vision_score": ("vision_sum", "vision_n"),
     "drakes": ("drakes_sum", "drakes_n"),
     "soul_rate": ("soul_sum", "soul_n"),

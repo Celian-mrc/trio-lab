@@ -128,8 +128,9 @@ RESILIENCE_FACTOR_LABELS = {
     "first_blood_team": "Premier sang d'équipe",
 }
 # En dessous de ce nombre de games d'un côté (avance OU retard), l'écart de
-# WR est trop bruité pour être lu comme un signal — grisé, jamais masqué
-# (même principe que DRAFT_MIN_GAMES_EFF).
+# WR est trop bruité pour être lu comme un signal — exclu, pas juste grisé
+# (retour utilisateur 2026-07-20 : une ligne illisible n'apporte rien, autant
+# ne pas l'afficher plutôt que de la garder en gris).
 RESILIENCE_MIN_GAMES_PER_SIDE = 30
 # Détecteur de picks flex (Phase 8) : rôles Riot → libellé, pour l'affichage
 # de /flex (contrairement à ROLE_LABELS, qui indexe sur les codes courts).
@@ -1191,7 +1192,20 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         "games": "desc",
     }
 
-    def _resilience_rows(conn, window: str, factor: str, *, role: str | None) -> list[dict]:
+    def _resilience_rows(
+        conn,
+        window: str,
+        factor: str,
+        *,
+        role: str | None,
+        min_games: int,
+        min_gap: float | None,
+        max_gap: float | None,
+        min_wr_ahead: float | None,
+        max_wr_ahead: float | None,
+        min_wr_behind: float | None,
+        max_wr_behind: float | None,
+    ) -> list[dict]:
         rows = queries.champion_resilience(conn, window, factor, role=role)
         result = []
         for r in rows:
@@ -1199,8 +1213,28 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             games_behind, wins_behind = r["games_behind"], r["wins_behind"]
             if games_ahead == 0 or games_behind == 0:
                 continue  # pas de comparaison possible sans les 2 côtés
+            if (
+                games_ahead < RESILIENCE_MIN_GAMES_PER_SIDE
+                or games_behind < RESILIENCE_MIN_GAMES_PER_SIDE
+            ):
+                continue  # écart trop bruité pour être un signal (retour utilisateur 2026-07-20)
+            if games_ahead + games_behind < min_games:
+                continue
             wr_ahead = wins_ahead / games_ahead
             wr_behind = wins_behind / games_behind
+            gap = wr_ahead - wr_behind
+            if min_gap is not None and gap < min_gap:
+                continue
+            if max_gap is not None and gap > max_gap:
+                continue
+            if min_wr_ahead is not None and wr_ahead < min_wr_ahead:
+                continue
+            if max_wr_ahead is not None and wr_ahead > max_wr_ahead:
+                continue
+            if min_wr_behind is not None and wr_behind < min_wr_behind:
+                continue
+            if max_wr_behind is not None and wr_behind > max_wr_behind:
+                continue
             c = champ(r["champion_id"])
             result.append(
                 {
@@ -1210,13 +1244,9 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                     "role_label": RIOT_ROLE_LABELS[r["role"]],
                     "wr_ahead": wr_ahead,
                     "wr_behind": wr_behind,
-                    "gap": wr_ahead - wr_behind,
+                    "gap": gap,
                     "games_ahead": games_ahead,
                     "games_behind": games_behind,
-                    "low_sample": (
-                        games_ahead < RESILIENCE_MIN_GAMES_PER_SIDE
-                        or games_behind < RESILIENCE_MIN_GAMES_PER_SIDE
-                    ),
                 }
             )
         return result
@@ -1230,16 +1260,57 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         role: str | None = None,
         sort: str = "gap",
         dir: str = "asc",
+        min_games: int = Query(0, ge=0),
+        min_gap: str | None = None,
+        max_gap: str | None = None,
+        min_wr_ahead: str | None = None,
+        max_wr_ahead: str | None = None,
+        min_wr_behind: str | None = None,
+        max_wr_behind: str | None = None,
     ):
         if factor not in RESILIENCE_FACTOR_LABELS:
             raise HTTPException(404, f"facteur inconnu : {factor!r}")
         if role and role not in RIOT_ROLE_LABELS:
             raise HTTPException(404, f"rôle inconnu : {role!r}")
         sort = sort if sort in _RESILIENCE_SORT_KEYS else "gap"
+        gap_bounds = (
+            _parse_optional_float(min_gap, ge=-100, le=100),
+            _parse_optional_float(max_gap, ge=-100, le=100),
+        )
+        wr_ahead_bounds = (
+            _parse_optional_float(min_wr_ahead, ge=0, le=100),
+            _parse_optional_float(max_wr_ahead, ge=0, le=100),
+        )
+        wr_behind_bounds = (
+            _parse_optional_float(min_wr_behind, ge=0, le=100),
+            _parse_optional_float(max_wr_behind, ge=0, le=100),
+        )
         with request.app.state.pool.connection() as conn:
             window, platform, context = resolve_context(conn, window, platform)
-            rows = _resilience_rows(conn, window, factor, role=role)
+            rows = _resilience_rows(
+                conn,
+                window,
+                factor,
+                role=role,
+                min_games=min_games,
+                min_gap=None if gap_bounds[0] is None else gap_bounds[0] / 100.0,
+                max_gap=None if gap_bounds[1] is None else gap_bounds[1] / 100.0,
+                min_wr_ahead=None if wr_ahead_bounds[0] is None else wr_ahead_bounds[0] / 100.0,
+                max_wr_ahead=None if wr_ahead_bounds[1] is None else wr_ahead_bounds[1] / 100.0,
+                min_wr_behind=None if wr_behind_bounds[0] is None else wr_behind_bounds[0] / 100.0,
+                max_wr_behind=None if wr_behind_bounds[1] is None else wr_behind_bounds[1] / 100.0,
+            )
         rows.sort(key=_RESILIENCE_SORT_KEYS[sort], reverse=(dir == "desc"))
+
+        filter_params = {
+            "min_games": min_games or "",
+            "min_gap": min_gap or "",
+            "max_gap": max_gap or "",
+            "min_wr_ahead": min_wr_ahead or "",
+            "max_wr_ahead": max_wr_ahead or "",
+            "min_wr_behind": min_wr_behind or "",
+            "max_wr_behind": max_wr_behind or "",
+        }
 
         def _sort_url(key: str) -> str:
             next_dir = (
@@ -1252,6 +1323,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 "role": role or "",
                 "sort": key,
                 "dir": next_dir,
+                **filter_params,
             }
             return "/resilience?" + urlencode({k: v for k, v in params.items() if v})
 
@@ -1264,6 +1336,13 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 "rows": rows,
                 "factor": factor,
                 "role": role or "",
+                "min_games": min_games,
+                "min_gap": min_gap or "",
+                "max_gap": max_gap or "",
+                "min_wr_ahead": min_wr_ahead or "",
+                "max_wr_ahead": max_wr_ahead or "",
+                "min_wr_behind": min_wr_behind or "",
+                "max_wr_behind": max_wr_behind or "",
                 "sort": sort,
                 "dir": dir,
                 "sort_urls": sort_urls,

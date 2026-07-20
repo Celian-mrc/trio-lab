@@ -394,9 +394,28 @@ gagner") avec les données déjà en place.
       indépendant). CC/min écarté malgré son indépendance du gold
       (r=0,084) : trop faiblement corrélé à la victoire (r=0,092) pour
       produire des écarts par champion fiables plutôt que du bruit —
-      candidat d'extension si le volume grandit. Lignes grisées sous
-      `RESILIENCE_MIN_GAMES_PER_SIDE` (30 games d'un côté), jamais
-      masquées. Même piège Postgres/contournement que win_factors/gold_factors.
+      candidat d'extension si le volume grandit. Même piège
+      Postgres/contournement que win_factors/gold_factors.
+- [x] **Révision `/resilience` (2026-07-20, retour utilisateur)** : lignes
+      sous `RESILIENCE_MIN_GAMES_PER_SIDE` désormais **exclues**, plus
+      grisées (une ligne illisible n'apporte rien) — filtres par seuil
+      min/max ajoutés (games total, écart, WR en avance/en retard),
+      calculés en Python après lecture (volume trop petit pour justifier du
+      SQL dédié, contrairement aux 13 colonnes de `/`/`/duos`).
+- [x] **Badges de rôle top/adc gris (2026-07-20, retour utilisateur)** :
+      `.role-jgl`/`.role-mid`/`.role-sup` avaient une couleur, `.role-top`/
+      `.role-bot` non — ajoutées (`style.css`).
+- [x] **Diff gold@15 de l'équipe entière sur `/` et `/duos` (2026-07-20,
+      `migrations/032_team_gold15.sql`, retour utilisateur)** : jusqu'ici
+      seul le gold@15 du trio/duo lui-même était affiché. Nouvelle colonne
+      "Gold@15 équipe", sourcée sur `match_role_stats` (5 rôles, LEFT JOIN
+      jamais INNER — même précaution que le fix des 3 duos internes
+      ci-dessus) : NULL sur les patchs antérieurs à 16.14 (pas de backfill
+      possible), se peuple tout seul au fil des patchs suivants. Colonnes
+      dédiées `team_gold15_sum/n` (agg_trio/agg_duo) et `team_gold_diff_15`
+      (score_trio/score_duo) — ajout d'une entrée à `compute.STAT_PAIRS`
+      suffit à la faire traverser tout le pipeline de moyenne pondérée
+      fenêtre existant, aucune autre logique dupliquée.
 
 Phase 8 close pour l'instant (draft, insights, résilience, flex) — prochaine idée à définir.
 

@@ -186,6 +186,49 @@ async def test_refresh_agg_duo_ext_pairs_from_role_stats(pg_conn):
     assert await cur.fetchone() == (0, 1)
 
 
+async def test_refresh_team_gold15_populated_from_role_stats(pg_conn):
+    """Diff gold@15 de l'ÉQUIPE ENTIÈRE (5 joueurs, migration 032, retour
+    utilisateur 2026-07-20), distinct de gold15_sum (le trio/duo seul).
+    Même match que `test_refresh_agg_duo_ext_pairs_from_role_stats` : team100
+    pids 1-5, team200 pids 6-10, gold_15(pid) = 15*(100+pid)."""
+    await _ingest_with_role_stats(pg_conn, "EUW1_A", winning_team=100)
+    aggregate.refresh("16.13", dsn=TEST_DSN)
+
+    # team100 : Σ15*(101..105) = 7725 ; team200 : Σ15*(106..110) = 8100.
+    # diff team100 = 7725 − 8100 = −375.
+    cur = await pg_conn.execute(
+        "SELECT team_gold15_sum, team_gold15_n FROM agg_trio"
+        " WHERE jgl_champion = 2 AND mid_champion = 3 AND sup_champion = 5"
+    )
+    assert await cur.fetchone() == (pytest.approx(-375.0), 1)
+
+    # Même valeur pour un duo interne au trio (team-level, pas pair-spécifique
+    # comme gold15_sum) et pour une paire étendue (top_jgl).
+    cur = await pg_conn.execute(
+        "SELECT team_gold15_sum, team_gold15_n FROM agg_duo"
+        " WHERE roles = 'jgl_mid' AND champ_a = 2 AND champ_b = 3"
+    )
+    assert await cur.fetchone() == (pytest.approx(-375.0), 1)
+    cur = await pg_conn.execute(
+        "SELECT team_gold15_sum, team_gold15_n FROM agg_duo"
+        " WHERE roles = 'top_jgl' AND champ_a = 1 AND champ_b = 2"
+    )
+    assert await cur.fetchone() == (pytest.approx(-375.0), 1)
+
+
+async def test_refresh_team_gold15_null_without_role_stats(pg_conn):
+    """Sans match_role_stats (comme gold15_sum pair-spécifique) : NULL, jamais
+    une erreur — LEFT JOIN, pas INNER (même principe que _DUO_SQL)."""
+    await _ingest(pg_conn, "EUW1_A", winning_team=100)  # pas de role_stats
+    aggregate.refresh("16.13", dsn=TEST_DSN)
+
+    cur = await pg_conn.execute(
+        "SELECT team_gold15_sum, team_gold15_n FROM agg_trio"
+        " WHERE jgl_champion = 2 AND mid_champion = 3 AND sup_champion = 5"
+    )
+    assert await cur.fetchone() == (None, 0)
+
+
 async def test_refresh_duo_internal_pairs_use_pair_specific_gold_when_role_stats_available(
     pg_conn,
 ):

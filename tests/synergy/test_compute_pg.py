@@ -239,6 +239,33 @@ async def test_cc_per_member_materialized_for_duo_and_trio(pg_conn):
     assert (champ_a_cc, champ_b_cc) == (pytest.approx(0.125), pytest.approx(0.375))
 
 
+async def test_team_gold15_materialized_for_duo_and_trio(pg_conn):
+    """Diff gold@15 de l'équipe entière (migration 032, retour utilisateur
+    2026-07-20) : colonne dédiée team_gold15_sum/n, indépendante de
+    gold15_sum (le trio/duo seul) — moyenne pondérée fenêtre comme les
+    autres stats de STAT_PAIRS."""
+    await _seed(pg_conn)
+    await pg_conn.execute("UPDATE agg_trio SET team_gold15_sum = -750, team_gold15_n = 2")
+    await pg_conn.execute(
+        "UPDATE agg_duo SET team_gold15_sum = -300, team_gold15_n = 4 WHERE roles = 'jgl_mid'"
+    )
+    compute.refresh(windows.make_window(["16.13"]), dsn=TEST_DSN)
+
+    cur = await pg_conn.execute("SELECT team_gold_diff_15 FROM score_trio WHERE platform = 'euw1'")
+    assert (await cur.fetchone())[0] == pytest.approx(-375.0)
+
+    cur = await pg_conn.execute(
+        "SELECT team_gold_diff_15 FROM score_duo WHERE roles = 'jgl_mid' AND platform = 'euw1'"
+    )
+    assert (await cur.fetchone())[0] == pytest.approx(-75.0)
+
+    # jgl_sup n'a pas été mis à jour : reste NULL (pas d'erreur de division).
+    cur = await pg_conn.execute(
+        "SELECT team_gold_diff_15 FROM score_duo WHERE roles = 'jgl_sup' AND platform = 'euw1'"
+    )
+    assert (await cur.fetchone())[0] is None
+
+
 async def test_all_platforms_view_combines_and_averages_stats(pg_conn):
     """La vue 'all' somme les agrégats entre plateformes ; les stats sont moyennées."""
     await _seed(pg_conn, platform="euw1")
