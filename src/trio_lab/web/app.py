@@ -1389,17 +1389,46 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
     # (match_role_stats, jeune) dévie de la moyenne du rôle — signal de méta
     # hybride (ex. bruiser/skirmisher en support), pas forcément un artefact.
 
+    # Colonnes triables (retour utilisateur 2026-07-20 : pas de tri du tout
+    # avant) — un seul critère actif à la fois, pas le tri multi-colonnes
+    # façon tableur de `/`/`/duos` (pas nécessaire, le volume de picks est
+    # petit et déjà filtré par les seuils de fiabilité). `deviation`/
+    # `dmg_deviation` trient par MAGNITUDE (abs), pas par signe — sinon
+    # "au-dessus" et "en dessous" de la moyenne s'alterneraient plutôt que
+    # de classer par écart le plus marquant en premier. `None` (pas de
+    # donnée dégâts/gold) trié en dernier plutôt que planter le tri.
+    _FLEX_SORT_KEYS: dict[str, object] = {
+        "deviation": lambda p: abs(p["gold_deviation"]),
+        "dmg_deviation": lambda p: (
+            abs(p["dmg_deviation"]) if p["dmg_deviation"] is not None else -1.0
+        ),
+        "wr_secondary": lambda p: p["wr_secondary"],
+        "share": lambda p: p["share"],
+        "games": lambda p: p["games_role"],
+    }
+    _FLEX_DEFAULT_DIR = {
+        "deviation": "desc",
+        "dmg_deviation": "desc",
+        "wr_secondary": "desc",
+        "share": "desc",
+        "games": "desc",
+    }
+
     def _flex_picks(conn, window: str, platform: str, *, role: str | None) -> list[dict]:
         distribution = queries.champion_role_distribution(conn, window, platform)
         totals: dict[int, int] = {}
         primary_role: dict[int, str] = {}
         primary_games: dict[int, int] = {}
+        role_totals: dict[str, list[int]] = {}  # role -> [games, wins], baseline WR du rôle
         for row in distribution:
-            cid, games = row["champion_id"], row["games"]
+            cid, games, wins = row["champion_id"], row["games"], row["wins"]
             totals[cid] = totals.get(cid, 0) + games
             if games > primary_games.get(cid, -1):
                 primary_games[cid] = games
                 primary_role[cid] = row["role"]
+            role_bucket = role_totals.setdefault(row["role"], [0, 0])
+            role_bucket[0] += games
+            role_bucket[1] += wins
 
         profiles = {
             (r["champion_id"], r["role"]): r
@@ -1411,7 +1440,12 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
 
         picks: list[dict] = []
         for row in distribution:
-            cid, row_role, games = row["champion_id"], row["role"], row["games"]
+            cid, row_role, games, wins = (
+                row["champion_id"],
+                row["role"],
+                row["games"],
+                row["wins"],
+            )
             if role and row_role != role:
                 continue
             if row_role == primary_role[cid] or games < FLEX_MIN_ROLE_GAMES:
@@ -1424,11 +1458,21 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             if profile is None or base is None or not base["avg_gold_15"]:
                 continue  # pas (encore) assez de match_role_stats pour ce rôle
             gold_ratio = profile["avg_gold_15"] / base["avg_gold_15"]
-            deviation = abs(gold_ratio - 1)
-            if deviation < FLEX_MIN_DEVIATION:
+            gold_deviation = gold_ratio - 1  # signé : + au-dessus, - en dessous de la moyenne
+            if abs(gold_deviation) < FLEX_MIN_DEVIATION:
                 continue  # profil ~= la moyenne du rôle : pas un vrai signal hybride
             name = champ(cid).name
-            direction = "au-dessus" if gold_ratio > 1 else "en dessous"
+            direction = "au-dessus" if gold_deviation > 0 else "en dessous"
+            base_dmg_per_gold = base["avg_dmg_per_gold"]
+            dmg_deviation = (
+                profile["avg_dmg_per_gold"] / base_dmg_per_gold - 1
+                if base_dmg_per_gold and profile["avg_dmg_per_gold"] is not None
+                else None
+            )
+            wr_secondary = wins / games
+            role_games, role_wins = role_totals[row_role]
+            wr_baseline = role_wins / role_games if role_games else None
+            wr_deviation = wr_secondary - wr_baseline if wr_baseline is not None else None
             picks.append(
                 {
                     "champion_id": cid,
@@ -1441,19 +1485,18 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                     "games_role": games,
                     "games_total": totals[cid],
                     "profile_n": profile["n"],
-                    "gold_ratio": gold_ratio,
-                    "deviation": deviation,
+                    "gold_deviation": gold_deviation,
                     "direction": direction,
-                    "dmg_per_gold": profile["avg_dmg_per_gold"],
-                    "baseline_dmg_per_gold": base["avg_dmg_per_gold"],
+                    "dmg_deviation": dmg_deviation,
+                    "wr_secondary": wr_secondary,
+                    "wr_deviation": wr_deviation,
                     "sentence": (
                         f"{name} joue {RIOT_ROLE_LABELS[row_role]} dans {100 * share:.0f} %"
                         f" de ses games ({games}/{totals[cid]}) — profil de gold"
-                        f" {100 * deviation:.0f} % {direction} de la moyenne du rôle."
+                        f" {100 * abs(gold_deviation):.0f} % {direction} de la moyenne du rôle."
                     ),
                 }
             )
-        picks.sort(key=lambda p: p["deviation"], reverse=True)
         return picks
 
     @app.get("/flex", response_class=HTMLResponse)
@@ -1462,14 +1505,42 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         window: str | None = None,
         platform: str | None = None,
         role: str | None = None,
+        sort: str = "deviation",
+        dir: str = "desc",
     ):
         if role and role not in RIOT_ROLE_LABELS:
             raise HTTPException(404, f"rôle inconnu : {role!r}")
+        sort = sort if sort in _FLEX_SORT_KEYS else "deviation"
         with request.app.state.pool.connection() as conn:
             window, platform, context = resolve_context(conn, window, platform)
             picks = _flex_picks(conn, window, platform, role=role)
+        picks.sort(key=_FLEX_SORT_KEYS[sort], reverse=(dir == "desc"))
+
+        def _sort_url(key: str) -> str:
+            next_dir = (
+                ("desc" if dir == "asc" else "asc") if sort == key else _FLEX_DEFAULT_DIR[key]
+            )
+            params = {
+                "window": window,
+                "platform": platform,
+                "role": role or "",
+                "sort": key,
+                "dir": next_dir,
+            }
+            return "/flex?" + urlencode({k: v for k, v in params.items() if v})
+
+        sort_urls = {key: _sort_url(key) for key in _FLEX_SORT_KEYS}
         return templates.TemplateResponse(
-            request, "flex.html", {**context, "picks": picks, "role": role or ""}
+            request,
+            "flex.html",
+            {
+                **context,
+                "picks": picks,
+                "role": role or "",
+                "sort": sort,
+                "dir": dir,
+                "sort_urls": sort_urls,
+            },
         )
 
     # --- API JSON ---

@@ -1202,8 +1202,9 @@ def test_flex_page_detects_off_role_resource_deviation(pg_sync, client):
     # Part des games en support : 150 / (300+150) = 33.3 %.
     assert "33.3 %" in resp.text
     # Gold@15 support (5200) vs moyenne du rôle (40×5200+40×4400)/80 = 4800 :
-    # ratio = 5200/4800 ≈ 1.08.
-    assert "×1.08" in resp.text
+    # ratio = 5200/4800 ≈ 1.08 → écart signé +8 % (retour utilisateur
+    # 2026-07-20 : ×1.08 remplacé par un écart % coloré, plus parlant).
+    assert "+8 %" in resp.text
     # Phrase en langage clair, pas juste des chiffres bruts (retour utilisateur).
     assert "Lee Sin joue Support dans 33 % de ses games (150/450)" in resp.text
     # Filtre par rôle : Support seulement.
@@ -1253,3 +1254,64 @@ def test_flex_page_hides_deviation_below_threshold(pg_sync, client):
     assert resp.status_code == 200
     assert "0 pick" in resp.text
     assert "Lee Sin" not in resp.text
+
+
+def test_flex_page_wr_column_and_sortable_headers(pg_sync, client):
+    """WR du rôle secondaire + colonnes triables (retour utilisateur
+    2026-07-20). Lee Sin (1, Top principal) et Vi (4, Jungle principal) ont
+    tous deux Support en secondaire ; Ahri (2, Support principal) sert
+    seulement d'ancre de baseline (exclue des picks, son propre rôle
+    secondaire n'existe pas ici)."""
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    pg_sync.execute(
+        "INSERT INTO agg_champion (patch, platform, role, champion_id, games, wins) VALUES"
+        " ('16.13', 'euw1', 'TOP', 1, 300, 150),"
+        " ('16.13', 'euw1', 'UTILITY', 1, 150, 70),"  # Lee Sin support : WR 46.7 %
+        " ('16.13', 'euw1', 'JUNGLE', 4, 300, 150),"
+        " ('16.13', 'euw1', 'UTILITY', 4, 150, 140),"  # Vi support : WR 93.3 %
+        " ('16.13', 'euw1', 'UTILITY', 2, 500, 250)"  # Ahri : ancre baseline, exclue des picks
+    )
+    # gold_15/dmg_per_gold en Support : Lee Sin très au-dessus de la moyenne
+    # (dev +16 %), Vi au-dessus mais moins (dev +6 %) — teste que le tri par
+    # défaut (deviation desc) met Lee Sin en premier, mais que trier par WR
+    # inverse l'ordre (Vi gagne bien plus dans ce rôle).
+    for champ_id, gold_15, dmg_per_gold, count in (
+        (1, 6000, 2.0, 40),
+        (4, 5500, 1.0, 40),
+        (2, 4000, 1.5, 40),
+    ):
+        for i in range(count):
+            match_id = f"SORT_{champ_id}_{i}"
+            pg_sync.execute(
+                "INSERT INTO matches (match_id, platform, patch, game_version, queue_id,"
+                " game_creation, game_duration_s, winning_team)"
+                " VALUES (%s, 'euw1', '16.13', '16.13.1', 420, now(), 1800, 100)",
+                (match_id,),
+            )
+            pg_sync.execute(
+                "INSERT INTO match_role_stats (match_id, team_id, role, champion_id, win,"
+                " gold_15, dmg_per_gold) VALUES (%s, 100, 'UTILITY', %s, true, %s, %s)",
+                (match_id, champ_id, gold_15, dmg_per_gold),
+            )
+    resp = client.get("/flex")
+    assert resp.status_code == 200
+    # WR rôle secondaire affiché (47 % Lee Sin, 93 % Vi, arrondis) avec
+    # l'écart signé vs la moyenne du rôle (baseline = (70+140)/(150+150) = 70 %).
+    assert "47 %" in resp.text
+    assert "93 %" in resp.text
+    # Dégâts/gold vs moyenne : Lee Sin au-dessus (+33 %), Vi en dessous (-33 %).
+    assert "+33 %" in resp.text
+    assert "-33 %" in resp.text
+    # Tri par défaut (deviation desc) : Lee Sin (dev le plus large) avant Vi.
+    assert resp.text.index("Lee Sin") < resp.text.index("Vi")
+    # Trier par WR croissant : Lee Sin (WR plus faible) doit passer avant Vi.
+    resp_wr_asc = client.get("/flex", params={"sort": "wr_secondary", "dir": "asc"})
+    assert resp_wr_asc.text.index("Lee Sin") < resp_wr_asc.text.index("Vi")
+    # Trier par WR décroissant : Vi (WR plus haut) doit passer avant Lee Sin.
+    resp_wr_desc = client.get("/flex", params={"sort": "wr_secondary", "dir": "desc"})
+    assert resp_wr_desc.text.index("Vi") < resp_wr_desc.text.index("Lee Sin")

@@ -493,12 +493,17 @@ def champion_role_distribution(
     """Répartition des games d'un champion entre rôles (Phase 8, détecteur de
     picks flex) — `agg_champion`, historique complet retenu (contrairement à
     `match_role_stats`, jeune). Sert à distinguer le rôle principal des rôles
-    secondaires réellement joués, pas du bruit de troll pick isolé."""
+    secondaires réellement joués, pas du bruit de troll pick isolé.
+
+    `wins` (retour utilisateur 2026-07-20) : sert à afficher le WR réel du
+    pick flex dans son rôle secondaire, pas seulement son profil de
+    ressources — un pick qui "joue différemment" mais perd plus n'est pas
+    le même signal qu'un pick qui gagne autant ou plus."""
     patches = window.split("+")
     with conn.cursor(row_factory=dict_row) as cur:
         return cur.execute(
             """
-            SELECT champion_id, role, sum(games) AS games
+            SELECT champion_id, role, sum(games) AS games, sum(wins) AS wins
             FROM agg_champion
             WHERE patch = ANY(%(patches)s)
               AND (%(platform)s = 'all' OR platform = %(platform)s)

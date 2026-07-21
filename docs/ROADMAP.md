@@ -461,6 +461,26 @@ gagner") avec les données déjà en place.
       (score_trio/score_duo) — ajout d'une entrée à `compute.STAT_PAIRS`
       suffit à la faire traverser tout le pipeline de moyenne pondérée
       fenêtre existant, aucune autre logique dupliquée.
+- [x] **Révision `/flex` (2026-07-20, retour utilisateur)** : 3 défauts
+      remontés — colonnes non triables, `×0.85` peu parlant, utilité du
+      dégâts/gold questionnée. Corrigés ensemble :
+      - Colonnes triables (`sort`/`dir`, même mécanisme à seuil unique que
+        `/resilience` — pas le tri multi-colonnes façon tableur de `/`/
+        `/duos`, pas nécessaire sur ce volume déjà filtré).
+      - `×0.85`/`×1.08` remplacés par un écart % signé et coloré (`-15 %`),
+        cohérent avec le reste du site (`gold_diff`, `synergy`) et avec la
+        phrase de résumé déjà affichée sur chaque ligne.
+      - Dégâts/gold : même traitement (écart % coloré au lieu de 2 valeurs
+        brutes côte à côte) plutôt que retiré — reste une mesure distincte
+        du gold (efficacité, pas juste la quantité de ressources).
+      - Nouvelle colonne **WR du rôle secondaire** (`agg_champion.wins`,
+        pas encore sélectionnée avant ce jour) : répond à « est-ce que ce
+        pick flex gagne vraiment », question que le seul profil de
+        ressources ne peut pas poser (un profil qui dévie mais un WR qui
+        s'effondre n'est pas le même signal qu'un profil qui dévie ET
+        gagne). Baseline du rôle calculée gratuitement en réutilisant
+        `champion_role_distribution` déjà chargée en mémoire (pas de
+        requête SQL supplémentaire).
 
 Phase 8 close pour l'instant (draft, insights, résilience, flex) — prochaine idée à définir.
 

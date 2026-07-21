@@ -8,13 +8,17 @@
 <p class="meta"><strong>Lecture</strong> : « rôle secondaire » (colonne du même nom) = un rôle où ce
   champion a ≥ 100 games et ≥ 5 % de son temps de jeu, mais pas son rôle principal. « Gold@15 vs
   moyenne du rôle secondaire » compare toujours au RÔLE SECONDAIRE (pas au rôle principal) : son
-  gold moyen à 15 min quand il est joué dans ce rôle secondaire, divisé par le gold moyen de TOUS les
+  gold moyen à 15 min quand il est joué dans ce rôle secondaire, comparé au gold moyen de TOUS les
   champions dans ce même rôle secondaire. Ex. Twitch en Support : on compare son gold à la moyenne
-  des SUPPORTS, pas à la moyenne des ADC. ×1,08 = 8 % au-dessus de la moyenne du rôle secondaire
-  (joue plus « carry » que la norme de ce rôle) ; ×0,90 = 10 % en-dessous. Seuls les écarts ≥ 5 %
-  sont affichés — en-dessous, le profil est essentiellement celui du rôle, pas un vrai signal.</p>
-<p class="meta"><strong>Limite</strong> : le ratio ne porte que sur match_role_stats, déployée le
-  19/07/2026 — la profondeur grandit avec le temps, les chiffres sont encore jeunes.</p>
+  des SUPPORTS, pas à la moyenne des ADC. +8 % = joue plus « carry » que la norme de ce rôle ;
+  -10 % = en dessous. Seuls les écarts ≥ 5 % sont affichés — en-dessous, le profil est
+  essentiellement celui du rôle, pas un vrai signal. « WR rôle secondaire » répond à une question
+  différente : est-ce que ce pick flex GAGNE vraiment, pas seulement s'il joue différemment — un
+  profil de ressources qui dévie mais un WR qui s'effondre n'est pas le même signal qu'un profil qui
+  dévie ET qui gagne autant ou plus que la moyenne du rôle.</p>
+<p class="meta"><strong>Limite</strong> : le ratio de gold/dégâts ne porte que sur match_role_stats,
+  déployée le 19/07/2026 — la profondeur grandit avec le temps, les chiffres sont encore jeunes. Le
+  WR, lui, vient d'agg_champion (historique complet).</p>
 
 <form method="get" action="/flex" class="filters">
   <label>Fenêtre
@@ -49,9 +53,18 @@
       <th>Champion</th>
       <th>Rôle principal</th>
       <th>Rôle secondaire</th>
-      <th data-tooltip="Part des games de ce champion jouées dans ce rôle secondaire, sur l'historique complet retenu (agg_champion)." aria-label="Part des games de ce champion jouées dans ce rôle secondaire, sur l'historique complet retenu (agg_champion).">Part des games</th>
-      <th data-tooltip="Gold moyen à 15 min de ce champion dans son rôle SECONDAIRE (colonne précédente), comparé à la moyenne de tous les champions dans ce même rôle secondaire — pas le rôle principal." aria-label="Gold moyen à 15 min de ce champion dans son rôle SECONDAIRE (colonne précédente), comparé à la moyenne de tous les champions dans ce même rôle secondaire — pas le rôle principal.">Gold@15 vs moyenne du rôle secondaire</th>
-      <th>Dégâts/gold</th>
+      <th data-tooltip="Part des games de ce champion jouées dans ce rôle secondaire, sur l'historique complet retenu (agg_champion)." aria-label="Part des games de ce champion jouées dans ce rôle secondaire, sur l'historique complet retenu (agg_champion).">
+        <a href="{{ sort_urls.share }}" class="{{ 'active' if sort == 'share' }}">Part des games</a>
+      </th>
+      <th data-tooltip="WR de ce champion dans son rôle SECONDAIRE, comparé au WR moyen de tous les champions dans ce même rôle (agg_champion, historique complet)." aria-label="WR de ce champion dans son rôle secondaire, comparé au WR moyen de tous les champions dans ce même rôle.">
+        <a href="{{ sort_urls.wr_secondary }}" class="{{ 'active' if sort == 'wr_secondary' }}">WR rôle secondaire</a>
+      </th>
+      <th data-tooltip="Gold moyen à 15 min de ce champion dans son rôle SECONDAIRE (colonne précédente), comparé à la moyenne de tous les champions dans ce même rôle secondaire — pas le rôle principal." aria-label="Gold moyen à 15 min de ce champion dans son rôle SECONDAIRE (colonne précédente), comparé à la moyenne de tous les champions dans ce même rôle secondaire — pas le rôle principal.">
+        <a href="{{ sort_urls.deviation }}" class="{{ 'active' if sort == 'deviation' }}">Gold@15 vs moyenne du rôle secondaire</a>
+      </th>
+      <th data-tooltip="Dégâts aux champions ÷ gold gagné, dans le rôle secondaire, comparé à la moyenne de tous les champions dans ce même rôle." aria-label="Dégâts aux champions ÷ gold gagné, dans le rôle secondaire, comparé à la moyenne de tous les champions dans ce même rôle.">
+        <a href="{{ sort_urls.dmg_deviation }}" class="{{ 'active' if sort == 'dmg_deviation' }}">Dégâts/gold vs moyenne</a>
+      </th>
     </tr>
   </thead>
   <tbody>
@@ -65,8 +78,11 @@
       <td>{{ p.primary_role_label }}</td>
       <td>{{ p.role_label }}</td>
       <td>{{ p.share | pct }} <span class="sub">{{ p.games_role }}/{{ p.games_total }} games</span></td>
-      <td class="{{ 'pos' if p.gold_ratio > 1 else 'neg' if p.gold_ratio < 1 }}">×{{ p.gold_ratio | num(2) }} <span class="sub">{{ p.profile_n }} games récentes</span></td>
-      <td>{{ p.dmg_per_gold | num(2) }} <span class="sub">rôle : {{ p.baseline_dmg_per_gold | num(2) }}</span></td>
+      <td class="{{ 'pos' if p.wr_secondary >= 0.5 else 'neg' }}">{{ p.wr_secondary | pct(0) }}
+        <span class="sub">{{ p.wr_deviation | signed_pct(0) }} vs rôle</span></td>
+      <td class="{{ 'pos' if p.gold_deviation > 0 else 'neg' if p.gold_deviation < 0 }}">{{ p.gold_deviation | signed_pct(0) }}
+        <span class="sub">{{ p.profile_n }} games récentes</span></td>
+      <td class="{{ 'pos' if p.dmg_deviation and p.dmg_deviation > 0 else 'neg' if p.dmg_deviation and p.dmg_deviation < 0 }}">{{ p.dmg_deviation | signed_pct(0) }}</td>
     </tr>
     {% endfor %}
   </tbody>
