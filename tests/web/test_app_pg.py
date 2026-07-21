@@ -1258,10 +1258,12 @@ def test_flex_page_hides_deviation_below_threshold(pg_sync, client):
 
 def test_flex_page_wr_column_and_sortable_headers(pg_sync, client):
     """WR du rôle secondaire + colonnes triables (retour utilisateur
-    2026-07-20). Lee Sin (1, Top principal) et Vi (4, Jungle principal) ont
-    tous deux Support en secondaire ; Ahri (2, Support principal) sert
-    seulement d'ancre de baseline (exclue des picks, son propre rôle
-    secondaire n'existe pas ici)."""
+    2026-07-20). Lee Sin (1, Top principal), Vi (4, Jungle principal) et
+    Thresh (3, Jungle principal) ont tous Support en secondaire — Thresh en
+    dessous de la moyenne (dev négative), les 2 autres au-dessus, pour
+    vérifier que le tri respecte le SIGNE (pas juste la magnitude). Ahri (2,
+    Support principal) sert seulement d'ancre de baseline (exclue des
+    picks, son propre rôle secondaire n'existe pas ici)."""
     pg_sync.execute(
         "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
         " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
@@ -1274,15 +1276,19 @@ def test_flex_page_wr_column_and_sortable_headers(pg_sync, client):
         " ('16.13', 'euw1', 'UTILITY', 1, 150, 70),"  # Lee Sin support : WR 46.7 %
         " ('16.13', 'euw1', 'JUNGLE', 4, 300, 150),"
         " ('16.13', 'euw1', 'UTILITY', 4, 150, 140),"  # Vi support : WR 93.3 %
+        " ('16.13', 'euw1', 'JUNGLE', 3, 300, 150),"
+        " ('16.13', 'euw1', 'UTILITY', 3, 150, 60),"  # Thresh support : WR 40 %
         " ('16.13', 'euw1', 'UTILITY', 2, 500, 250)"  # Ahri : ancre baseline, exclue des picks
     )
-    # gold_15/dmg_per_gold en Support : Lee Sin très au-dessus de la moyenne
-    # (dev +16 %), Vi au-dessus mais moins (dev +6 %) — teste que le tri par
-    # défaut (deviation desc) met Lee Sin en premier, mais que trier par WR
-    # inverse l'ordre (Vi gagne bien plus dans ce rôle).
+    # gold_15/dmg_per_gold en Support, baseline = (6000+5500+3800+4000)/4 =
+    # 4825 : Lee Sin dev +24 %, Vi dev +14 % (tous deux AU-DESSUS), Thresh
+    # dev -21 % (EN DESSOUS) — un tri par magnitude (bug initial) classerait
+    # Thresh avant Vi en décroissant ; un tri par signe (attendu) le classe
+    # dernier.
     for champ_id, gold_15, dmg_per_gold, count in (
         (1, 6000, 2.0, 40),
         (4, 5500, 1.0, 40),
+        (3, 3800, 1.5, 40),
         (2, 4000, 1.5, 40),
     ):
         for i in range(count):
@@ -1301,14 +1307,21 @@ def test_flex_page_wr_column_and_sortable_headers(pg_sync, client):
     resp = client.get("/flex")
     assert resp.status_code == 200
     # WR rôle secondaire affiché (47 % Lee Sin, 93 % Vi, arrondis) avec
-    # l'écart signé vs la moyenne du rôle (baseline = (70+140)/(150+150) = 70 %).
+    # l'écart signé vs la moyenne du rôle.
     assert "47 %" in resp.text
     assert "93 %" in resp.text
     # Dégâts/gold vs moyenne : Lee Sin au-dessus (+33 %), Vi en dessous (-33 %).
     assert "+33 %" in resp.text
     assert "-33 %" in resp.text
-    # Tri par défaut (deviation desc) : Lee Sin (dev le plus large) avant Vi.
-    assert resp.text.index("Lee Sin") < resp.text.index("Vi")
+    # Tri par défaut (deviation desc, SIGNÉ) : Lee Sin (+24 %) > Vi (+14 %)
+    # > Thresh (-21 %) — Thresh DERNIER malgré une magnitude plus grande que
+    # Vi (21 % > 14 %), ce qu'un tri par abs() aurait inversé.
+    idx_lee, idx_vi, idx_thresh = (resp.text.index(n) for n in ("Lee Sin", "Vi", "Thresh"))
+    assert idx_lee < idx_vi < idx_thresh
+    # Tri croissant : Thresh (le plus négatif) en premier, Lee Sin en dernier.
+    resp_asc = client.get("/flex", params={"sort": "deviation", "dir": "asc"})
+    idx_lee, idx_vi, idx_thresh = (resp_asc.text.index(n) for n in ("Lee Sin", "Vi", "Thresh"))
+    assert idx_thresh < idx_vi < idx_lee
     # Trier par WR croissant : Lee Sin (WR plus faible) doit passer avant Vi.
     resp_wr_asc = client.get("/flex", params={"sort": "wr_secondary", "dir": "asc"})
     assert resp_wr_asc.text.index("Lee Sin") < resp_wr_asc.text.index("Vi")

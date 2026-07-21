@@ -481,6 +481,18 @@ gagner") avec les données déjà en place.
         gagne). Baseline du rôle calculée gratuitement en réutilisant
         `champion_role_distribution` déjà chargée en mémoire (pas de
         requête SQL supplémentaire).
+- [x] **Bug de tri corrigé sur `/flex` le jour même (retour utilisateur)** :
+      le tri initial de "Gold@15 vs moyenne"/"Dégâts/gold" comparait par
+      MAGNITUDE (`abs()`), pas par signe — croissant/décroissant changeait
+      bien l'ordre mais mélangeait + et - sans redonner un classement
+      cohérent, contraire à la convention déjà en place sur `/`/`/duos`
+      (tri par valeur brute). Corrigé en triant par la valeur signée ;
+      `_sort_flex_picks` gère `None` (dégâts/gold manquant) toujours en
+      dernier quel que soit le sens (même principe que `NULLS LAST` en
+      SQL), une comparaison directe `None < float` aurait sinon levé une
+      exception. Régression testée avec un 3e champion à déviation
+      négative (les 2 précédents étaient tous deux positifs, insuffisant
+      pour distinguer un tri par signe d'un tri par magnitude).
 
 Phase 8 close pour l'instant (draft, insights, résilience, flex) — prochaine idée à définir.
 

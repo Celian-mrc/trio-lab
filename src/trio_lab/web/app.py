@@ -1392,20 +1392,32 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
     # Colonnes triables (retour utilisateur 2026-07-20 : pas de tri du tout
     # avant) — un seul critère actif à la fois, pas le tri multi-colonnes
     # façon tableur de `/`/`/duos` (pas nécessaire, le volume de picks est
-    # petit et déjà filtré par les seuils de fiabilité). `deviation`/
-    # `dmg_deviation` trient par MAGNITUDE (abs), pas par signe — sinon
-    # "au-dessus" et "en dessous" de la moyenne s'alterneraient plutôt que
-    # de classer par écart le plus marquant en premier. `None` (pas de
-    # donnée dégâts/gold) trié en dernier plutôt que planter le tri.
+    # petit et déjà filtré par les seuils de fiabilité). Tri par VALEUR
+    # SIGNÉE brute, pas par magnitude (abs) : un premier essai triait
+    # `deviation`/`dmg_deviation` par écart le plus marquant peu importe le
+    # signe, mais ça mélange + et - sans que croissant/décroissant ne
+    # redonne un ordre cohérent — contraire à la convention déjà en place
+    # sur `/`/`/duos` (tri par valeur brute), source de confusion (retour
+    # utilisateur 2026-07-20). `None` (pas de donnée dégâts/gold) toujours
+    # en dernier quel que soit le sens, cf. `_sort_flex_picks` ci-dessous.
     _FLEX_SORT_KEYS: dict[str, object] = {
-        "deviation": lambda p: abs(p["gold_deviation"]),
-        "dmg_deviation": lambda p: (
-            abs(p["dmg_deviation"]) if p["dmg_deviation"] is not None else -1.0
-        ),
+        "deviation": lambda p: p["gold_deviation"],
+        "dmg_deviation": lambda p: p["dmg_deviation"],
         "wr_secondary": lambda p: p["wr_secondary"],
         "share": lambda p: p["share"],
         "games": lambda p: p["games_role"],
     }
+
+    def _sort_flex_picks(picks: list[dict], key_fn, *, reverse: bool) -> list[dict]:
+        """Trie par `key_fn`, `None` toujours en dernier quel que soit `reverse`
+        (même convention que `NULLS LAST` en SQL, cf. `_order_by_clause`) —
+        un simple `reverse=True` sur une liste contenant des `None` lèverait
+        de toute façon un `TypeError` en les comparant à des floats."""
+        with_value = [p for p in picks if key_fn(p) is not None]
+        without_value = [p for p in picks if key_fn(p) is None]
+        with_value.sort(key=key_fn, reverse=reverse)
+        return with_value + without_value
+
     _FLEX_DEFAULT_DIR = {
         "deviation": "desc",
         "dmg_deviation": "desc",
@@ -1514,7 +1526,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         with request.app.state.pool.connection() as conn:
             window, platform, context = resolve_context(conn, window, platform)
             picks = _flex_picks(conn, window, platform, role=role)
-        picks.sort(key=_FLEX_SORT_KEYS[sort], reverse=(dir == "desc"))
+        picks = _sort_flex_picks(picks, _FLEX_SORT_KEYS[sort], reverse=(dir == "desc"))
 
         def _sort_url(key: str) -> str:
             next_dir = (
