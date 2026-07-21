@@ -23,6 +23,10 @@ CC/min écarté : indépendant du gold (r=0,084) mais trop faiblement corrélé
 à la victoire (r=0,092) — les écarts par champion seraient surtout du
 bruit. Candidat d'extension si le volume grandit.
 
+`team_gold_diff_15` a une zone neutre (±1000 gold, cf. `_NEUTRAL_ZONES`) :
+un split brut à 0 comptait un écart de -50 gold comme "en retard" au même
+titre que -3000, ce qui diluait le signal (retour utilisateur 2026-07-20).
+
 Calcul PAR APPARITION (une ligne par match/équipe/rôle, comme
 `gold_factors`), pas par match : chaque ligne porte les 3 facteurs
 TEAM-LEVEL (déjà calculés une fois par équipe) + le champion de CE rôle —
@@ -90,6 +94,19 @@ def _fetch_rows(conn: psycopg.Connection, patches: list[str]) -> list[dict]:
         return cur.fetchall()
 
 
+# Zone neutre : sous ce seuil (valeur absolue), l'écart est trop faible pour
+# compter comme "en avance" OU "en retard" — la game est ignorée pour ce
+# facteur plutôt que rangée par le signe brut (retour utilisateur
+# 2026-07-20 : un split à 0 comptait -50 gold comme "en retard" au même
+# titre que -3000, ce qui diluait le signal). Vérifié empiriquement avant de
+# choisir 1000 : écart médian en valeur absolue sur team_gold_diff_15 =
+# 2597 gold (fenêtre 16.14+16.13, 287k lignes équipe), un écart franc est la
+# norme — exclure ±1000 ne retire que ~21 % des lignes, les plus ambiguës.
+# Pas de zone neutre pour jgl_cs_diff_15/first_blood_team : pas demandé, et
+# first_blood_team est un booléen (pas de "quasi premier sang").
+_NEUTRAL_ZONES: dict[str, float] = {"team_gold_diff_15": 1000.0}
+
+
 def _is_ahead(value: object) -> bool:
     """État favorable : booléen vrai, ou diff continue ≥ 0."""
     return bool(value) if isinstance(value, bool) else value >= 0
@@ -101,11 +118,15 @@ def _aggregate(rows: list[dict]) -> list[dict]:
     for r in rows:
         key_base = (r["role"], r["champion_id"])
         for factor in FACTORS:
+            value = r[factor]
+            zone = _NEUTRAL_ZONES.get(factor, 0.0)
+            if zone and not isinstance(value, bool) and abs(value) < zone:
+                continue  # écart trop faible pour compter comme avance ou retard
             key = (*key_base, factor)
             bucket = buckets.setdefault(
                 key, {"games_ahead": 0, "wins_ahead": 0, "games_behind": 0, "wins_behind": 0}
             )
-            side = "ahead" if _is_ahead(r[factor]) else "behind"
+            side = "ahead" if _is_ahead(value) else "behind"
             bucket[f"games_{side}"] += 1
             if r["win"]:
                 bucket[f"wins_{side}"] += 1

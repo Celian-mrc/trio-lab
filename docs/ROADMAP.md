@@ -434,6 +434,19 @@ gagner") avec les données déjà en place.
       `score_champion_resilience` aurait accumulé une fenêtre non purgée à
       chaque rollover de patch. `win_factors`/`gold_factors` restent
       manuels, eux (pas demandé, pas de mesure de coût faite pour eux).
+- [x] **Zone neutre sur `team_gold_diff_15` (2026-07-20, retour
+      utilisateur)** : le seuil "en avance"/"en retard" (0 gold, invisible
+      sur la page) comptait -50 gold comme "en retard" au même titre que
+      -3000 — dilution du signal, question légitime de l'utilisateur en
+      creusant "de combien est le seuil ?". Vérifié empiriquement avant de
+      choisir la largeur : écart médian en valeur absolue = 2597 gold
+      (fenêtre 16.14+16.13, 287k lignes équipe), un écart franc est la
+      norme. `_NEUTRAL_ZONES = {"team_gold_diff_15": 1000.0}` dans
+      `resilience.py` : les games à moins de ±1000 gold sont ignorées pour
+      ce facteur (ni avance ni retard), pas de zone neutre pour
+      `jgl_cs_diff_15`/`first_blood_team` (pas demandé, `first_blood_team`
+      est booléen). Seuil maintenant affiché sur la page
+      (`RESILIENCE_FACTOR_THRESHOLDS`).
 - [x] **Badges de rôle top/adc gris (2026-07-20, retour utilisateur)** :
       `.role-jgl`/`.role-mid`/`.role-sup` avaient une couleur, `.role-top`/
       `.role-bot` non — ajoutées (`style.css`).

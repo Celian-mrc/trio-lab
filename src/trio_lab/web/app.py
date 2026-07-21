@@ -127,6 +127,18 @@ RESILIENCE_FACTOR_LABELS = {
     "jgl_cs_diff_15": "CS jungle d'équipe à 15 min",
     "first_blood_team": "Premier sang d'équipe",
 }
+# Seuil de classement "en avance"/"en retard" par facteur — affiché sur la
+# page (retour utilisateur 2026-07-20 : le seuil était invisible). Doit
+# rester synchronisé à la main avec `synergy.resilience._NEUTRAL_ZONES`/
+# `_is_ahead` (pas de dépendance croisée : ce module web n'importe pas le
+# module de calcul batch, même séparation que les libellés au-dessus).
+RESILIENCE_FACTOR_THRESHOLDS = {
+    "team_gold_diff_15": "en avance = plus de 1000 gold d'écart, en retard = moins de "
+    "-1000 gold — entre les deux (zone neutre), la game ne compte ni pour ni contre",
+    "jgl_cs_diff_15": "en avance = au moins 1 CS jungle d'écart, en retard = déficit "
+    "(pas de zone neutre)",
+    "first_blood_team": "en avance = équipe qui a le premier sang, en retard = l'adverse",
+}
 # En dessous de ce nombre de games d'un côté (avance OU retard), l'écart de
 # WR est trop bruité pour être lu comme un signal — exclu, pas juste grisé
 # (retour utilisateur 2026-07-20 : une ligne illisible n'apporte rien, autant
@@ -366,6 +378,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
     templates.env.globals["DUO_ROLE_KEYS"] = DUO_ROLE_KEYS
     templates.env.globals["RIOT_ROLE_LABELS"] = RIOT_ROLE_LABELS
     templates.env.globals["RESILIENCE_FACTOR_LABELS"] = RESILIENCE_FACTOR_LABELS
+    templates.env.globals["RESILIENCE_FACTOR_THRESHOLDS"] = RESILIENCE_FACTOR_THRESHOLDS
 
     def resolve_champion(name_or_id: str | None) -> int | None:
         """Filtre champion de la tier list : nom (recherche) ou id. None si vide."""

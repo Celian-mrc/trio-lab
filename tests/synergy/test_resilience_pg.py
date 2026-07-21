@@ -57,10 +57,12 @@ async def _seed_match(conn, match_id: str, patch: str, *, gold_diff: int, win: b
 
 
 async def test_refresh_captures_champion_specific_ahead_behind_gap(pg_conn):
+    # gold_diff au-delà de la zone neutre ±1000 (retour utilisateur
+    # 2026-07-20) : sinon ces games seraient ignorées pour team_gold_diff_15.
     for i in range(10):
-        await _seed_match(pg_conn, f"16.13_ahead_{i}", "16.13", gold_diff=500, win=True)
+        await _seed_match(pg_conn, f"16.13_ahead_{i}", "16.13", gold_diff=1500, win=True)
     for i in range(10):
-        await _seed_match(pg_conn, f"16.13_behind_{i}", "16.13", gold_diff=-500, win=False)
+        await _seed_match(pg_conn, f"16.13_behind_{i}", "16.13", gold_diff=-1500, win=False)
 
     count = resilience.refresh(windows.make_window(["16.13"]), dsn=TEST_DSN, min_rows=50)
     # Picks identiques sur les 20 games (5 rôles × 2 équipes = 10 combos
