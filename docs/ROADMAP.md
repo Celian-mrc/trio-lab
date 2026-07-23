@@ -518,6 +518,18 @@ gagner") avec les données déjà en place.
         mesurées ne le prédisent, cf. recherche du même jour sur l'analyse
         de résidus façon xG) mise en pause : elle dépendait de ce modèle,
         pas construite tant que l'audit n'était pas fait.
+- [x] **`×N` retiré de `/insights` (2026-07-24, retour utilisateur, "perturbant
+      et pas très lisible")** : le tableau "Ce qui fait gagner" n'affiche
+      plus l'odds ratio, seulement le swing de probabilité déjà calculé
+      (« 49 % → 81 % ») — c'était déjà le format recommandé dans le texte
+      d'aide ("×N a tendance à exagérer l'effet perçu quand gagner/perdre
+      est ~50/50"), maintenant le seul affiché. Comportement inchangé côté
+      calcul (`_win_prob_swing`), uniquement `insights.html`/tests touchés.
+      Texte d'aide aussi clarifié sur le piège de la colonne "Derrière au
+      gold" : "+1 écart-type" n'y veut pas dire la même chose qu'en
+      population complète (toutes les games y sont déjà en déficit — le
+      facteur y mesure "un peu moins en retard", pas "passer en avance"),
+      confusion remontée par l'utilisateur en creusant le tableau.
 
 Phase 8 close pour l'instant (draft, insights, résilience, flex) — prochaine idée à définir.
 

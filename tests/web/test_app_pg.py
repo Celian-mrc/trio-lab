@@ -1014,20 +1014,19 @@ def test_insights_page_shows_aligned_combined_table(pg_sync, client):
     assert "ÉQUIPE à 15 min" in resp.text  # apostrophe échappée en HTML (d&#39;ÉQUIPE)
     assert "CS jungle vs adverse à 15 min" in resp.text
     assert "équipe / min" in resp.text  # "Vision d'équipe / min", apostrophe échappée en HTML
-    assert "×8.20" in resp.text
-    assert "×10.00" in resp.text
     # team_gold_diff_15 doit apparaître avant team_vision_per_min : l'ordre
-    # suit FEATURES, pas la valeur de l'odds ratio.
+    # suit FEATURES, pas la valeur du coefficient.
     assert resp.text.index("Avantage gold") < resp.text.index("équipe / min")
-    # jgl_cs_diff_15 n'a une valeur QUE pour 'all' : la ligne existe quand
-    # même (alignement garanti, pas de ligne manquante), valeur affichée.
-    assert "×1.05" in resp.text
-    # Conversion en probabilité absolue (retour utilisateur 2026-07-19) :
-    # sigmoid(intercept) → sigmoid(intercept + coef) pour 'all'/team_vision_per_min
-    # (intercept=-0.9, coef=2.1) ; 'behind_gold15' n'a pas de ligne intercept
-    # dans ce jeu de données, donc pas de conversion pour cette colonne —
-    # ne doit pas planter, juste ne rien afficher pour cette cellule.
+    # Conversion en probabilité absolue (retour utilisateur 2026-07-19),
+    # seul format affiché depuis le retrait du ×N (retour utilisateur
+    # 2026-07-24, jugé peu lisible) : sigmoid(intercept) →
+    # sigmoid(intercept + coef) pour 'all'/team_vision_per_min
+    # (intercept=-0.9, coef=2.1).
     assert "29 % → 77 %" in resp.text
+    # jgl_cs_diff_15 n'a une valeur QUE pour 'all' : la ligne existe quand
+    # même (alignement garanti, pas de ligne manquante), valeur affichée
+    # (intercept=-0.9, coef=0.05).
+    assert "29 % → 30 %" in resp.text
 
 
 def test_insights_page_shows_win_factors_holdout_auc(pg_sync, client):

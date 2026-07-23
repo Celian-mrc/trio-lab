@@ -9,12 +9,15 @@
   réel » : chaque facteur est isolé des autres, pour ne pas confondre corrélation et cause — ex. le CS
   jungle en avance est en partie ce qui construit l'avance au gold elle-même, ce calcul essaie de
   démêler les deux plutôt que de tout mettre sur le même plan.</p>
-<p class="meta"><strong>Comment lire les chiffres</strong> : ×N veut dire « N fois plus de chances de
-  gagner que la moyenne quand ce facteur est marqué ». ×1 = aucun effet. Au-dessus de 1 (vert) = ce
-  facteur aide à gagner, plus le nombre est grand plus il pèse lourd. En dessous de 1 (rouge) = ce
-  facteur est associé à la défaite. Le petit chiffre en dessous convertit ça en probabilité concrète
-  (ex. « 50 % → 78 % ») : c'est plus parlant qu'un ×N seul, et ×N a tendance à exagérer l'effet perçu
-  quand gagner/perdre est ~50/50 (ce qui est le cas ici) plutôt qu'un évènement rare.</p>
+<p class="meta"><strong>Comment lire les chiffres</strong> : chaque cellule montre une probabilité de
+  victoire AVANT ce facteur → APRÈS (ex. « 49 % → 81 % »). « Avant » = une game dans l'état moyen de
+  cette population (aucun facteur particulier) ; « après » = la même game avec CE facteur poussé à
+  « un écart-type au-dessus de sa moyenne » (retour utilisateur 2026-07-24 : le format précédent en
+  ×N — odds ratio — était retiré, jugé peu lisible et trompeur quand gagner/perdre est ~50/50). Vert =
+  ce facteur aide à gagner, rouge = associé à la défaite. Attention à la colonne « Derrière au gold » :
+  la « moyenne » n'y est PAS la même qu'en population complète (toutes les games y sont déjà en
+  déficit), donc « ce facteur poussé d'un écart-type » veut dire « un peu moins en retard que la
+  moyenne des games menées », pas « passer en avance ».</p>
 {% if all_auc or behind_auc %}
 <p class="meta"><strong>Fiabilité du modèle</strong> : AUC (capacité à distinguer une victoire d'une
   défaite à partir des seuls facteurs ci-dessus) mesuré sur un échantillon <strong>jamais vu à
@@ -47,17 +50,11 @@
     {% for f in factors %}
     <tr>
       <td>{{ f.label }}</td>
-      <td class="{{ 'pos' if f.all and f.all.odds_ratio > 1 else 'neg' if f.all and f.all.odds_ratio < 1 }}">
-        {% if f.all %}
-        ×{{ f.all.odds_ratio | num(2) }}
-        {% if f.all_prob %}<span class="sub">{{ f.all_prob[0] | pct(0) }} → {{ f.all_prob[1] | pct(0) }}</span>{% endif %}
-        {% else %}—{% endif %}
+      <td class="{{ 'pos' if f.all_prob and f.all_prob[1] > f.all_prob[0] else 'neg' if f.all_prob and f.all_prob[1] < f.all_prob[0] }}">
+        {% if f.all_prob %}{{ f.all_prob[0] | pct(0) }} → {{ f.all_prob[1] | pct(0) }}{% else %}—{% endif %}
       </td>
-      <td class="{{ 'pos' if f.behind and f.behind.odds_ratio > 1 else 'neg' if f.behind and f.behind.odds_ratio < 1 }}">
-        {% if f.behind %}
-        ×{{ f.behind.odds_ratio | num(2) }}
-        {% if f.behind_prob %}<span class="sub">{{ f.behind_prob[0] | pct(0) }} → {{ f.behind_prob[1] | pct(0) }}</span>{% endif %}
-        {% else %}—{% endif %}
+      <td class="{{ 'pos' if f.behind_prob and f.behind_prob[1] > f.behind_prob[0] else 'neg' if f.behind_prob and f.behind_prob[1] < f.behind_prob[0] }}">
+        {% if f.behind_prob %}{{ f.behind_prob[0] | pct(0) }} → {{ f.behind_prob[1] | pct(0) }}{% else %}—{% endif %}
       </td>
     </tr>
     {% endfor %}
