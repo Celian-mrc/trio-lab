@@ -105,9 +105,13 @@ async def _seed_rows(conn, patch: str, rows: list[tuple[int, bool]]) -> None:
 async def test_refresh_fits_signal_and_ignores_constant_features(pg_conn):
     await _seed_rows(pg_conn, "16.13", _separable_with_noise())
     counts = win_factors.refresh(windows.make_window(["16.13"]), dsn=TEST_DSN, min_rows=50)
+    # +1 intercept +1 ligne de diagnostic _auc_test (retour utilisateur
+    # 2026-07-24 : AUC hors-échantillon jamais mesurée avant, cf. docstring
+    # module) — 100 games est bien au-dessus du seuil min_rows=50 sur le
+    # train (80 games) donc l'AUC doit être calculable, jamais None ici.
     assert counts == {
-        "all": len(win_factors.FEATURES) + 1,
-        "behind_gold15": len(win_factors.FEATURES) + 1,
+        "all": len(win_factors.FEATURES) + 1 + 1,
+        "behind_gold15": len(win_factors.FEATURES) + 1 + 1,
     }
 
     cur = await pg_conn.execute(
@@ -120,17 +124,27 @@ async def test_refresh_fits_signal_and_ignores_constant_features(pg_conn):
     assert odds_ratio > 2.0
 
     # Features tenues constantes dans le jeu de données (CC/vision identiques
-    # sur les 5 rôles, les 2 équipes, objectifs/CS jungle fixes) : aucune
-    # information, coefficient proche de 0 (colonne nulle après
-    # standardisation + ridge).
+    # sur les 5 rôles, les 2 équipes, CS jungle fixe) : aucune information,
+    # coefficient proche de 0 (colonne nulle après standardisation + ridge).
     cur = await pg_conn.execute(
         "SELECT feature, coef FROM score_win_factors"
         " WHERE window_label = '16.13' AND population = 'all'"
-        " AND feature IN ('team_cc_per_min', 'team_vision_per_min', 'herald_taken',"
-        " 'jgl_cs_diff_15')"
+        " AND feature IN ('team_cc_per_min', 'team_vision_per_min', 'jgl_cs_diff_15')"
     )
     for feature, coef in await cur.fetchall():
         assert abs(coef) < 1e-3, feature
+
+    # AUC hors-échantillon : jeu de données très séparable par construction
+    # (80 % des games suivent le signal, 20 % de bruit) — doit rester nette
+    # même mesurée sur le test jamais vu, sans être exactement 1.0 (le bruit
+    # empêche une séparation parfaite).
+    cur = await pg_conn.execute(
+        "SELECT coef, n FROM score_win_factors"
+        " WHERE window_label = '16.13' AND population = 'all' AND feature = '_auc_test'"
+    )
+    auc, auc_n = await cur.fetchone()
+    assert 0.6 < auc < 1.0
+    assert 0 < auc_n < 200
 
 
 async def test_refresh_weights_patches_by_window(pg_conn):

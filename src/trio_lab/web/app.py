@@ -97,14 +97,14 @@ DRAFT_SAFETY_MIN_GAMES_EFF = 50.0
 # cohérent avec l'amplitude typique des deltas de score_matchup.
 DRAFT_NOTABLE_COUNTER_DELTA = -0.03
 # Libellés lisibles pour le dashboard /insights (synergy.win_factors.FEATURES).
+# herald_taken/soul_taken/first_tower retirés le 2026-07-24 (retour
+# utilisateur + audit) : résultats de fin de partie, pas bornés à 15 min —
+# cf. docstring synergy/win_factors.py.
 WIN_FACTOR_LABELS = {
     "team_gold_diff_15": "Avantage gold d'ÉQUIPE à 15 min",
     "team_cc_per_min": "CC d'équipe / min",
     "team_vision_per_min": "Vision d'équipe / min",
     "jgl_cs_diff_15": "CS jungle vs adverse à 15 min",
-    "herald_taken": "Héraut pris",
-    "soul_taken": "Âme de dragon",
-    "first_tower": "Première tour",
 }
 # Libellés lisibles pour la section "qu'est-ce qui construit l'avantage au
 # gold" de /insights (synergy.gold_factors.FEATURES).
@@ -1156,8 +1156,17 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             behind_rows = queries.win_factors(conn, window, "behind_gold15")
             gold_rows = queries.gold_factors(conn, window)
         factors = _combined_win_factors(all_rows, behind_rows)
-        all_n = all_rows[0]["n"] if all_rows else 0
-        behind_n = behind_rows[0]["n"] if behind_rows else 0
+        # `rows[0]` n'est pas fiable pour lire `n` : pas d'ORDER BY côté SQL,
+        # et depuis l'ajout de la ligne de diagnostic `_auc_test` (2026-07-24)
+        # toutes les lignes n'ont plus le même `n` (le diagnostic porte le
+        # nombre de games du jeu de TEST, pas de l'ajustement complet) — lire
+        # `n`/l'AUC depuis une feature nommée précisément, jamais `[0]`.
+        all_by_feature = {r["feature"]: r for r in all_rows}
+        behind_by_feature = {r["feature"]: r for r in behind_rows}
+        all_n = all_by_feature["intercept"]["n"] if "intercept" in all_by_feature else 0
+        behind_n = behind_by_feature["intercept"]["n"] if "intercept" in behind_by_feature else 0
+        all_auc = all_by_feature.get("_auc_test")
+        behind_auc = behind_by_feature.get("_auc_test")
 
         gold_by_feature = {r["feature"]: r for r in gold_rows}
         gold_factors_list = _ordered_gold_factors(gold_rows)
@@ -1173,6 +1182,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 "factors": factors,
                 "all_n": all_n,
                 "behind_n": behind_n,
+                "all_auc": all_auc["coef"] if all_auc else None,
+                "behind_auc": behind_auc["coef"] if behind_auc else None,
                 "gold_factors": gold_factors_list,
                 "gold_n": gold_n,
                 "r2_draft_only": r2_draft_only["coef"] if r2_draft_only else None,

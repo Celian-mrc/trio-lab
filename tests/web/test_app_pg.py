@@ -992,12 +992,14 @@ def test_insights_page_shows_aligned_combined_table(pg_sync, client):
     # features (jgl_cs_diff_15 manquant) : la page doit quand même aligner
     # chaque feature sur la même ligne dans les 2 colonnes, ordre FEATURES
     # fixe, 'intercept' jamais affiché (pas actionnable pour un coach).
+    # herald_taken/soul_taken/first_tower retirés le 2026-07-24 (résultats de
+    # fin de partie, pas bornés à 15 min) : team_vision_per_min à la place.
     rows = (
-        ("all", "soul_taken", 2.1, 8.2),
+        ("all", "team_vision_per_min", 2.1, 8.2),
         ("all", "team_gold_diff_15", 0.96, 2.6),
         ("all", "jgl_cs_diff_15", 0.05, 1.05),
         ("all", "intercept", -0.9, 0.4),
-        ("behind_gold15", "soul_taken", 2.3, 10.0),
+        ("behind_gold15", "team_vision_per_min", 2.3, 10.0),
         ("behind_gold15", "team_gold_diff_15", 0.48, 1.61),
     )
     for population, feature, coef, odds in rows:
@@ -1011,21 +1013,58 @@ def test_insights_page_shows_aligned_combined_table(pg_sync, client):
     assert "équipe complète des 5 rôles" in resp.text
     assert "ÉQUIPE à 15 min" in resp.text  # apostrophe échappée en HTML (d&#39;ÉQUIPE)
     assert "CS jungle vs adverse à 15 min" in resp.text
-    assert "Âme de dragon" in resp.text
+    assert "équipe / min" in resp.text  # "Vision d'équipe / min", apostrophe échappée en HTML
     assert "×8.20" in resp.text
     assert "×10.00" in resp.text
-    # team_gold_diff_15 doit apparaître avant soul_taken : l'ordre suit
-    # FEATURES, pas la valeur de l'odds ratio.
-    assert resp.text.index("Avantage gold") < resp.text.index("Âme de dragon")
+    # team_gold_diff_15 doit apparaître avant team_vision_per_min : l'ordre
+    # suit FEATURES, pas la valeur de l'odds ratio.
+    assert resp.text.index("Avantage gold") < resp.text.index("équipe / min")
     # jgl_cs_diff_15 n'a une valeur QUE pour 'all' : la ligne existe quand
     # même (alignement garanti, pas de ligne manquante), valeur affichée.
     assert "×1.05" in resp.text
     # Conversion en probabilité absolue (retour utilisateur 2026-07-19) :
-    # sigmoid(intercept) → sigmoid(intercept + coef) pour 'all'/soul_taken
+    # sigmoid(intercept) → sigmoid(intercept + coef) pour 'all'/team_vision_per_min
     # (intercept=-0.9, coef=2.1) ; 'behind_gold15' n'a pas de ligne intercept
     # dans ce jeu de données, donc pas de conversion pour cette colonne —
     # ne doit pas planter, juste ne rien afficher pour cette cellule.
     assert "29 % → 77 %" in resp.text
+
+
+def test_insights_page_shows_win_factors_holdout_auc(pg_sync, client):
+    """AUC hors-échantillon (`_auc_test`, retour utilisateur 2026-07-24) :
+    affichée sur la page, jamais dans le tableau de coefficients (feature
+    spéciale, exclue de WIN_FACTOR_FEATURES comme _r2_draft_only/_r2_full
+    pour gold_factors)."""
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    rows = (
+        ("all", "intercept", -0.9, 0.4, 1000),
+        ("all", "team_gold_diff_15", 0.96, 2.6, 1000),
+        ("all", "_auc_test", 0.821, 0.821, 200),
+        ("behind_gold15", "intercept", -0.5, 0.6, 500),
+        ("behind_gold15", "_auc_test", 0.734, 0.734, 100),
+    )
+    for population, feature, coef, odds, n in rows:
+        pg_sync.execute(
+            "INSERT INTO score_win_factors (window_label, population, feature, coef,"
+            " odds_ratio, n) VALUES ('16.13', %s, %s, %s, %s, %s)",
+            (population, feature, coef, odds, n),
+        )
+    resp = client.get("/insights")
+    assert resp.status_code == 200
+    assert "Fiabilité du modèle" in resp.text
+    assert "0.821" in resp.text
+    assert "0.734" in resp.text
+    # jamais dans le tableau de coefficients (pas une vraie feature).
+    assert "_auc_test" not in resp.text
+    # n affiché pour 'all' doit être celui de l'ajustement complet (1000),
+    # pas celui du jeu de test de l'AUC (200) — rows[0] n'est pas fiable
+    # (pas d'ORDER BY, et le diagnostic a un n différent depuis 2026-07-24).
+    assert "1000" in resp.text
 
 
 def test_insights_page_shows_gold_factors_section(pg_sync, client):

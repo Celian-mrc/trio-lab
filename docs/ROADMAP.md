@@ -493,6 +493,31 @@ gagner") avec les données déjà en place.
       exception. Régression testée avec un 3e champion à déviation
       négative (les 2 précédents étaient tous deux positifs, insuffisant
       pour distinguer un tri par signe d'un tri par magnitude).
+- [x] **Audit `win_factors` (2026-07-24, retour utilisateur)** : parti d'une
+      question simple ("le modèle est-il bon ? quel AUC ?") — réponse :
+      aucun AUC n'était calculé nulle part. Mesuré à la main puis comparé au
+      modèle dédié de `macro-lab` (`wp_v3`, AUC@15 = 0,813, test set propre,
+      anti-fuite vérifiée) : `win_factors` ressortait à 0,852 en échantillon,
+      ce qui aurait dû alerter plutôt que rassurer (un modèle à 4 variables
+      "battant" un modèle à 28 variables par rôle est suspect). Cause
+      trouvée : `herald_taken`/`soul_taken`/`first_tower` sont des résultats
+      DE FIN DE PARTIE (l'âme de dragon n'arrive quasiment jamais avant
+      25-30 min), pas bornés à 15 min — `gold_factors.py` les excluait déjà
+      pour cette raison précise, `win_factors` ne s'appliquait pas la même
+      règle à lui-même. Corrigé :
+      - Les 3 variables retirées de `FEATURES` (AUC sans elles : 0,822 —
+        baisse modeste, beaucoup du signal de `soul_taken` recoupait déjà
+        `team_gold_diff_15`).
+      - AUC hors-échantillon désormais calculé et affiché sur `/insights`
+        (`_auc_test`, ligne de diagnostic comme `gold_factors._r2_*`) :
+        split déterministe 80/20 par hash `crc32(match_id)` (jamais les 2
+        perspectives d'un match dans des ensembles différents), coefficients
+        SERVIS ajustés séparément sur 100 % des données (précision
+        maximale) — l'ajustement train-only ne sert qu'au diagnostic.
+      - Piste "facteur X" (champions qui gagnent plus/moins que leurs stats
+        mesurées ne le prédisent, cf. recherche du même jour sur l'analyse
+        de résidus façon xG) mise en pause : elle dépendait de ce modèle,
+        pas construite tant que l'audit n'était pas fait.
 
 Phase 8 close pour l'instant (draft, insights, résilience, flex) — prochaine idée à définir.
 

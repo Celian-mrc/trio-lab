@@ -4,16 +4,27 @@
 <h1>Ce qui fait gagner</h1>
 <p class="meta">Ce tableau classe les facteurs de jeu selon leur poids réel dans la victoire, sur
   toutes les games de la fenêtre (<strong>équipe complète des 5 rôles</strong> — top/jungle/mid/adc/
-  support, pas seulement jungle/mid/support). « Poids réel » : chaque facteur est isolé des autres,
-  pour ne pas confondre corrélation et cause — ex. les équipes qui prennent l'âme de dragon gagnent
-  plus, mais est-ce l'âme qui fait gagner ou juste qu'elles étaient déjà en avance ? Ce calcul essaie
-  de démêler les deux plutôt que de tout mettre sur le même plan.</p>
+  support, pas seulement jungle/mid/support), mesurés à <strong>15 minutes</strong> uniquement (rien
+  de plus tardif — un objectif pris à 25 min ne peut pas causer un avantage mesuré à 15 min). « Poids
+  réel » : chaque facteur est isolé des autres, pour ne pas confondre corrélation et cause — ex. le CS
+  jungle en avance est en partie ce qui construit l'avance au gold elle-même, ce calcul essaie de
+  démêler les deux plutôt que de tout mettre sur le même plan.</p>
 <p class="meta"><strong>Comment lire les chiffres</strong> : ×N veut dire « N fois plus de chances de
   gagner que la moyenne quand ce facteur est marqué ». ×1 = aucun effet. Au-dessus de 1 (vert) = ce
   facteur aide à gagner, plus le nombre est grand plus il pèse lourd. En dessous de 1 (rouge) = ce
   facteur est associé à la défaite. Le petit chiffre en dessous convertit ça en probabilité concrète
   (ex. « 50 % → 78 % ») : c'est plus parlant qu'un ×N seul, et ×N a tendance à exagérer l'effet perçu
   quand gagner/perdre est ~50/50 (ce qui est le cas ici) plutôt qu'un évènement rare.</p>
+{% if all_auc or behind_auc %}
+<p class="meta"><strong>Fiabilité du modèle</strong> : AUC (capacité à distinguer une victoire d'une
+  défaite à partir des seuls facteurs ci-dessus) mesuré sur un échantillon <strong>jamais vu à
+  l'ajustement</strong> (20 % des games mises de côté avant tout calcul, pas une mesure optimiste sur
+  les données d'entraînement) —
+  {% if all_auc %}{{ all_auc | num(3) }} pour la population complète{% endif %}{% if all_auc and behind_auc %}, {% endif %}{% if behind_auc %}{{ behind_auc | num(3) }} pour « derrière au gold »{% endif %}.
+  0,5 = aucun pouvoir prédictif (équivalent à deviner), 1,0 = parfait. Pour repère, un modèle dédié
+  bien plus riche (dégâts, niveau, kills, objectifs par rôle) atteint 0,81 à 15 min sur des games de
+  très haut niveau.</p>
+{% endif %}
 <p class="meta"><strong>Limites</strong> : données solo queue Emerald+, pas scrims/pro — les
   tendances early (gold, objectifs) transfèrent généralement bien, les choix de champions bien
   moins. Certains signaux (CS jungle) sont en partie définitionnels du gold lui-même : ce sont des
