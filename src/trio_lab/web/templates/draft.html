@@ -23,19 +23,23 @@
 <section class="draft-suggest">
   <div class="draft-suggest-head">
     <h2>Compositions suggérées</h2>
-    <a class="button-like" href="{{ suggest_url }}">Proposer {{ draft_suggest_count }} compositions</a>
+    <a class="button-like" href="{{ suggest_url }}">Proposer des compositions</a>
   </div>
-  <p class="meta">Indépendant du simulateur ci-dessous : part des meilleurs trios jungle/mid/support par
-    synergie, puis complète chacun avec le TOP et l'ADC qui maximisent la synergie avec ce qui est déjà
-    posé — jamais de contre calculé (peu importe qui est en face). Les 3 propositions ne partagent aucun
-    champion entre elles.</p>
+  <p class="meta">Indépendant du simulateur ci-dessous, jamais de contre calculé (peu importe qui est en
+    face). Part d'un <strong>duo</strong> (2 champions précis, bien mieux renseigné qu'un trio à 3) parmi
+    les 10 paires de rôles possibles, puis étend rôle par rôle en ajoutant à chaque étape le champion qui
+    maximise la synergie avec tout ce qui est déjà posé. 4 profils proposent chacun un duo de départ
+    différent — <strong>scaling</strong>, <strong>gold@15</strong>, <strong>CC</strong> et
+    <strong>prise de drakes</strong> pesés différemment selon le profil — mais la suite de la
+    composition (une fois le duo choisi) reste toujours par pure synergie, quel que soit le profil.</p>
   {% if suggested_drafts is not none %}
   {% if not suggested_drafts %}
-  <p class="empty">Pas assez de trios fiables sur cette fenêtre pour proposer des compositions.</p>
+  <p class="empty">Pas assez de duos fiables sur cette fenêtre pour proposer des compositions.</p>
   {% else %}
   <div class="draft-suggest-grid">
     {% for d in suggested_drafts %}
     <div class="draft-suggest-card">
+      <h3 class="draft-suggest-label">{{ d.label }}</h3>
       <div class="draft-suggest-members">
         {% for m in d.members %}
         <span class="champ" title="{{ m.role_label }}">
@@ -47,7 +51,7 @@
       </div>
       <p class="meta">Synergie totale :
         <span class="{{ 'pos' if d.total_synergy > 0 else 'neg' if d.total_synergy < 0 }}">{{ d.total_synergy | signed_pct }}</span>
-        <span class="sub">trio jungle/mid/support : {{ d.trio_games }} games, fiabilité {{ d.trio_tier }}</span>
+        <span class="sub">duo de départ : {{ d.seed_games }} games, fiabilité {{ d.seed_tier }}</span>
       </p>
       {% if d.advice %}
       <ul class="draft-suggest-advice">

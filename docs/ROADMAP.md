@@ -531,26 +531,54 @@ gagner") avec les données déjà en place.
       facteur y mesure "un peu moins en retard", pas "passer en avance"),
       confusion remontée par l'utilisateur en creusant le tableau.
 - [x] **Compositions suggérées sur `/draft` (2026-07-24, retour
-      utilisateur)** : "un système qui propose 3 drafts, peu importe les
-      champions en face, avec des recommandations sur comment les jouer".
-      Nouvelle section indépendante du simulateur pick-par-pick existant
-      (confirmé avec l'utilisateur : repart toujours de zéro, ne complète
-      pas les picks en cours). Aucune donnée nouvelle : part des meilleurs
-      trios jgl/mid/sup par synergie (`score_trio`), complète chacun avec
-      le TOP puis l'ADC qui maximisent la Σ synergie avec ce qui est déjà
-      posé (`score_duo`, les 7 paires étendues — exactement ce qu'il fallait
-      pour compléter un trio en draft à 5). Garde les 3 meilleures
-      compositions complètes SANS champion partagé entre elles. Conseils de
-      jeu traduits depuis des stats déjà calculées du trio (`scaling` →
-      pacing, `cc_blended_pct` → engage, `gold_diff_15` → agressivité en
-      lane), pas un nouveau calcul, seuils "notable" arbitraires (même
-      esprit que `DRAFT_NOTABLE_COUNTER_DELTA`). Chaque composition propose
-      un lien pour se recharger dans le simulateur (réutilise le schéma
-      d'URL `blue_*` déjà existant). Mesuré avant implémentation : ~0,4s
-      par trio candidat, ~3-5s pour en explorer 10 — trop lent pour tourner
-      à chaque chargement de page, déclenché par un bouton explicite
-      (`?suggest=1`) plutôt qu'automatique ; ne persiste pas dans l'état
-      URL du simulateur (sinon recalculé à chaque pick suivant).
+      utilisateur ; algorithme revu le 2026-07-25, 2e retour utilisateur)** :
+      "un système qui propose 3 drafts, peu importe les champions en face,
+      avec des recommandations sur comment les jouer". Nouvelle section
+      indépendante du simulateur pick-par-pick existant (repart toujours de
+      zéro, ne complète pas les picks en cours).
+      **v1 (2026-07-24)** : partait du meilleur TRIO jgl/mid/sup par
+      synergie, complété par le TOP puis l'ADC. **Remplacée le jour même** :
+      un trio exige 3 champions précis simultanément, bien moins de données
+      qu'un duo (2 champions) — retour utilisateur.
+      **v2 (2026-07-25)** : part d'un DUO parmi les 10 paires de rôles
+      possibles (`score_duo`, `roles=None` — mêmes données que le filtre
+      "tous les rôles" de `/duos`), puis étend rôle par rôle SANS ordre
+      fixe : à chaque étape, le (rôle, champion) qui maximise la Σ synergie
+      avec TOUT ce qui est déjà posé, quel que soit le rôle restant. La Σ
+      des scores ajoutés à chaque étape (2 ancrages, puis 3, puis 4) couvre
+      exactement les 10 paires d'un draft à 5 (1+2+3+4=10=C(5,2)) : le total
+      final est la vraie somme de synergie sur toutes les paires, pas une
+      approximation.
+      **4 profils de poids ("archétypes", 2e retour utilisateur : "une
+      bonne draft pro c'est une draft qui scale, qui a un avantage aux
+      golds@15, qui a des CC et qui peut farm les drakes")** pilotent
+      UNIQUEMENT le choix du DUO DE DÉPART (score = Σ poids × z-score sur
+      `scaling`/`gold_diff_15`/`cc_blended_pct`/`drakes`, duos sans donnée
+      sur un axe pondéré exclus du classement) — l'extension gloutonne
+      reste TOUJOURS par synergie pure quel que soit le profil, jamais
+      pondérée elle-même (sinon la complexité explose) :
+      - "Meilleure synergie" : classement direct par synergie brute.
+      - "Scaling / fin de partie" : scaling 55 % / CC 20 % / gold 10 % /
+        drakes 15 %.
+      - "Avantage early / lane" : gold 45 % / CC 25 % / drakes 30 % /
+        scaling 0 %.
+      - "Contrôle des objectifs" : drakes 45 % / CC 35 % / gold 10 % /
+        scaling 10 %.
+      Poids arbitraires (comme `DRAFT_NOTABLE_COUNTER_DELTA`), pas de test
+      statistique dessus. Seuils "notable" des conseils de jeu recalibrés à
+      l'échelle DUO (pas trio) et vérifiés contre la vraie distribution
+      prod (`score_duo` fiable, n=25 173) : scaling ±0,03 (~0,8 écart-type),
+      CC ≥ 40 (~0,4 écart-type au-dessus de la moyenne), gold@15 ±350
+      (~0,8 écart-type) — mêmes ordres de grandeur relatifs que les seuils
+      v1, juste réduits pour refléter 2 champions plutôt que 3.
+      Chaque composition propose un lien pour se recharger dans le
+      simulateur (réutilise le schéma d'URL `blue_*` déjà existant).
+      Coût mesuré (réseau local → Supabase, donc plutôt une borne haute) :
+      ~3-40s selon le profil pour explorer jusqu'à 8 duos de départ —
+      variabilité surtout réseau (latence par requête), pas algorithmique
+      (le tout premier duo essayé réussit presque toujours). Toujours
+      déclenché par un bouton explicite (`?suggest=1`), jamais au
+      chargement de page ; ne persiste pas dans l'état URL du simulateur.
 
 Phase 8 close pour l'instant (draft, insights, résilience, flex) — prochaine idée à définir.
 

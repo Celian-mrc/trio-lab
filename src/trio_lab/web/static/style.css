@@ -376,6 +376,10 @@ th[data-tooltip]::after, label[data-tooltip]::after {
   background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 0.9rem 1.1rem; display: flex; flex-direction: column; gap: 0.6rem;
 }
+.draft-suggest-label {
+  margin: 0; font-size: 0.85rem; font-weight: 600; color: var(--accent);
+  text-transform: uppercase; letter-spacing: 0.03em;
+}
 .draft-suggest-members { display: flex; flex-direction: column; gap: 0.4rem; }
 .draft-suggest-members .champ { gap: 0.5rem; }
 .draft-suggest-advice {

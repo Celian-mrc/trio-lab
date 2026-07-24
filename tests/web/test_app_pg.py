@@ -971,8 +971,9 @@ def test_draft_page_blind_pick_shows_worst_matchup_safety(pg_sync, client):
 
 def test_draft_page_suggest_button_shown_but_not_computed_by_default(pg_sync, client):
     """Compositions suggérées (retour utilisateur 2026-07-24) : le calcul
-    (~3-5s) ne tourne jamais sur un chargement de page normal, seulement sur
-    clic explicite (`?suggest=1`) — le bouton reste visible dans les 2 cas."""
+    (~10-15s, 4 archétypes) ne tourne jamais sur un chargement de page
+    normal, seulement sur clic explicite (`?suggest=1`) — le bouton reste
+    visible dans les 2 cas."""
     pg_sync.execute(
         "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
         " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
@@ -982,31 +983,50 @@ def test_draft_page_suggest_button_shown_but_not_computed_by_default(pg_sync, cl
     resp = client.get("/draft")
     assert resp.status_code == 200
     assert "Compositions suggérées" in resp.text
-    assert "Proposer 3 compositions" in resp.text
-    # Pas de calcul : ni carte de composition, ni message "pas assez de trios".
+    assert "Proposer des compositions" in resp.text
+    # Pas de calcul : ni carte de composition, ni message "pas assez de duos".
     assert "draft-suggest-card" not in resp.text
-    assert "Pas assez de trios fiables" not in resp.text
+    assert "Pas assez de duos fiables" not in resp.text
 
 
 def _seed_suggest_scenario(conn) -> None:
-    """Trio jgl=1/mid=2/sup=3 (synergie +10 %, fiable) complété par un TOP
-    (champ 4) et un BOT (champ 5) via les 7 paires étendues — synergies
-    choisies pour donner un total exact et vérifiable : 0.10 (trio) + 0.06
-    (top : .02+.03+.01) + 0.07 (bot : .015+.02+.025+.01) = 0.23."""
+    """Duo de départ jgl_mid (champ 1/2, synergie +30 %, le plus fort de
+    tous — gagne l'archétype "Meilleure synergie") étendu rôle par rôle
+    (sup puis top puis bot, sans ordre fixe imposé — c'est juste l'ordre
+    que donnent ces synergies) vers un draft complet à 5. Chaque paire
+    n'a QU'UN seul candidat renseigné : le chemin glouton est donc
+    déterministe, vérifiable à la main.
+    Index de test : 1=Lee Sin(jgl), 2=Ahri(mid), 3=Thresh(sup), 4=Vi(top),
+    5=Orianna(bot).
+    Total attendu : seed jgl_mid (.30)
+      + étape 1 (sup, vs jgl+mid) : jgl_sup(.05) + mid_sup(.04) = .09
+      + étape 2 (top, vs jgl+mid+sup) : top_jgl(.02)+top_mid(.02)+top_sup(.03) = .07
+      + étape 3 (bot, vs les 4 autres) : jgl_bot(.01)+mid_bot(.01)+bot_sup(.01)+top_bot(.02) = .05
+      = .30 + .09 + .07 + .05 = .51 (couvre bien les 10 paires : 1+2+3+4=10)."""
+    # available_windows() lit score_trio (jamais score_duo) pour savoir
+    # quelles fenêtres existent — ligne minimale, son contenu n'est jamais
+    # lu par l'algorithme de suggestion (100 % duo-based désormais).
     conn.execute(
         "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
         " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
-        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 100, 100.0, 0.55, 0.10,"
-        " 0.0, 0.10, 0.0, 0.2, 'moyen')"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    conn.execute(
+        "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
+        " games_eff, wr, synergy, ci_low, ci_high, tier)"
+        " VALUES ('16.13', 'euw1', 'jgl_mid', 1, 2, 60, 60.0, 0.55, 0.30, 0.0, 0.30, 'moyen')"
     )
     rows = (
+        ("jgl_sup", 1, 3, 0.05),
+        ("mid_sup", 2, 3, 0.04),
         ("top_jgl", 4, 1, 0.02),
-        ("top_mid", 4, 2, 0.03),
-        ("top_sup", 4, 3, 0.01),
-        ("top_bot", 4, 5, 0.015),
-        ("jgl_bot", 1, 5, 0.02),
-        ("mid_bot", 2, 5, 0.025),
+        ("top_mid", 4, 2, 0.02),
+        ("top_sup", 4, 3, 0.03),
+        ("jgl_bot", 1, 5, 0.01),
+        ("mid_bot", 2, 5, 0.01),
         ("bot_sup", 5, 3, 0.01),
+        ("top_bot", 4, 5, 0.02),
     )
     for roles, champ_a, champ_b, synergy in rows:
         conn.execute(
@@ -1022,38 +1042,47 @@ def test_draft_page_suggest_proposes_synergy_based_composition(pg_sync, client):
     resp = client.get("/draft", params={"suggest": "1"})
     assert resp.status_code == 200
     assert "draft-suggest-card" in resp.text
-    # Les 5 membres de la composition (trio + TOP champ 4 + BOT champ 5,
-    # index de test : 1=Lee Sin, 2=Ahri, 3=Thresh, 4=Vi, 5=Orianna).
+    assert "Meilleure synergie" in resp.text
+    # Les 5 membres de la composition (index de test : 1=Lee Sin, 2=Ahri,
+    # 3=Thresh, 4=Vi, 5=Orianna).
     for name in ("Vi", "Lee Sin", "Ahri", "Orianna", "Thresh"):
         assert name in resp.text
-    # Synergie totale exacte : 0.10 + 0.06 + 0.07 = 0.23.
-    assert "+23.0 %" in resp.text
-    assert "100 games, fiabilité moyen" in resp.text
+    # Synergie totale exacte : .30 + .09 + .07 + .05 = .51 (cf. docstring
+    # de _seed_suggest_scenario pour le détail des 10 paires couvertes).
+    assert "+51.0 %" in resp.text
+    assert "60 games, fiabilité moyen" in resp.text
     # Lien pour recharger cette composition dans le simulateur, côté Blue.
     assert "blue_top=Vi" in resp.text
     assert "blue_jgl=Lee+Sin" in resp.text or "blue_jgl=Lee%20Sin" in resp.text
     assert "blue_bot=Orianna" in resp.text
 
 
-def test_draft_page_suggest_shows_advice_from_trio_stats(pg_sync, client):
+def test_draft_page_suggest_shows_advice_from_seed_duo_stats(pg_sync, client):
     """Les conseils de jeu (retour utilisateur 2026-07-24) traduisent des
-    stats déjà calculées du trio (scaling/CC/gold@15), pas un nouveau
+    stats déjà calculées du DUO DE DÉPART (`score_duo`), pas un nouveau
     calcul — jamais présentés comme une garantie, juste une phrase."""
     pg_sync.execute(
         "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
         " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
-        " ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15)"
-        " VALUES ('16.13', 'euw1', 1, 2, 3, 100, 100.0, 0.55, 0.10, 0.0, 0.10, 0.0, 0.2,"
-        " 'moyen', 0.08, 70.0, 800.0)"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    pg_sync.execute(
+        "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
+        " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15)"
+        " VALUES ('16.13', 'euw1', 'jgl_mid', 1, 2, 60, 60.0, 0.55, 0.30, 0.0, 0.30, 'moyen',"
+        " 0.08, 70.0, 800.0)"
     )
     rows = (
+        ("jgl_sup", 1, 3, 0.05),
+        ("mid_sup", 2, 3, 0.04),
         ("top_jgl", 4, 1, 0.02),
-        ("top_mid", 4, 2, 0.03),
-        ("top_sup", 4, 3, 0.01),
-        ("top_bot", 4, 5, 0.015),
-        ("jgl_bot", 1, 5, 0.02),
-        ("mid_bot", 2, 5, 0.025),
+        ("top_mid", 4, 2, 0.02),
+        ("top_sup", 4, 3, 0.03),
+        ("jgl_bot", 1, 5, 0.01),
+        ("mid_bot", 2, 5, 0.01),
         ("bot_sup", 5, 3, 0.01),
+        ("top_bot", 4, 5, 0.02),
     )
     for roles, champ_a, champ_b, synergy in rows:
         pg_sync.execute(
@@ -1069,13 +1098,82 @@ def test_draft_page_suggest_shows_advice_from_trio_stats(pg_sync, client):
     assert "avantage économique attendu tôt" in resp.text  # gold_diff_15 > seuil notable
 
 
-def test_draft_page_suggest_returns_fewer_than_count_without_crashing(pg_sync, client):
-    """Un seul trio fiable disponible : une seule composition retournée
-    (pas DRAFT_SUGGEST_COUNT), pas de ligne manquante/plantage."""
+def test_draft_page_suggest_skips_archetypes_without_stat_data(pg_sync, client):
+    """Sans scaling/CC/gold/drakes renseignés sur aucun duo, les 3
+    archétypes pondérés (Scaling/Early/Objectifs) n'ont aucun candidat
+    classable — seule "Meilleure synergie" (qui ne dépend pas de ces
+    colonnes) produit une composition, pas de ligne vide/plantée pour les
+    3 autres."""
     _seed_suggest_scenario(pg_sync)
     resp = client.get("/draft", params={"suggest": "1"})
     assert resp.status_code == 200
     assert resp.text.count("draft-suggest-card") == 1
+    assert "Meilleure synergie" in resp.text
+    assert "Scaling / fin de partie" not in resp.text
+
+
+def test_draft_page_suggest_archetypes_pick_different_seed_duos(pg_sync, client):
+    """Le profil "Scaling" doit pouvoir choisir un duo de départ DIFFÉRENT
+    de "Meilleure synergie" quand les stats le justifient — même si la
+    synergie brute est plus faible (retour utilisateur 2026-07-25 : le
+    poids pilote UNIQUEMENT le choix du duo de départ)."""
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    # Duo A (jgl_mid, champ 1/2) : synergie dominante (+30 %) mais scaling
+    # négatif (-10 %, "early") — gagne "Meilleure synergie", perd "Scaling".
+    pg_sync.execute(
+        "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
+        " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15,"
+        " drakes)"
+        " VALUES ('16.13', 'euw1', 'jgl_mid', 1, 2, 60, 60.0, 0.55, 0.30, 0.0, 0.30, 'moyen',"
+        " -0.10, 20.0, 100.0, 0.02)"
+    )
+    # Duo B (top_bot, champ 4/5) : synergie bien plus faible (+5 %) mais
+    # scaling fortement positif (+10 %, "scaling") — perd "Meilleure
+    # synergie", gagne "Scaling" (poids scaling = 55 %, dominant).
+    pg_sync.execute(
+        "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
+        " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15,"
+        " drakes)"
+        " VALUES ('16.13', 'euw1', 'top_bot', 4, 5, 60, 60.0, 0.55, 0.05, 0.0, 0.05, 'moyen',"
+        " 0.10, 20.0, 100.0, 0.02)"
+    )
+    # Paires structurelles restantes (pas de stats archétype dessus, juste
+    # de la synergie — nécessaires pour que les 2 duos de départ puissent
+    # se compléter en draft à 5).
+    rows = (
+        ("jgl_sup", 1, 3, 0.05),
+        ("mid_sup", 2, 3, 0.04),
+        ("top_jgl", 4, 1, 0.02),
+        ("top_mid", 4, 2, 0.02),
+        ("top_sup", 4, 3, 0.03),
+        ("jgl_bot", 1, 5, 0.01),
+        ("mid_bot", 2, 5, 0.01),
+        ("bot_sup", 5, 3, 0.01),
+    )
+    for roles, champ_a, champ_b, synergy in rows:
+        pg_sync.execute(
+            "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
+            " games_eff, wr, synergy, ci_low, ci_high, tier)"
+            " VALUES ('16.13', 'euw1', %s, %s, %s, 60, 60.0, 0.55, %s, 0.0, %s, 'moyen')",
+            (roles, champ_a, champ_b, synergy, synergy),
+        )
+    resp = client.get("/draft", params={"suggest": "1"})
+    assert resp.status_code == 200
+    assert "Meilleure synergie" in resp.text
+    assert "Scaling / fin de partie" in resp.text
+    # Preuve indirecte que les 2 profils ont choisi 2 duos de départ
+    # différents (A vs B) : leurs conseils de jeu, dérivés du scaling du
+    # SEED, sont opposés — "Meilleure synergie" (duo A, scaling -10 %)
+    # dit "plus fort tôt", "Scaling" (duo B, scaling +10 %) dit "monte en
+    # puissance". Si les 2 profils avaient choisi le même duo, ces 2
+    # phrases contradictoires ne pourraient pas apparaître ensemble.
+    assert "plus forte tôt que tard" in resp.text
+    assert "monte en puissance" in resp.text
 
 
 def test_insights_page_empty_state(pg_sync, client):
