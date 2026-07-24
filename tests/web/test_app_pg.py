@@ -969,6 +969,115 @@ def test_draft_page_blind_pick_shows_worst_matchup_safety(pg_sync, client):
     assert "pire contre" not in resp.text
 
 
+def test_draft_page_suggest_button_shown_but_not_computed_by_default(pg_sync, client):
+    """Compositions suggérées (retour utilisateur 2026-07-24) : le calcul
+    (~3-5s) ne tourne jamais sur un chargement de page normal, seulement sur
+    clic explicite (`?suggest=1`) — le bouton reste visible dans les 2 cas."""
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    resp = client.get("/draft")
+    assert resp.status_code == 200
+    assert "Compositions suggérées" in resp.text
+    assert "Proposer 3 compositions" in resp.text
+    # Pas de calcul : ni carte de composition, ni message "pas assez de trios".
+    assert "draft-suggest-card" not in resp.text
+    assert "Pas assez de trios fiables" not in resp.text
+
+
+def _seed_suggest_scenario(conn) -> None:
+    """Trio jgl=1/mid=2/sup=3 (synergie +10 %, fiable) complété par un TOP
+    (champ 4) et un BOT (champ 5) via les 7 paires étendues — synergies
+    choisies pour donner un total exact et vérifiable : 0.10 (trio) + 0.06
+    (top : .02+.03+.01) + 0.07 (bot : .015+.02+.025+.01) = 0.23."""
+    conn.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 100, 100.0, 0.55, 0.10,"
+        " 0.0, 0.10, 0.0, 0.2, 'moyen')"
+    )
+    rows = (
+        ("top_jgl", 4, 1, 0.02),
+        ("top_mid", 4, 2, 0.03),
+        ("top_sup", 4, 3, 0.01),
+        ("top_bot", 4, 5, 0.015),
+        ("jgl_bot", 1, 5, 0.02),
+        ("mid_bot", 2, 5, 0.025),
+        ("bot_sup", 5, 3, 0.01),
+    )
+    for roles, champ_a, champ_b, synergy in rows:
+        conn.execute(
+            "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
+            " games_eff, wr, synergy, ci_low, ci_high, tier)"
+            " VALUES ('16.13', 'euw1', %s, %s, %s, 60, 60.0, 0.55, %s, 0.0, %s, 'moyen')",
+            (roles, champ_a, champ_b, synergy, synergy),
+        )
+
+
+def test_draft_page_suggest_proposes_synergy_based_composition(pg_sync, client):
+    _seed_suggest_scenario(pg_sync)
+    resp = client.get("/draft", params={"suggest": "1"})
+    assert resp.status_code == 200
+    assert "draft-suggest-card" in resp.text
+    # Les 5 membres de la composition (trio + TOP champ 4 + BOT champ 5,
+    # index de test : 1=Lee Sin, 2=Ahri, 3=Thresh, 4=Vi, 5=Orianna).
+    for name in ("Vi", "Lee Sin", "Ahri", "Orianna", "Thresh"):
+        assert name in resp.text
+    # Synergie totale exacte : 0.10 + 0.06 + 0.07 = 0.23.
+    assert "+23.0 %" in resp.text
+    assert "100 games, fiabilité moyen" in resp.text
+    # Lien pour recharger cette composition dans le simulateur, côté Blue.
+    assert "blue_top=Vi" in resp.text
+    assert "blue_jgl=Lee+Sin" in resp.text or "blue_jgl=Lee%20Sin" in resp.text
+    assert "blue_bot=Orianna" in resp.text
+
+
+def test_draft_page_suggest_shows_advice_from_trio_stats(pg_sync, client):
+    """Les conseils de jeu (retour utilisateur 2026-07-24) traduisent des
+    stats déjà calculées du trio (scaling/CC/gold@15), pas un nouveau
+    calcul — jamais présentés comme une garantie, juste une phrase."""
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15)"
+        " VALUES ('16.13', 'euw1', 1, 2, 3, 100, 100.0, 0.55, 0.10, 0.0, 0.10, 0.0, 0.2,"
+        " 'moyen', 0.08, 70.0, 800.0)"
+    )
+    rows = (
+        ("top_jgl", 4, 1, 0.02),
+        ("top_mid", 4, 2, 0.03),
+        ("top_sup", 4, 3, 0.01),
+        ("top_bot", 4, 5, 0.015),
+        ("jgl_bot", 1, 5, 0.02),
+        ("mid_bot", 2, 5, 0.025),
+        ("bot_sup", 5, 3, 0.01),
+    )
+    for roles, champ_a, champ_b, synergy in rows:
+        pg_sync.execute(
+            "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
+            " games_eff, wr, synergy, ci_low, ci_high, tier)"
+            " VALUES ('16.13', 'euw1', %s, %s, %s, 60, 60.0, 0.55, %s, 0.0, %s, 'moyen')",
+            (roles, champ_a, champ_b, synergy, synergy),
+        )
+    resp = client.get("/draft", params={"suggest": "1"})
+    assert resp.status_code == 200
+    assert "monte en puissance" in resp.text  # scaling > seuil notable
+    assert "contrôle de foule" in resp.text  # cc_blended_pct >= seuil notable
+    assert "avantage économique attendu tôt" in resp.text  # gold_diff_15 > seuil notable
+
+
+def test_draft_page_suggest_returns_fewer_than_count_without_crashing(pg_sync, client):
+    """Un seul trio fiable disponible : une seule composition retournée
+    (pas DRAFT_SUGGEST_COUNT), pas de ligne manquante/plantage."""
+    _seed_suggest_scenario(pg_sync)
+    resp = client.get("/draft", params={"suggest": "1"})
+    assert resp.status_code == 200
+    assert resp.text.count("draft-suggest-card") == 1
+
+
 def test_insights_page_empty_state(pg_sync, client):
     pg_sync.execute(
         "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"

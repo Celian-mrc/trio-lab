@@ -20,6 +20,48 @@
   avec plusieurs contres notables est un blind pick plus risqué, même si son pire cas n'est pas
   extrême.</p>
 
+<section class="draft-suggest">
+  <div class="draft-suggest-head">
+    <h2>Compositions suggérées</h2>
+    <a class="button-like" href="{{ suggest_url }}">Proposer {{ draft_suggest_count }} compositions</a>
+  </div>
+  <p class="meta">Indépendant du simulateur ci-dessous : part des meilleurs trios jungle/mid/support par
+    synergie, puis complète chacun avec le TOP et l'ADC qui maximisent la synergie avec ce qui est déjà
+    posé — jamais de contre calculé (peu importe qui est en face). Les 3 propositions ne partagent aucun
+    champion entre elles.</p>
+  {% if suggested_drafts is not none %}
+  {% if not suggested_drafts %}
+  <p class="empty">Pas assez de trios fiables sur cette fenêtre pour proposer des compositions.</p>
+  {% else %}
+  <div class="draft-suggest-grid">
+    {% for d in suggested_drafts %}
+    <div class="draft-suggest-card">
+      <div class="draft-suggest-members">
+        {% for m in d.members %}
+        <span class="champ" title="{{ m.role_label }}">
+          <span class="role-badge role-{{ m.role }}">{{ m.role | upper }}</span>
+          {% if m.champion.icon_url %}<img src="{{ m.champion.icon_url }}" alt="" width="28" height="28">{% endif %}
+          {{ m.champion.name }}
+        </span>
+        {% endfor %}
+      </div>
+      <p class="meta">Synergie totale :
+        <span class="{{ 'pos' if d.total_synergy > 0 else 'neg' if d.total_synergy < 0 }}">{{ d.total_synergy | signed_pct }}</span>
+        <span class="sub">trio jungle/mid/support : {{ d.trio_games }} games, fiabilité {{ d.trio_tier }}</span>
+      </p>
+      {% if d.advice %}
+      <ul class="draft-suggest-advice">
+        {% for tip in d.advice %}<li>{{ tip }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+      <a class="draft-suggest-load" href="{{ d.load_url }}">Charger dans le simulateur (côté Blue)</a>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endif %}
+</section>
+
 <form method="get" action="/draft" class="filters">
   <label>Fenêtre
     <select name="window">

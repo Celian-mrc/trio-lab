@@ -355,6 +355,39 @@ th[data-tooltip]::after, label[data-tooltip]::after {
   padding: 0.4rem 0.6rem; font-size: 0.85rem; margin-bottom: 0.7rem;
 }
 
+/* --- Compositions suggérées (draft, retour utilisateur 2026-07-24) : 3
+   drafts complets indépendants du simulateur pick-par-pick ci-dessous,
+   calculés uniquement sur clic (bouton .button-like, jamais au chargement
+   de page — ~3-5s de calcul, cf. commentaire DRAFT_SUGGEST_* dans app.py). */
+.draft-suggest { margin: 1.25rem 0; }
+.draft-suggest-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.draft-suggest-head h2 { margin: 0; }
+.button-like {
+  background: var(--primary); color: var(--primary-fg); border: none;
+  border-radius: 6px; padding: 0.45rem 1rem; font-size: 0.85rem; font-weight: 600;
+  cursor: pointer; text-decoration: none; display: inline-block;
+}
+.button-like:hover { opacity: 0.9; }
+.draft-suggest-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 1rem; margin-top: 0.9rem;
+}
+.draft-suggest-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 0.9rem 1.1rem; display: flex; flex-direction: column; gap: 0.6rem;
+}
+.draft-suggest-members { display: flex; flex-direction: column; gap: 0.4rem; }
+.draft-suggest-members .champ { gap: 0.5rem; }
+.draft-suggest-advice {
+  margin: 0; padding-left: 1.1rem; font-size: 0.8rem; color: var(--muted-fg);
+  display: flex; flex-direction: column; gap: 0.3rem;
+}
+.draft-suggest-load {
+  align-self: flex-start; color: var(--accent); text-decoration: none; font-size: 0.82rem;
+  border: 1px solid var(--border); border-radius: 6px; padding: 0.3rem 0.7rem;
+}
+.draft-suggest-load:hover { background: var(--muted); }
+
 .champ-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr)); gap: 0.5rem;
 }

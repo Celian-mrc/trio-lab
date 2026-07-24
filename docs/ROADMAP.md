@@ -530,6 +530,27 @@ gagner") avec les données déjà en place.
       population complète (toutes les games y sont déjà en déficit — le
       facteur y mesure "un peu moins en retard", pas "passer en avance"),
       confusion remontée par l'utilisateur en creusant le tableau.
+- [x] **Compositions suggérées sur `/draft` (2026-07-24, retour
+      utilisateur)** : "un système qui propose 3 drafts, peu importe les
+      champions en face, avec des recommandations sur comment les jouer".
+      Nouvelle section indépendante du simulateur pick-par-pick existant
+      (confirmé avec l'utilisateur : repart toujours de zéro, ne complète
+      pas les picks en cours). Aucune donnée nouvelle : part des meilleurs
+      trios jgl/mid/sup par synergie (`score_trio`), complète chacun avec
+      le TOP puis l'ADC qui maximisent la Σ synergie avec ce qui est déjà
+      posé (`score_duo`, les 7 paires étendues — exactement ce qu'il fallait
+      pour compléter un trio en draft à 5). Garde les 3 meilleures
+      compositions complètes SANS champion partagé entre elles. Conseils de
+      jeu traduits depuis des stats déjà calculées du trio (`scaling` →
+      pacing, `cc_blended_pct` → engage, `gold_diff_15` → agressivité en
+      lane), pas un nouveau calcul, seuils "notable" arbitraires (même
+      esprit que `DRAFT_NOTABLE_COUNTER_DELTA`). Chaque composition propose
+      un lien pour se recharger dans le simulateur (réutilise le schéma
+      d'URL `blue_*` déjà existant). Mesuré avant implémentation : ~0,4s
+      par trio candidat, ~3-5s pour en explorer 10 — trop lent pour tourner
+      à chaque chargement de page, déclenché par un bouton explicite
+      (`?suggest=1`) plutôt qu'automatique ; ne persiste pas dans l'état
+      URL du simulateur (sinon recalculé à chaque pick suivant).
 
 Phase 8 close pour l'instant (draft, insights, résilience, flex) — prochaine idée à définir.
 
