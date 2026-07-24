@@ -579,6 +579,14 @@ gagner") avec les données déjà en place.
       (le tout premier duo essayé réussit presque toujours). Toujours
       déclenché par un bouton explicite (`?suggest=1`), jamais au
       chargement de page ; ne persiste pas dans l'état URL du simulateur.
+      **Seuil de fiabilité relevé le jour même (3e retour utilisateur)** :
+      `DRAFT_SUGGEST_MIN_TIER` passé de "moyen" (games_eff ≥ 50) à "eleve"
+      (games_eff ≥ 400) — un duo a bien plus de volume qu'un trio, on peut
+      se permettre d'être exigeant. Vérifié avant de changer : 5867 duos
+      "eleve" sur la fenêtre courante, 325 à 1040 par paire de rôles
+      (aucune des 10 sous-alimentée). Bénéfice inattendu : aussi bien plus
+      rapide (moins de lignes à sommer par requête), ~6s mesurées pour les
+      4 archétypes au lieu de ~40s avec le seuil "moyen".
 
 Phase 8 close pour l'instant (draft, insights, résilience, flex) — prochaine idée à définir.
 

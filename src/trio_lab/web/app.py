@@ -113,7 +113,13 @@ DRAFT_NOTABLE_COUNTER_DELTA = -0.03
 # l'extension gloutonne reste toujours par synergie pure, quel que soit le
 # profil — sinon la complexité (et le temps de calcul) explose.
 DRAFT_SUGGEST_SEED_SHORTLIST = 8  # duos de départ essayés par profil avant d'abandonner
-DRAFT_SUGGEST_MIN_TIER = "moyen"  # même plancher que champion_best_partners par défaut
+# "eleve" (games_eff ≥ 400), pas "moyen" (retour utilisateur 2026-07-25) : un
+# duo a bien plus de volume qu'un trio (2 champions précis, pas 3), on peut
+# se permettre d'être exigeant. Vérifié avant de changer : 5867 duos
+# "eleve" sur la fenêtre courante, 325 à 1040 par paire de rôles (aucune des
+# 10 sous-alimentée) — largement assez de candidats malgré le seuil plus
+# strict, cf. docs/ROADMAP.md.
+DRAFT_SUGGEST_MIN_TIER = "eleve"
 DRAFT_ARCHETYPE_STAT_COLUMNS = {
     "scaling": "scaling",
     "cc": "cc_blended_pct",
