@@ -1115,8 +1115,11 @@ def test_draft_page_suggest_skips_archetypes_without_stat_data(pg_sync, client):
 def test_draft_page_suggest_archetypes_pick_different_seed_duos(pg_sync, client):
     """Le profil "Scaling" doit pouvoir choisir un duo de départ DIFFÉRENT
     de "Meilleure synergie" quand les stats le justifient — même si la
-    synergie brute est plus faible (retour utilisateur 2026-07-25 : le
-    poids pilote UNIQUEMENT le choix du duo de départ)."""
+    synergie brute est plus faible (retour utilisateur 2026-07-25 : le poids
+    pilote désormais le choix du duo de départ ET chaque champion ajouté
+    ensuite ; les paires structurelles portent donc ici des stats neutres
+    partout, pour isoler l'effet des stats EXTRÊMES des 2 duos de départ
+    sans qu'une des 2 archétypes soit disqualifiée faute de données)."""
     pg_sync.execute(
         "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
         " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
@@ -1134,7 +1137,7 @@ def test_draft_page_suggest_archetypes_pick_different_seed_duos(pg_sync, client)
     )
     # Duo B (top_bot, champ 4/5) : synergie bien plus faible (+5 %) mais
     # scaling fortement positif (+10 %, "scaling") — perd "Meilleure
-    # synergie", gagne "Scaling" (poids scaling = 55 %, dominant).
+    # synergie", gagne "Scaling" (poids scaling = 38.5 %, dominant).
     pg_sync.execute(
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
         " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15,"
@@ -1142,9 +1145,11 @@ def test_draft_page_suggest_archetypes_pick_different_seed_duos(pg_sync, client)
         " VALUES ('16.13', 'euw1', 'top_bot', 4, 5, 60, 60.0, 0.55, 0.05, 0.0, 0.05, 'eleve',"
         " 0.10, 20.0, 100.0, 0.02)"
     )
-    # Paires structurelles restantes (pas de stats archétype dessus, juste
-    # de la synergie — nécessaires pour que les 2 duos de départ puissent
-    # se compléter en draft à 5).
+    # Paires structurelles restantes : stats archétype neutres et
+    # identiques partout (scaling=0.0, cc/gold/drakes = les mêmes valeurs
+    # que les 2 duos de départ) — comme ça un candidat n'est jamais exclu
+    # faute de donnée, et son z-score sur ces axes est ~0 (n'influence pas
+    # le classement, seule la synergie et le scaling des SEEDS discriminent).
     rows = (
         ("jgl_sup", 1, 3, 0.05),
         ("mid_sup", 2, 3, 0.04),
@@ -1158,8 +1163,10 @@ def test_draft_page_suggest_archetypes_pick_different_seed_duos(pg_sync, client)
     for roles, champ_a, champ_b, synergy in rows:
         pg_sync.execute(
             "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
-            " games_eff, wr, synergy, ci_low, ci_high, tier)"
-            " VALUES ('16.13', 'euw1', %s, %s, %s, 60, 60.0, 0.55, %s, 0.0, %s, 'eleve')",
+            " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct,"
+            " gold_diff_15, drakes)"
+            " VALUES ('16.13', 'euw1', %s, %s, %s, 60, 60.0, 0.55, %s, 0.0, %s, 'eleve',"
+            " 0.0, 20.0, 100.0, 0.02)",
             (roles, champ_a, champ_b, synergy, synergy),
         )
     resp = client.get("/draft", params={"suggest": "1"})

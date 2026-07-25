@@ -551,26 +551,38 @@ gagner") avec les données déjà en place.
       approximation.
       **4 profils de poids ("archétypes", 2e retour utilisateur : "une
       bonne draft pro c'est une draft qui scale, qui a un avantage aux
-      golds@15, qui a des CC et qui peut farm les drakes")** pilotent
-      UNIQUEMENT le choix du DUO DE DÉPART (score = Σ poids × z-score sur
-      `scaling`/`gold_diff_15`/`cc_blended_pct`/`drakes`, duos sans donnée
-      sur un axe pondéré exclus du classement) — l'extension gloutonne
-      reste TOUJOURS par synergie pure quel que soit le profil, jamais
-      pondérée elle-même (sinon la complexité explose) :
-      - "Meilleure synergie" : classement direct par synergie brute.
-      - "Scaling / fin de partie" : scaling 55 % / CC 20 % / gold 10 % /
-        drakes 15 %.
-      - "Avantage early / lane" : gold 45 % / CC 25 % / drakes 30 % /
-        scaling 0 %.
-      - "Contrôle des objectifs" : drakes 45 % / CC 35 % / gold 10 % /
-        scaling 10 %.
-      Poids arbitraires (comme `DRAFT_NOTABLE_COUNTER_DELTA`), pas de test
-      statistique dessus. Seuils "notable" des conseils de jeu recalibrés à
-      l'échelle DUO (pas trio) et vérifiés contre la vraie distribution
-      prod (`score_duo` fiable, n=25 173) : scaling ±0,03 (~0,8 écart-type),
-      CC ≥ 40 (~0,4 écart-type au-dessus de la moyenne), gold@15 ±350
-      (~0,8 écart-type) — mêmes ordres de grandeur relatifs que les seuils
-      v1, juste réduits pour refléter 2 champions plutôt que 3.
+      golds@15, qui a des CC et qui peut farm les drakes")**, poids
+      arbitraires (comme `DRAFT_NOTABLE_COUNTER_DELTA`), pas de test
+      statistique dessus :
+      - "Meilleure synergie" : synergie 100 %.
+      - "Scaling / fin de partie" : synergie 30 % / scaling 38,5 % / CC 14 %
+        / gold 7 % / drakes 10,5 %.
+      - "Avantage early / lane" : synergie 30 % / gold 31,5 % / CC 17,5 % /
+        drakes 21 % / scaling 0 %.
+      - "Contrôle des objectifs" : synergie 30 % / drakes 31,5 % / CC 24,5 %
+        / gold 7 % / scaling 7 %.
+      Seuils "notable" des conseils de jeu recalibrés à l'échelle DUO (pas
+      trio) et vérifiés contre la vraie distribution prod (`score_duo`
+      fiable, n=25 173) : scaling ±0,03 (~0,8 écart-type), CC ≥ 40 (~0,4
+      écart-type au-dessus de la moyenne), gold@15 ±350 (~0,8 écart-type) —
+      mêmes ordres de grandeur relatifs que les seuils v1, juste réduits
+      pour refléter 2 champions plutôt que 3.
+      **v3 (2026-07-25, 4e retour utilisateur)** : "un champion d'un duo
+      fait forcément partie d'un autre duo" — les poids ne pilotaient QUE le
+      choix du duo de départ, l'extension gloutonne restait ensuite par
+      synergie pure quel que soit le profil. Corrigé : `synergy` devient un
+      axe pondéré parmi les autres (100 % pour "Meilleure synergie", 30 %
+      pour les 3 profils pondérés — le reste réparti sur scaling/CC/gold/
+      drakes, poids d'origine × 0,7 — pour ne pas sacrifier la synergie pure
+      au profit du profil), et le MÊME score composite (Σ poids × z-score,
+      moyenné sur les nouvelles paires formées à chaque étape) sert à choisir
+      le duo de départ ET chaque champion ajouté ensuite — plus seulement le
+      premier. Le total "Synergie totale" affiché reste la vraie Σ synergie
+      sur les 10 paires (calcul inchangé) ; seul le critère de sélection a
+      changé. Vérifié sur données réelles (16.14+16.13) : "Scaling" diverge
+      maintenant de "Meilleure synergie" au niveau MID/SUP (Katarina/Nami →
+      Syndra/Milio) sur le même duo de départ, preuve que l'archétype
+      pèse bien sur toute la composition et pas seulement le seed.
       Chaque composition propose un lien pour se recharger dans le
       simulateur (réutilise le schéma d'URL `blue_*` déjà existant).
       Coût mesuré (réseau local → Supabase, donc plutôt une borne haute) :
@@ -587,6 +599,34 @@ gagner") avec les données déjà en place.
       (aucune des 10 sous-alimentée). Bénéfice inattendu : aussi bien plus
       rapide (moins de lignes à sommer par requête), ~6s mesurées pour les
       4 archétypes au lieu de ~40s avec le seuil "moyen".
+      **v4 (2026-07-25, 5e retour utilisateur)** : "est-ce possible de ne
+      pas se baser sur un duo de départ" — un ancrage réel reste nécessaire
+      (aucune donnée n'existe pour 5 champions précis à la fois, même
+      logique que l'abandon des counters trio, cf. CLAUDE.md), mais 2
+      corrections rapprochent du principe :
+      1. `_propose_drafts` ne s'arrête plus au premier duo de départ qui
+         complète : les `DRAFT_SUGGEST_SEED_SHORTLIST` (8) candidats sont
+         tous complétés, puis comparés sur un nouveau score
+         (`_full_draft_score`) calculé sur les 10 VRAIES paires du draft
+         fini (pas juste les moyennes partielles vues pendant la
+         construction) — la composition FINIE au meilleur score archétype
+         est retenue, pas celle du duo le mieux classé isolément.
+      2. **Bug préexistant découvert en marge** : le pool de duos candidats
+         pour le choix du duo de départ était silencieusement plafonné à 50
+         lignes (`duo_tierlist` pagine par défaut, `PER_PAGE`), toujours les
+         50 meilleures en synergie BRUTE — les archétypes non-synergie ne
+         pouvaient donc jamais considérer un duo hors de ce top-50, même
+         taillé pour leur profil. `duo_tierlist` accepte désormais un
+         `per_page` optionnel ; `_propose_drafts` passe `DRAFT_SUGGEST_POOL_SIZE
+         = 10 000` (marge au-dessus des ~5867 duos "eleve" actuels).
+      Résultat vérifié sur données réelles (16.14+16.13) : les 4 archétypes
+      donnent maintenant 4 compositions ET 4 duos de départ réellement
+      différents (540/497/690/701 games), alors qu'avant ce correctif 3 des
+      4 convergeaient sur la même composition que "Meilleure synergie".
+      Coût mesuré : ~26-29s pour les 4 profils (vs ~6s v3) — attendu, on
+      construit et compare désormais plusieurs drafts complets par profil
+      au lieu de s'arrêter au premier ; jugé acceptable pour une action
+      "clic et attente" explicite, pas un chargement de page.
 
 Phase 8 close pour l'instant (draft, insights, résilience, flex) — prochaine idée à définir.
 

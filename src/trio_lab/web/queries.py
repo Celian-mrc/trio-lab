@@ -197,6 +197,7 @@ def duo_tierlist(
     sort: Sequence[str] = ("synergy",),
     direction: Sequence[str] = ("desc",),
     page: int = 1,
+    per_page: int = PER_PAGE,
 ) -> dict:
     """Une page de tier list des duos d'un couple de rôles — ou, `roles=None`
     (retour utilisateur 2026-07-20), toutes les paires mélangées : chercher
@@ -208,7 +209,12 @@ def duo_tierlist(
     rôles de `roles` (ex. jgl_mid → champ_a=jungle, champ_b=mid) — même
     principe que `trio_tierlist`. Non applicables si `roles` est None (quel
     rôle serait champ_a ?) — laissés à `None` par l'appelant dans ce cas.
-    """
+
+    `per_page` : `PER_PAGE` (50) par défaut pour l'affichage paginé de
+    `/duos` — surchargeable (ex. `_propose_drafts`, retour utilisateur
+    2026-07-25 : un pool de candidats de départ plafonné à 50 lignes,
+    toujours triées par synergie brute, empêchait les archétypes non-synergie
+    de considérer un duo hors de ce top-50)."""
     if roles is not None and roles not in DUO_ROLES:
         raise ValueError(f"roles inconnu : {roles!r}")
     order_clause = _order_by_clause(sort, direction, DUO_SORTS)
@@ -223,8 +229,8 @@ def duo_tierlist(
         "platform": platform,
         "min_games": min_games,
         "tiers": list(_TIER_AT_LEAST[min_tier]),
-        "offset": (max(page, 1) - 1) * PER_PAGE,
-        "per_page": PER_PAGE,
+        "offset": (max(page, 1) - 1) * per_page,
+        "per_page": per_page,
     }
     if roles is not None:
         where.append("roles = %(roles)s")
@@ -250,7 +256,7 @@ def duo_tierlist(
     total = rows[0].pop("total") if rows else 0
     for row in rows:
         row.pop("total", None)
-    return {"rows": rows, "total": total, "page": max(page, 1), "per_page": PER_PAGE}
+    return {"rows": rows, "total": total, "page": max(page, 1), "per_page": per_page}
 
 
 def trio_score(
@@ -368,7 +374,8 @@ def champion_best_partners(
     with conn.cursor(row_factory=dict_row) as cur:
         return cur.execute(
             f"""
-            SELECT {partner_col} AS partner_champion, games, games_eff, wr, synergy, tier
+            SELECT {partner_col} AS partner_champion, games, games_eff, wr, synergy, tier,
+                   scaling, cc_blended_pct, gold_diff_15, drakes
             FROM score_duo
             WHERE window_label = %(window)s AND platform = %(platform)s AND roles = %(roles)s
               AND {fixed_col} = %(champ)s AND tier = ANY(%(tiers)s)
