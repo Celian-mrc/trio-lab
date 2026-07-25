@@ -27,7 +27,7 @@ import psycopg
 from trio_lab import db, maintenance
 from trio_lab.collector import collect, patches
 from trio_lab.stats import aggregate
-from trio_lab.synergy import compute, matchups, resilience
+from trio_lab.synergy import compute, draft_suggestions, matchups, resilience
 from trio_lab.synergy.windows import PatchWindow, make_window, patch_key
 
 logger = logging.getLogger(__name__)
@@ -68,6 +68,13 @@ def refresh_scores(patch: str, dsn: str | None = None) -> None:
     # manuel à automatique le 20/07/2026, retour utilisateur (cf.
     # docs/ROADMAP.md). `min_rows` en dessous du seuil : no-op silencieux.
     resilience.refresh(window, dsn=dsn)
+    # Compositions suggérées + contres précalculées pour "toutes régions"
+    # UNIQUEMENT (retour utilisateur 2026-07-25) : la région par défaut à
+    # l'arrivée sur /draft (le plus de games) — les autres régions restent en
+    # calcul à la demande (bouton), coût mesuré ~30-47s par région, pas
+    # justifié pour un usage bien plus rare. Coût ici absorbé dans le même
+    # cycle que score_duo/score_matchup/résilience, déjà plusieurs minutes.
+    draft_suggestions.refresh(window, "all", dsn=dsn)
     maintenance.purge_stale_scores(dsn=dsn)
 
 

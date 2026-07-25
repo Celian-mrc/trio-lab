@@ -896,3 +896,100 @@ def duo_best_trios(
                 "limit": limit,
             },
         ).fetchall()
+
+
+def draft_suggestions(conn: psycopg.Connection, window: str, platform: str) -> list[dict]:
+    """Compositions suggérées PRÉCALCULÉES (`synergy.draft_suggestions.refresh`,
+    Phase 9, retour utilisateur 2026-07-25 — "je voulais garder les drafts
+    proposées sans avoir à cliquer"). `[]` si rien de matérialisé pour cette
+    fenêtre/plateforme (web/app.py retombe alors sur le calcul à la demande).
+
+    Retourne la MÊME forme brute que
+    `synergy.draft_suggestions.propose_drafts` (une entrée par archétype :
+    `members` dict de rôle→champion_id, `seed_pairs` à 1 entrée, `advice_stats`
+    et `counters` bruts) — web/app.py rend les 2 sources de façon identique.
+    `seed_roles` (ex. 'jgl_mid') se scinde directement en `role_a`/`role_b` :
+    format garanti "{role_court}_{role_court}" par construction (`refresh`).
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        rows = cur.execute(
+            """
+            SELECT archetype, label, top_champion, jgl_champion, mid_champion,
+                   bot_champion, sup_champion, total_synergy, seed_roles,
+                   seed_champ_a, seed_champ_b, seed_synergy, seed_games, seed_tier,
+                   advice_scaling, advice_cc, advice_gold15
+            FROM draft_suggestion
+            WHERE window_label = %s AND platform = %s
+            ORDER BY archetype
+            """,
+            (window, platform),
+        ).fetchall()
+        if not rows:
+            return []
+        counter_rows = cur.execute(
+            """
+            SELECT archetype, kind, rank, role, against_champion, champion_id, delta
+            FROM draft_suggestion_counter
+            WHERE window_label = %s AND platform = %s
+            ORDER BY archetype, kind, rank
+            """,
+            (window, platform),
+        ).fetchall()
+
+    counters_by_archetype: dict[str, dict] = {}
+    for r in counter_rows:
+        entry = counters_by_archetype.setdefault(r["archetype"], {"primary": None, "secondary": []})
+        pick = {"champion_id": r["champion_id"], "delta": r["delta"]}
+        if r["kind"] == "primary":
+            if entry["primary"] is None:
+                entry["primary"] = {
+                    "role": r["role"],
+                    "against_champion": r["against_champion"],
+                    "picks": [],
+                }
+            entry["primary"]["picks"].append(pick)
+        else:
+            entry["secondary"].append(
+                {"role": r["role"], "against_champion": r["against_champion"], **pick}
+            )
+
+    results = []
+    for row in rows:
+        role_a, role_b = row["seed_roles"].split("_")
+        advice_stats = (
+            {
+                "scaling": row["advice_scaling"],
+                "cc_blended_pct": row["advice_cc"],
+                "gold_diff_15": row["advice_gold15"],
+            }
+            if row["advice_scaling"] is not None
+            else None
+        )
+        results.append(
+            {
+                "archetype": row["archetype"],
+                "label": row["label"],
+                "members": {
+                    "top": row["top_champion"],
+                    "jgl": row["jgl_champion"],
+                    "mid": row["mid_champion"],
+                    "bot": row["bot_champion"],
+                    "sup": row["sup_champion"],
+                },
+                "total_synergy": row["total_synergy"],
+                "seed_pairs": [
+                    {
+                        "role_a": role_a,
+                        "role_b": role_b,
+                        "champ_a": row["seed_champ_a"],
+                        "champ_b": row["seed_champ_b"],
+                        "synergy": row["seed_synergy"],
+                        "games": row["seed_games"],
+                        "tier": row["seed_tier"],
+                    }
+                ],
+                "advice_stats": advice_stats,
+                "counters": counters_by_archetype.get(row["archetype"]),
+            }
+        )
+    return results

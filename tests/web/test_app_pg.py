@@ -41,7 +41,8 @@ def pg_sync():
             " agg_champion, agg_duo, agg_trio,"
             " agg_trio_duration, agg_duo_duration, agg_matchup,"
             " score_duo, score_trio, score_matchup, score_win_factors, score_gold_factors,"
-            " score_champion_resilience, champion_cc_theoretical CASCADE"
+            " score_champion_resilience, champion_cc_theoretical,"
+            " draft_suggestion, draft_suggestion_counter CASCADE"
         )
         yield conn
 
@@ -789,6 +790,57 @@ def test_api_status_reports_collection(pg_sync, client):
     assert sum(d["matches"] for d in payload["matches_per_day"]) == 2
 
 
+def test_draft_page_shows_precomputed_compositions_for_platform_all(pg_sync, client):
+    """Région par défaut (`platform="all"`) : les compositions précalculées
+    (`draft_suggestion(_counter)`, matérialisées par le service collector)
+    s'affichent SANS clic sur le bouton (retour utilisateur 2026-07-25 :
+    "je voulais garder les drafts proposées sans avoir à cliquer"), et le
+    bouton "Proposer des compositions" disparaît (plus la peine, déjà là)."""
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'all', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    pg_sync.execute(
+        "INSERT INTO draft_suggestion (window_label, platform, archetype, label,"
+        " top_champion, jgl_champion, mid_champion, bot_champion, sup_champion,"
+        " total_synergy, seed_roles, seed_champ_a, seed_champ_b, seed_synergy, seed_games,"
+        " seed_tier, advice_scaling, advice_cc, advice_gold15)"
+        " VALUES ('16.13', 'all', 'synergy', 'Meilleure synergie', 4, 1, 2, 5, 3, 0.51,"
+        " 'jgl_mid', 1, 2, 0.30, 60, 'eleve', 0.08, 70.0, 800.0)"
+    )
+    pg_sync.execute(
+        "INSERT INTO draft_suggestion_counter (window_label, platform, archetype, kind, rank,"
+        " role, against_champion, champion_id, delta)"
+        " VALUES ('16.13', 'all', 'synergy', 'primary', 0, 'jgl', 1, 6, 0.10)"
+    )
+    resp = client.get("/draft", params={"platform": "all"})
+    assert resp.status_code == 200
+    assert "Proposer des compositions" not in resp.text
+    assert "draft-suggest-card" in resp.text
+    for name in ("Vi", "Lee Sin", "Ahri", "Orianna", "Thresh", "Leona"):
+        assert name in resp.text
+    assert "+51.0 %" in resp.text
+    assert "monte en puissance" in resp.text  # advice_scaling = 0.08 > seuil
+
+
+def test_draft_page_falls_back_to_button_when_nothing_precomputed(pg_sync, client):
+    """`platform="all"` mais rien encore matérialisé (ex. juste après un
+    déploiement, avant le 1er cycle du collector) : retombe sur le bouton
+    "Proposer des compositions", jamais de page cassée/vide sans explication."""
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'all', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    resp = client.get("/draft", params={"platform": "all"})
+    assert resp.status_code == 200
+    assert "Proposer des compositions" in resp.text
+    assert "draft-suggest-card" not in resp.text
+
+
 def test_draft_page_suggest_button_shown_but_not_computed_by_default(pg_sync, client):
     """Compositions suggérées (retour utilisateur 2026-07-24) : le calcul
     (~10-15s, 4 archétypes) ne tourne jamais sur un chargement de page
@@ -917,7 +969,7 @@ def test_draft_page_suggest_shows_advice_from_seed_duo_stats(pg_sync, client):
     assert resp.status_code == 200
     assert "monte en puissance" in resp.text  # scaling > seuil notable
     assert "contrôle de foule" in resp.text  # cc_blended_pct >= seuil notable
-    assert "avantage économique attendu tôt" in resp.text  # gold_diff_15 > seuil notable
+    assert "économique attendu tôt" in resp.text  # gold_diff_15 > seuil notable
 
 
 def test_draft_page_suggest_skips_archetypes_without_stat_data(pg_sync, client):
@@ -1027,7 +1079,10 @@ def test_draft_page_suggest_shows_counters(pg_sync, client):
     )
     resp = client.get("/draft", params={"suggest": "1"})
     assert resp.status_code == 200
-    assert "Jungle</strong> est le rôle le plus exploitable" in resp.text
+    # Contre le champion PRÉCIS de la composition (Lee Sin en jungle), pas
+    # juste "le rôle jungle" dans l'abstrait (retour utilisateur 2026-07-25 :
+    # la 1ère formulation ne disait pas contre QUI).
+    assert "contre Lee Sin" in resp.text
     assert "Leona" in resp.text
     assert "+10.0 %" in resp.text
 

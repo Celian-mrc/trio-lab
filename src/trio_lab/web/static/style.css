@@ -295,17 +295,45 @@ th[data-tooltip]::after, label[data-tooltip]::after {
    suggérées/composées + leurs contres 1v1). --- */
 .draft-compose {
   background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 0.9rem 1.1rem; margin: 1.25rem 0; display: flex; flex-direction: column; gap: 0.7rem;
+  padding: 1rem 1.2rem; margin: 1.25rem 0; display: flex; flex-direction: column; gap: 0.9rem;
 }
-.draft-compose-roles { display: flex; flex-wrap: wrap; gap: 0.6rem; }
-.draft-compose-roles label {
-  display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.75rem; color: var(--muted-fg);
+.draft-compose h2 { margin: 0; }
+.draft-compose-roles {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 0.6rem;
 }
-.draft-compose-roles input, .draft-compose select {
+.draft-compose-role {
+  display: flex; align-items: center; gap: 0.5rem;
+  background: var(--muted); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 0.4rem 0.6rem;
+}
+.draft-compose-role input {
+  flex: 1; min-width: 0; background: transparent; color: var(--foreground); border: none;
+  font-size: 0.85rem; padding: 0;
+}
+.draft-compose-role input:focus { outline: none; }
+.draft-compose-submit {
+  display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap;
+}
+.draft-compose-archetype {
+  display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: var(--muted-fg);
+}
+.draft-compose-archetype select {
   background: transparent; color: var(--foreground); border: 1px solid var(--input);
   border-radius: var(--radius); padding: 0.35rem 0.55rem; font-size: 0.85rem;
 }
-.draft-compose-roles input { width: 10rem; }
+.draft-compose-loadbar {
+  width: 6rem; height: 3px; border-radius: 3px; overflow: hidden; background: var(--muted);
+  position: relative; opacity: 0; transition: opacity 150ms ease-in;
+}
+.draft-compose-form.htmx-request .draft-compose-loadbar { opacity: 1; }
+.draft-compose-loadbar::after {
+  content: ""; position: absolute; inset: 0 auto 0 0; width: 40%; height: 100%;
+  background: var(--accent); animation: draft-loadbar-slide 1.1s ease-in-out infinite;
+}
+@keyframes draft-loadbar-slide {
+  0% { left: -40%; }
+  100% { left: 100%; }
+}
 
 /* --- Compositions suggérées (draft, retour utilisateur 2026-07-24) :
    calculées uniquement sur clic (bouton .button-like, jamais au chargement
@@ -348,11 +376,14 @@ th[data-tooltip]::after, label[data-tooltip]::after {
 }
 .draft-counters {
   border-top: 1px dashed var(--border); padding-top: 0.5rem; font-size: 0.8rem;
-  display: flex; flex-direction: column; gap: 0.3rem;
+  display: flex; flex-direction: column; gap: 0.4rem;
 }
-.draft-counters-primary { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
-.draft-counters-secondary {
-  margin: 0; padding-left: 1.1rem; color: var(--muted-fg); display: flex; flex-direction: column;
-  gap: 0.2rem;
+.draft-counters-title {
+  margin: 0; font-size: 0.7rem; color: var(--muted-fg); text-transform: uppercase;
+  letter-spacing: 0.03em; font-weight: 500;
+}
+.draft-counters-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+.counter-chip {
+  gap: 0.3rem; background: var(--muted); border-radius: 9999px; padding: 0.1rem 0.5rem 0.1rem 0.3rem;
 }
 .legend li { margin: 0.4rem 0; }

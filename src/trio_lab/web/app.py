@@ -10,12 +10,10 @@ un index fixe (aucun appel Data Dragon).
 
 from __future__ import annotations
 
-import itertools
 import json
 import logging
 import math
 import secrets
-from collections.abc import Iterable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -29,6 +27,7 @@ from fastapi.templating import Jinja2Templates
 from psycopg_pool import ConnectionPool
 
 from trio_lab import config, db
+from trio_lab.synergy import draft_suggestions
 from trio_lab.synergy.compute import DUO_ROLES
 from trio_lab.synergy.gold_factors import BLOCK_OF as GOLD_FACTOR_BLOCK_OF
 from trio_lab.synergy.gold_factors import CONTINUOUS as GOLD_FACTOR_CONTINUOUS
@@ -74,113 +73,11 @@ DRAFT_ROLE_TO_TEAM_POSITION = {
 # roles de score_duo (ex. 'top_jgl') retrouvée depuis une paire de rôles
 # courts non ordonnée — inverse de DUO_ROLE_KEYS.
 _DRAFT_ROLES_BY_PAIR = {frozenset(v): k for k, v in DUO_ROLE_KEYS.items()}
-# Delta à partir duquel un matchup 1v1 (score_matchup) compte comme un
-# "contre notable" — repère arbitraire mais cohérent avec l'amplitude
-# typique des deltas de score_matchup (±3 pts de WR). Réutilisé par
-# `_draft_counters` (contres d'une composition, retour utilisateur
-# 2026-07-25) dans le sens POSITIF (`-DRAFT_NOTABLE_COUNTER_DELTA` : un bon
-# contre, pas un mauvais matchup).
-DRAFT_NOTABLE_COUNTER_DELTA = -0.03
-# Fiabilité minimale (games_eff) pour qu'un contre 1v1 soit proposé dans
-# `_draft_counters` — même plancher que l'ancienne sécurité blind pick
-# (tier "moyen"), à valider sur la vraie distribution de score_matchup.
-DRAFT_COUNTER_MIN_GAMES_EFF = 50.0
-# Rôle le plus exploitable d'une composition : jusqu'à ce nombre de contres
-# proposés dessus (retour utilisateur 2026-07-25, "3 champions sur le rôle
-# le plus faible").
-DRAFT_COUNTER_PRIMARY_PICKS = 3
-# + ces N rôles suivants les plus exploitables, 1 contre chacun (retour
-# utilisateur 2026-07-25, "les deux combinés").
-DRAFT_COUNTER_SECONDARY_ROLES = 2
-# Compositions suggérées (retour utilisateur 2026-07-24, révisé le 2026-07-25
-# suite retour utilisateur) : propose des drafts complets à 5, indépendants
-# de l'adversaire — pas de contre à calculer. Part d'un DUO (pas d'un trio :
-# 2 champions précis ont bien plus de données que 3, cf. discussion session)
-# choisi parmi les 10 paires de rôles (`score_duo`, `roles=None` — mêmes
-# données que le filtre "tous les rôles" de /duos), puis étend rôle par rôle
-# SANS ordre fixe : à chaque étape, le (rôle, champion) qui maximise la Σ
-# synergie avec TOUT ce qui est déjà posé, quel que soit le rôle restant.
-# La Σ synergie accumulée à chaque étape (2 ancrages puis 3 puis 4) couvre
-# exactement les 10 paires d'un draft à 5 (C(5,2)=10 = 1+2+3+4) — le total
-# final est donc la vraie somme sur toutes les paires, pas une approximation.
-# 4 profils de poids ("archétypes", poids arbitraires mais justifiés, pas de
-# test statistique dessus) pilotent le choix du duo de départ ET chaque
-# champion ajouté ensuite (v3, cf. DRAFT_ARCHETYPE_STAT_COLUMNS plus bas) ;
-# plusieurs duos de départ sont essayés et complétés en entier, la
-# composition FINIE retenue est celle au meilleur score archétype sur ses 10
-# vraies paires (`_full_draft_score`), pas celle du premier duo qui complète.
-DRAFT_SUGGEST_SEED_SHORTLIST = 8  # duos de départ essayés par profil avant d'abandonner
-# Pool de duos candidats pour le choix du duo de départ : sans ça,
-# `duo_tierlist` pagine à 50 lignes par défaut (PER_PAGE, affichage /duos) —
-# toujours les 50 meilleures en synergie BRUTE, donc les archétypes non-
-# synergie ne pouvaient jamais considérer un duo hors de ce top-50 (bug
-# préexistant, découvert et corrigé le 2026-07-25 suite retour utilisateur).
-# 10 000 : confortablement au-dessus des ~5867 duos "eleve" actuels (marge
-# de croissance), sans faire un SELECT * illimité.
-DRAFT_SUGGEST_POOL_SIZE = 10_000
-# "eleve" (games_eff ≥ 400), pas "moyen" (retour utilisateur 2026-07-25) : un
-# duo a bien plus de volume qu'un trio (2 champions précis, pas 3), on peut
-# se permettre d'être exigeant. Vérifié avant de changer : 5867 duos
-# "eleve" sur la fenêtre courante, 325 à 1040 par paire de rôles (aucune des
-# 10 sous-alimentée) — largement assez de candidats malgré le seuil plus
-# strict, cf. docs/ROADMAP.md.
-DRAFT_SUGGEST_MIN_TIER = "eleve"
-# "synergy" est un axe pondéré comme les autres (pas un cas à part) : un
-# champion touche 4 paires sur un draft à 5, la synergie de chaque nouvelle
-# paire doit peser dans le choix à CHAQUE étape gloutonne, pas seulement sur
-# le duo de départ (retour utilisateur 2026-07-25) — cf. _greedy_complete_draft.
-DRAFT_ARCHETYPE_STAT_COLUMNS = {
-    "synergy": "synergy",
-    "scaling": "scaling",
-    "cc": "cc_blended_pct",
-    "gold": "gold_diff_15",
-    "drakes": "drakes",
-}
-# 30 % synergie / 70 % axes archétype (poids d'origine scalés ×0.7) : évite
-# qu'un archétype pousse un champion très marqué sur son axe mais qui
-# synergise mal avec le reste du groupe déjà posé. Validé sur données réelles
-# avant de figer (cf. docs/ROADMAP.md).
-DRAFT_ARCHETYPES: dict[str, dict] = {
-    "synergy": {"label": "Meilleure synergie", "weights": {"synergy": 1.0}},
-    "scaling": {
-        "label": "Scaling / fin de partie",
-        "weights": {
-            "synergy": 0.30,
-            "scaling": 0.385,
-            "cc": 0.14,
-            "gold": 0.07,
-            "drakes": 0.105,
-        },
-    },
-    "early": {
-        "label": "Avantage early / lane",
-        "weights": {
-            "synergy": 0.30,
-            "scaling": 0.0,
-            "cc": 0.175,
-            "gold": 0.315,
-            "drakes": 0.21,
-        },
-    },
-    "objectives": {
-        "label": "Contrôle des objectifs",
-        "weights": {
-            "synergy": 0.30,
-            "scaling": 0.07,
-            "cc": 0.245,
-            "gold": 0.07,
-            "drakes": 0.315,
-        },
-    },
-}
-# Seuils "notable" pour les conseils de jeu — repères arbitraires (comme
-# DRAFT_NOTABLE_COUNTER_DELTA ci-dessus), pas de test statistique dessus,
-# juste éviter un conseil générique quand le signal est proche de zéro.
-# Calibrés au niveau DUO (2 champions), pas trio (3) : ordre de grandeur
-# plus petit que la 1ère version de cette fonctionnalité.
-DRAFT_ADVICE_SCALING_NOTABLE = 0.03
-DRAFT_ADVICE_CC_NOTABLE = 40.0  # cc_blended_pct est déjà sur 0-100, mais porté par 2 membres pas 3
-DRAFT_ADVICE_GOLD15_NOTABLE = 350.0
+# Compositions suggérées + contres (Phase 9, retour utilisateur 2026-07-25) :
+# le moteur de calcul (archétypes, algorithme glouton, contres 1v1) vit
+# entièrement dans `synergy.draft_suggestions` — réutilisé tel quel ici en
+# calcul à la demande, et par le service collector 24/24 pour la
+# matérialisation (`platform="all"`, cf. `collector/service.py`).
 # Libellés lisibles pour le dashboard /insights (synergy.win_factors.FEATURES).
 # herald_taken/soul_taken/first_tower retirés le 2026-07-24 (retour
 # utilisateur + audit) : résultats de fin de partie, pas bornés à 15 min —
@@ -463,8 +360,10 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
     templates.env.globals["RIOT_ROLE_LABELS"] = RIOT_ROLE_LABELS
     templates.env.globals["RESILIENCE_FACTOR_LABELS"] = RESILIENCE_FACTOR_LABELS
     templates.env.globals["RESILIENCE_FACTOR_THRESHOLDS"] = RESILIENCE_FACTOR_THRESHOLDS
-    templates.env.globals["draft_counter_primary_picks"] = DRAFT_COUNTER_PRIMARY_PICKS
-    templates.env.globals["draft_counter_secondary_roles"] = DRAFT_COUNTER_SECONDARY_ROLES
+    templates.env.globals["draft_counter_primary_picks"] = draft_suggestions.COUNTER_PRIMARY_PICKS
+    templates.env.globals["draft_counter_secondary_roles"] = (
+        draft_suggestions.COUNTER_SECONDARY_ROLES
+    )
 
     def resolve_champion(name_or_id: str | None) -> int | None:
         """Filtre champion de la tier list : nom (recherche) ou id. None si vide."""
@@ -951,507 +850,113 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
     # État entièrement dans l'URL (query params), pas de session serveur —
     # même principe que window/platform ailleurs.
 
-    def _sum_synergy(
-        conn,
-        window: str,
-        platform: str,
-        anchors: list[tuple[str, str, int]],
-        min_tier: str,
-        stat_columns: Iterable[str] = (),
-    ) -> dict[int, dict]:
-        """Σ synergie d'un candidat contre chaque ancrage (rôle, champion déjà
-        posé) de `anchors` — ne garde que les candidats couverts par TOUS les
-        ancrages (fiabilité ≥ `min_tier` pour chacun) : un candidat qui n'a
-        de la donnée que contre 1 des 3/4 ancrages semblerait sinon
-        artificiellement fort en ne sommant que ce qu'il a.
-
-        `stat_columns` (ex. scaling/cc_blended_pct/...) : en plus de la Σ
-        synergie, moyenne de chaque colonne sur les paires nouvellement
-        formées où elle est renseignée (None exclu, pas traité comme 0 —
-        même logique que `_zscore_stats`). Retourne, par candidat couvert :
-        `{"synergy_sum": ..., "stats": {col: moyenne}}`."""
-        totals: dict[int, float] = {}
-        coverage: dict[int, int] = {}
-        stat_totals: dict[int, dict[str, float]] = {}
-        stat_counts: dict[int, dict[str, int]] = {}
-        for roles, fixed_role, champion_id in anchors:
-            partners = queries.champion_best_partners(
-                conn, window, platform, roles, fixed_role, champion_id, 500, min_tier=min_tier
-            )
-            for row in partners:
-                cid = row["partner_champion"]
-                totals[cid] = totals.get(cid, 0.0) + row["synergy"]
-                coverage[cid] = coverage.get(cid, 0) + 1
-                for col in stat_columns:
-                    value = row.get(col)
-                    if value is None:
-                        continue
-                    stat_totals.setdefault(cid, {})
-                    stat_totals[cid][col] = stat_totals[cid].get(col, 0.0) + value
-                    stat_counts.setdefault(cid, {})
-                    stat_counts[cid][col] = stat_counts[cid].get(col, 0) + 1
-        n = len(anchors)
-        result: dict[int, dict] = {}
-        for cid, total in totals.items():
-            if coverage[cid] != n:
-                continue
-            stats = {
-                col: stat_totals[cid][col] / stat_counts[cid][col]
-                for col in stat_counts.get(cid, {})
+    def _resolve_seed_pairs(raw_pairs: list[dict]) -> list[dict]:
+        """Résout les champion_id de `raw_pairs` (`synergy.draft_suggestions`,
+        seed_pairs) en Champion/labels pour le template."""
+        return [
+            {
+                "role_label_a": ROLE_LABELS[p["role_a"]],
+                "role_label_b": ROLE_LABELS[p["role_b"]],
+                "champion_a": champ(p["champ_a"]),
+                "champion_b": champ(p["champ_b"]),
+                "synergy": p["synergy"],
+                "games": p["games"],
+                "tier": p["tier"],
             }
-            result[cid] = {"synergy_sum": total, "stats": stats}
-        return result
-
-    def _draft_advice(
-        scaling: float | None, cc_blended_pct: float | None, gold_diff_15: float | None
-    ) -> list[str]:
-        """Conseils de jeu dérivés des stats déjà calculées du DUO de départ
-        (`score_duo`) — pas un nouveau calcul, juste traduit en phrase.
-        Jamais plus d'1 conseil par thème (pacing/CC/économie), aucun si le
-        signal est trop proche de zéro pour être notable."""
-        tips: list[str] = []
-        if scaling is not None and scaling > DRAFT_ADVICE_SCALING_NOTABLE:
-            tips.append(
-                "Composition qui monte en puissance avec la durée de la game : évitez les "
-                "combats forcés tôt, cherchez à faire durer."
-            )
-        elif scaling is not None and scaling < -DRAFT_ADVICE_SCALING_NOTABLE:
-            tips.append(
-                "Composition plus forte tôt que tard : cherchez à conclure avant que "
-                "l'adversaire ne monte en puissance."
-            )
-        if cc_blended_pct is not None and cc_blended_pct >= DRAFT_ADVICE_CC_NOTABLE:
-            tips.append(
-                "Bon profil de contrôle de foule autour du duo de départ : cherchez à "
-                "engager les combats groupés plutôt qu'à les éviter."
-            )
-        if gold_diff_15 is not None and gold_diff_15 > DRAFT_ADVICE_GOLD15_NOTABLE:
-            tips.append(
-                "Le duo de départ a un avantage économique attendu tôt en lane : jouez "
-                "agressif dans les 15 premières minutes."
-            )
-        elif gold_diff_15 is not None and gold_diff_15 < -DRAFT_ADVICE_GOLD15_NOTABLE:
-            tips.append(
-                "Le duo de départ part avec un léger déficit économique attendu : jouez "
-                "prudent en lane, cherchez votre impact ailleurs (jungle, objectifs)."
-            )
-        return tips
-
-    def _zscore_stats(rows: list[dict], columns: Iterable[str]) -> dict[str, tuple[float, float]]:
-        """(moyenne, écart-type) par colonne, sur les lignes où la valeur
-        n'existe pas (`None` exclu du calcul, pas traité comme 0 — sinon un
-        duo sans donnée de scaling semblerait "moyen" sur cet axe au lieu
-        d'être exclu du classement pondéré)."""
-        stats: dict[str, tuple[float, float]] = {}
-        for col in columns:
-            vals = [r[col] for r in rows if r.get(col) is not None]
-            if len(vals) < 2:
-                stats[col] = (0.0, 1.0)
-                continue
-            mean = sum(vals) / len(vals)
-            var = sum((v - mean) ** 2 for v in vals) / len(vals)
-            stats[col] = (mean, math.sqrt(var) or 1.0)
-        return stats
-
-    def _archetype_seed_order(
-        pool: list[dict], weights: dict[str, float], zstats: dict[str, tuple[float, float]]
-    ) -> list[dict]:
-        """Ordonne `pool` (duos fiables, 10 paires confondues) pour un
-        archétype donné : score = Σ poids × z-score(stat), en excluant les
-        duos sans donnée sur un axe pondéré (jamais de 0 implicite qui
-        fausserait le classement). "Meilleure synergie" (`weights =
-        {"synergy": 1.0}`) reproduit le tri par synergie brute (z-score
-        d'un seul axe = transformation affine, l'ordre est inchangé)."""
-        scored: list[tuple[dict, float]] = []
-        for row in pool:
-            total = 0.0
-            skip = False
-            for axis, weight in weights.items():
-                if weight == 0:
-                    continue
-                col = DRAFT_ARCHETYPE_STAT_COLUMNS[axis]
-                value = row.get(col)
-                if value is None:
-                    skip = True
-                    break
-                mean, std = zstats[col]
-                total += weight * (value - mean) / std
-            if not skip:
-                scored.append((row, total))
-        scored.sort(key=lambda rs: -rs[1])
-        return [row for row, _ in scored]
-
-    def _greedy_complete_draft(
-        conn,
-        window: str,
-        platform: str,
-        placed: dict[str, int],
-        total: float,
-        min_tier: str,
-        weights: dict[str, float],
-        zstats: dict[str, tuple[float, float]],
-    ) -> tuple[dict[str, int], float] | None:
-        """Étend un état de départ PARTIEL (`placed`, 1 à 4 rôles déjà posés,
-        `total` = Σ synergie déjà couverte par ces paires) en un draft à 5
-        rôles : à chaque étape, ajoute le (rôle, champion) qui maximise le
-        score pondéré de l'archétype (Σ poids × z-score(moyenne des NOUVELLES
-        paires formées avec tout ce qui est déjà posé), `synergy` étant un
-        axe parmi les autres (`DRAFT_ARCHETYPE_STAT_COLUMNS`) — un champion
-        touche jusqu'à 4 paires sur un draft à 5, l'archétype doit peser sur
-        chacune, pas seulement sur le duo de départ (retour utilisateur
-        2026-07-25). Le total de synergie retourné (affiché tel quel côté
-        template) reste lui la vraie Σ synergie sur les paires effectivement
-        traversées ici (celles déjà connues dans `placed` restent dans
-        `total` tel que passé par l'appelant) — seul le CRITÈRE DE CHOIX
-        change, pas ce qui est reporté. `None` si un rôle ne peut pas être
-        complété avec une couverture fiable complète (`_sum_synergy`).
-        Générique sur la taille de `placed` (1 à 4) : réutilisé aussi bien
-        pour étendre un duo de départ auto-suggéré que des champions choisis
-        à la main (`_seed_from_champions`, retour utilisateur 2026-07-25)."""
-        placed = dict(placed)  # ne jamais muter le dict de l'appelant
-        remaining = [r for r in DRAFT_ROLES if r not in placed]
-        stat_columns = [
-            col
-            for axis, col in DRAFT_ARCHETYPE_STAT_COLUMNS.items()
-            if col != "synergy" and weights.get(axis, 0)
+            for p in raw_pairs
         ]
-        while remaining:
-            best: tuple[str, int, float, float] | None = None  # role, cid, synergy_sum, combined_z
-            for role in remaining:
-                anchors = [
-                    (
-                        _DRAFT_ROLES_BY_PAIR[frozenset({role, placed_role})],
-                        placed_role,
-                        placed_champ,
-                    )
-                    for placed_role, placed_champ in placed.items()
-                ]
-                scores = _sum_synergy(conn, window, platform, anchors, min_tier, stat_columns)
-                if not scores:
-                    continue
-                n_anchors = len(anchors)
-                role_best: tuple[int, float, float] | None = None  # cid, synergy_sum, combined_z
-                for cid, data in scores.items():
-                    combined = 0.0
-                    skip = False
-                    for axis, weight in weights.items():
-                        if weight == 0:
-                            continue
-                        col = DRAFT_ARCHETYPE_STAT_COLUMNS[axis]
-                        value = (
-                            data["synergy_sum"] / n_anchors
-                            if col == "synergy"
-                            else data["stats"].get(col)
-                        )
-                        if value is None:
-                            skip = True
-                            break
-                        mean, std = zstats[col]
-                        combined += weight * (value - mean) / std
-                    if skip:
-                        continue
-                    if role_best is None or combined > role_best[2]:
-                        role_best = (cid, data["synergy_sum"], combined)
-                if role_best is None:
-                    continue
-                cid, synergy_sum, combined = role_best
-                if best is None or combined > best[3]:
-                    best = (role, cid, synergy_sum, combined)
-            if best is None:
-                return None
-            role, cid, synergy_sum, _ = best
-            placed[role] = cid
-            total += synergy_sum
-            remaining.remove(role)
-        return placed, total
 
-    def _full_draft_stat_averages(
-        conn,
-        window: str,
-        platform: str,
-        placed: dict[str, int],
-        columns: Iterable[str],
-    ) -> dict[str, float] | None:
-        """Moyenne de chaque colonne de `columns` sur les 10 VRAIES paires
-        d'un draft complet `placed` — un seul aller-retour par paire,
-        réutilisable aussi bien pour comparer des compositions candidates
-        (`_full_draft_score`) que pour les conseils de jeu (`_build_draft_result`).
-        Chaque paire ajoutée par l'algorithme a déjà été validée fiable
-        (`_sum_synergy`) au moment de sa construction — un nouveau fetch ici
-        sert juste à lire ses stats, pas à re-filtrer. Exception : les paires
-        d'un draft parti de champions choisis À LA MAIN peuvent ne PAS avoir
-        de données du tout (retour utilisateur 2026-07-25, jamais bloquant à
-        la construction) — dans ce cas précis, `None` ici (pas de moyenne
-        fiable pour TOUT le draft), l'appelant traite ça comme "pas de
-        conseils", jamais comme une erreur."""
-        totals: dict[str, float] = {col: 0.0 for col in columns}
-        for role_x, role_y in itertools.combinations(DRAFT_ROLES, 2):
-            roles_str = _DRAFT_ROLES_BY_PAIR[frozenset({role_x, role_y})]
-            role_a, role_b = DUO_ROLE_KEYS[roles_str]
-            row = queries.duo_score(
-                conn, window, platform, roles_str, placed[role_a], placed[role_b]
-            )
-            if row is None:
-                return None
-            for col in totals:
-                value = row.get(col)
-                if value is None:
-                    return None
-                totals[col] += value
-        n_pairs = len(DRAFT_ROLES) * (len(DRAFT_ROLES) - 1) // 2
-        return {col: total / n_pairs for col, total in totals.items()}
-
-    def _full_draft_score(
-        conn,
-        window: str,
-        platform: str,
-        placed: dict[str, int],
-        weights: dict[str, float],
-        zstats: dict[str, tuple[float, float]],
-    ) -> float | None:
-        """Score composite (Σ poids × z-score) sur les 10 VRAIES paires d'un
-        draft complet `placed` — sert à comparer plusieurs compositions
-        candidates FINIES entre elles pour un même archétype, plutôt que de
-        garder la première qui complète (retour utilisateur 2026-07-25 :
-        "est-ce possible de ne pas se baser sur un duo de départ" — on ne
-        peut pas scorer 5 champions sans passer par des paires réelles, mais
-        on peut au moins comparer plusieurs drafts COMPLETS entre eux plutôt
-        que de figer le choix sur le premier duo de départ qui aboutit).
-        `None` si `_full_draft_stat_averages` ne peut pas couvrir les 10
-        paires (ne devrait pas arriver pour une composition auto-suggérée,
-        chaque paire étant déjà validée fiable à la construction)."""
-        columns = [DRAFT_ARCHETYPE_STAT_COLUMNS[axis] for axis, weight in weights.items() if weight]
-        averages = _full_draft_stat_averages(conn, window, platform, placed, columns)
-        if averages is None:
+    def _resolve_counters(raw_counters: dict | None) -> dict | None:
+        """Résout les champion_id de `raw_counters`
+        (`synergy.draft_suggestions.draft_counters`, brut ou lu depuis
+        `draft_suggestion_counter`) en Champion/labels pour le template."""
+        if raw_counters is None:
             return None
-        combined = 0.0
-        for axis, weight in weights.items():
-            if not weight:
-                continue
-            col = DRAFT_ARCHETYPE_STAT_COLUMNS[axis]
-            mean, std = zstats[col]
-            combined += weight * (averages[col] - mean) / std
-        return combined
-
-    def _seed_pair_from_duo_row(seed_row: dict) -> dict:
-        """Convertit une ligne `score_duo` (duo de départ auto-suggéré) vers
-        la même forme que `_seed_from_champions` — une composition
-        auto-suggérée n'est jamais qu'un cas particulier à 1 seule paire déjà
-        connue, affichée par `_build_draft_result` de façon identique aux
-        champions choisis à la main."""
-        role_a, role_b = DUO_ROLE_KEYS[seed_row["roles"]]
-        return {
-            "role_label_a": ROLE_LABELS[role_a],
-            "role_label_b": ROLE_LABELS[role_b],
-            "champion_a": champ(seed_row["champ_a"]),
-            "champion_b": champ(seed_row["champ_b"]),
-            "synergy": seed_row["synergy"],
-            "games": seed_row["games"],
-            "tier": seed_row["tier"],
-        }
-
-    def _seed_from_champions(
-        conn, window: str, platform: str, picks: dict[str, int]
-    ) -> tuple[dict[str, int], float, list[dict]]:
-        """`picks` : 1 à 5 (rôle → champion) choisis à la main par
-        l'utilisateur (retour utilisateur 2026-07-25, "Compose à partir de
-        tes champions"). Calcule le total de synergie déjà couvert par les
-        paires FORMÉES ENTRE CES CHAMPIONS (`queries.duo_score`) et le détail
-        de fiabilité de chacune — JAMAIS bloquant : une paire jamais jouée
-        ensemble (pas de ligne `score_duo`) contribue 0 à la synergie et
-        affiche une fiabilité "aucune donnée", elle n'empêche pas de
-        continuer (contrairement aux rôles que le système complète ensuite,
-        qui restent filtrés par `DRAFT_SUGGEST_MIN_TIER`). Retourne
-        `(placed, total_synergy, seed_pairs)` — `seed_pairs` même forme que
-        `_seed_pair_from_duo_row`, une entrée par paire déjà posée."""
-        pairs: list[dict] = []
-        total = 0.0
-        for role_x, role_y in itertools.combinations(picks, 2):
-            roles_str = _DRAFT_ROLES_BY_PAIR[frozenset({role_x, role_y})]
-            role_a, role_b = DUO_ROLE_KEYS[roles_str]
-            row = queries.duo_score(conn, window, platform, roles_str, picks[role_a], picks[role_b])
-            pairs.append(
-                {
-                    "role_label_a": ROLE_LABELS[role_a],
-                    "role_label_b": ROLE_LABELS[role_b],
-                    "champion_a": champ(picks[role_a]),
-                    "champion_b": champ(picks[role_b]),
-                    "synergy": row["synergy"] if row else None,
-                    "games": row["games"] if row else 0,
-                    "tier": row["tier"] if row else None,
-                }
-            )
-            if row is not None:
-                total += row["synergy"]
-        return dict(picks), total, pairs
-
-    def _draft_counters(conn, window: str, platform: str, placed: dict[str, int]) -> dict | None:
-        """Contres 1v1 (`score_matchup`) d'une composition COMPLÈTE à 5 —
-        jamais de counter trio/5v5 en bloc (combinatoirement intraitable,
-        abandonné en Phase 4, cf. CLAUDE.md) : uniquement des deltas 1v1 par
-        rôle, agrégés par exploitabilité (retour utilisateur 2026-07-25,
-        "les deux combinés"). Le rôle au MEILLEUR contre disponible devient
-        le rôle PRIMAIRE (jusqu'à `DRAFT_COUNTER_PRIMARY_PICKS` champions) ;
-        les `DRAFT_COUNTER_SECONDARY_ROLES` rôles suivants (si un contre
-        notable existe) : 1 champion chacun. `None` si aucun contre notable
-        nulle part (composition solide de partout, pas de ligne vide)."""
-        by_role: dict[str, list[dict]] = {}
-        for role in DRAFT_ROLES:
-            candidates = queries.matchup_candidates(
-                conn, window, platform, DRAFT_ROLE_TO_TEAM_POSITION[role], placed[role], 50
-            )
-            notable = [
-                c
-                for c in candidates
-                if c["delta"] >= -DRAFT_NOTABLE_COUNTER_DELTA
-                and c["games_eff"] >= DRAFT_COUNTER_MIN_GAMES_EFF
-            ]
-            if notable:
-                by_role[role] = notable
-        if not by_role:
-            return None
-        ranked_roles = sorted(by_role, key=lambda r: -by_role[r][0]["delta"])
-
-        def _fmt(c: dict) -> dict:
-            return {
-                "champion": champ(c["candidate_champion"]),
-                "delta": c["delta"],
-                "games_eff": c["games_eff"],
-            }
-
-        primary_role = ranked_roles[0]
+        primary = raw_counters["primary"]
         return {
             "primary": {
-                "role": primary_role,
-                "role_label": ROLE_LABELS[primary_role],
-                "picks": [_fmt(c) for c in by_role[primary_role][:DRAFT_COUNTER_PRIMARY_PICKS]],
+                "role": primary["role"],
+                "role_label": ROLE_LABELS[primary["role"]],
+                "against": champ(primary["against_champion"]),
+                "picks": [
+                    {"champion": champ(p["champion_id"]), "delta": p["delta"]}
+                    for p in primary["picks"]
+                ],
             },
             "secondary": [
-                {"role": role, "role_label": ROLE_LABELS[role], "pick": _fmt(by_role[role][0])}
-                for role in ranked_roles[1 : 1 + DRAFT_COUNTER_SECONDARY_ROLES]
+                {
+                    "role": s["role"],
+                    "role_label": ROLE_LABELS[s["role"]],
+                    "against": champ(s["against_champion"]),
+                    "pick": {"champion": champ(s["champion_id"]), "delta": s["delta"]},
+                }
+                for s in raw_counters["secondary"]
             ],
         }
 
-    def _build_draft_result(
-        conn,
-        window: str,
-        platform: str,
-        placed: dict[str, int],
-        total_synergy: float,
-        label: str,
-        seed_pairs: list[dict],
-    ) -> dict:
-        """Représentation commune d'une composition à 5, utilisée aussi bien
-        par les compositions auto-suggérées que par "Compose à partir de tes
-        champions" (retour utilisateur 2026-07-25). `seed_pairs` : les paires
-        déjà connues au départ (1 pour un duo auto-suggéré, 0 à C(5,2) pour
-        des champions choisis à la main), affichées telles quelles — jamais
-        masquées même sans donnée. Les conseils de jeu sont dérivés de la
-        moyenne des stats sur les 10 VRAIES paires du draft COMPLET
-        (`_full_draft_stat_averages`), pas seulement du/des point(s) de
-        départ — absents (jamais bloquant) si une paire du draft fini n'a
-        pas de données. Les contres (`_draft_counters`) portent sur la
-        composition complète, indépendamment de sa provenance."""
+    def _build_draft_result(raw: dict) -> dict:
+        """Adapte un résultat BRUT (`synergy.draft_suggestions.propose_drafts`,
+        un draft "compose à la main" tout juste calculé, ou une ligne lue
+        depuis `draft_suggestion(_counter)`) en structure prête pour le
+        template : résout les champion_id en Champion (nom/icône), génère
+        les phrases de conseil depuis les stats moyennes. Un seul chemin de
+        rendu pour les 2 sources (précalculé ou en direct) et les 2 sections
+        (compositions suggérées / composées à la main)."""
         members = [
-            {"role": role, "role_label": ROLE_LABELS[role], "champion": champ(placed[role])}
+            {"role": role, "role_label": ROLE_LABELS[role], "champion": champ(raw["members"][role])}
             for role in DRAFT_ROLES
         ]
-        stats = _full_draft_stat_averages(
-            conn, window, platform, placed, ("scaling", "cc_blended_pct", "gold_diff_15")
-        )
+        stats = raw["advice_stats"]
         advice = (
-            _draft_advice(stats["scaling"], stats["cc_blended_pct"], stats["gold_diff_15"])
+            draft_suggestions.draft_advice(
+                stats["scaling"], stats["cc_blended_pct"], stats["gold_diff_15"]
+            )
             if stats
             else []
         )
         return {
-            "label": label,
+            "label": raw["label"],
             "members": members,
-            "total_synergy": total_synergy,
-            "seed_pairs": seed_pairs,
+            "total_synergy": raw["total_synergy"],
+            "seed_pairs": _resolve_seed_pairs(raw["seed_pairs"]),
             "advice": advice,
-            "counters": _draft_counters(conn, window, platform, placed),
+            "counters": _resolve_counters(raw["counters"]),
         }
 
-    def _propose_drafts(
+    def _manual_propose(
         conn,
         window: str,
         platform: str,
-        pool: list[dict],
+        seed_picks: dict[str, int],
+        archetype_key: str,
         zstats: dict[str, tuple[float, float]],
-    ) -> list[dict]:
-        """Une composition par archétype de `DRAFT_ARCHETYPES` (jamais un
-        archétype sans composition silencieusement omis : il n'apparaît
-        juste pas). Part d'un DUO parmi les 10 paires de rôles (bien plus de
-        données qu'un trio à 3 champions précis), puis étend gloutonnement en
-        draft à 5 (`_greedy_complete_draft`) — même score pondéré (synergie +
-        axes de l'archétype) utilisé pour choisir le duo de départ ET chaque
-        champion ajouté ensuite, pas seulement le duo de départ.
-
-        Essaie TOUS les duos de départ du short-list (pas seulement le
-        premier qui complète, retour utilisateur 2026-07-25 : "est-ce
-        possible de ne pas se baser sur un duo de départ") et garde la
-        composition FINIE dont le score archétype sur ses 10 vraies paires
-        (`_full_draft_score`) est le meilleur — pas celle du duo de départ
-        le mieux classé isolément, qui n'est qu'un point de départ pratique.
-        `pool`/`zstats` (`_pool_and_zstats`) : calculés une seule fois par
-        requête, potentiellement partagés avec "Compose à partir de tes
-        champions" si les 2 sont demandés ensemble."""
-        results: list[dict] = []
-        for archetype in DRAFT_ARCHETYPES.values():
-            weights = archetype["weights"]
-            seeds = _archetype_seed_order(pool, weights, zstats)
-            candidates: list[tuple[float, dict, dict, float]] = []
-            for seed_row in seeds[:DRAFT_SUGGEST_SEED_SHORTLIST]:
-                role_a, role_b = DUO_ROLE_KEYS[seed_row["roles"]]
-                seed_placed = {role_a: seed_row["champ_a"], role_b: seed_row["champ_b"]}
-                completed = _greedy_complete_draft(
-                    conn,
-                    window,
-                    platform,
-                    seed_placed,
-                    seed_row["synergy"],
-                    DRAFT_SUGGEST_MIN_TIER,
-                    weights,
-                    zstats,
-                )
-                if completed is None:
-                    continue
-                placed, total = completed
-                score = _full_draft_score(conn, window, platform, placed, weights, zstats)
-                if score is None:
-                    continue
-                candidates.append((score, seed_row, placed, total))
-            if not candidates:
-                continue
-            _, seed_row, placed, total = max(candidates, key=lambda c: c[0])
-            results.append(
-                _build_draft_result(
-                    conn,
-                    window,
-                    platform,
-                    placed,
-                    total,
-                    archetype["label"],
-                    [_seed_pair_from_duo_row(seed_row)],
-                )
-            )
-        return results
-
-    def _pool_and_zstats(conn, window: str, platform: str) -> tuple[list[dict], dict]:
-        pool = queries.duo_tierlist(
-            conn,
-            window,
-            platform,
-            roles=None,
-            min_tier=DRAFT_SUGGEST_MIN_TIER,
-            sort=("synergy",),
-            direction=("desc",),
-            page=1,
-            per_page=DRAFT_SUGGEST_POOL_SIZE,
-        )["rows"]
-        zstats = _zscore_stats(pool, DRAFT_ARCHETYPE_STAT_COLUMNS.values())
-        return pool, zstats
+    ) -> dict | None:
+        """Construit le résultat BRUT (même forme que `propose_drafts`) pour
+        "Compose à partir de tes champions" — 1 seul résultat, pas de
+        recherche parmi plusieurs seeds (l'utilisateur a déjà fixé son point
+        de départ, `seed_picks`, 1 à 5 rôles). `None` si la complétion des
+        rôles restants échoue (pas assez de données fiables)."""
+        weights = draft_suggestions.ARCHETYPES[archetype_key]["weights"]
+        placed, total, seed_pairs = draft_suggestions.seed_from_champions(
+            conn, window, platform, seed_picks
+        )
+        completed = draft_suggestions.greedy_complete_draft(
+            conn, window, platform, placed, total, draft_suggestions.MIN_TIER, weights, zstats
+        )
+        if completed is None:
+            return None
+        full_placed, full_total = completed
+        return {
+            "archetype": archetype_key,
+            "label": draft_suggestions.ARCHETYPES[archetype_key]["label"],
+            "members": full_placed,
+            "total_synergy": full_total,
+            "seed_pairs": seed_pairs,
+            "advice_stats": draft_suggestions.full_draft_stat_averages(
+                conn, window, platform, full_placed, ("scaling", "cc_blended_pct", "gold_diff_15")
+            ),
+            "counters": draft_suggestions.draft_counters(conn, window, platform, full_placed),
+        }
 
     @app.get("/draft", response_class=HTMLResponse)
     def draft_page(
@@ -1484,60 +989,52 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
 
             # `pool`/`zstats` (le tri par archétype des duos fiables) coûte
             # une requête large (~10 000 lignes) : calculé au plus une fois
-            # par requête, partagé entre "Compositions suggérées" et
-            # "Compose à partir de tes champions" si les 2 sont demandés
-            # ensemble — jamais sur un chargement de page normal.
+            # par requête, partagé entre "Compositions suggérées" (calcul en
+            # direct, pas la région par défaut) et "Compose à partir de tes
+            # champions" si les 2 sont demandés ensemble.
             _pool_zstats_cache: list[tuple[list[dict], dict]] = []
 
             def _get_pool_zstats() -> tuple[list[dict], dict]:
                 if not _pool_zstats_cache:
-                    _pool_zstats_cache.append(_pool_and_zstats(conn, window, platform))
+                    _pool_zstats_cache.append(
+                        draft_suggestions.pool_and_zstats(conn, window, platform)
+                    )
                 return _pool_zstats_cache[0]
 
+            # Compositions suggérées : précalculées pour la région par défaut
+            # (`platform == "all"`, matérialisées par le service collector,
+            # cf. synergy/draft_suggestions.py) — affichées SANS clic (retour
+            # utilisateur 2026-07-25 : "je voulais garder les drafts
+            # proposées sans avoir à cliquer"). Pour toute autre région (ou
+            # si rien n'est encore matérialisé, ex. juste après un déploiement),
+            # calcul à la demande derrière le bouton, comme avant.
             suggested_drafts = None
-            if suggest:
+            if platform == "all":
+                precomputed = queries.draft_suggestions(conn, window, platform)
+                if precomputed:
+                    suggested_drafts = [_build_draft_result(raw) for raw in precomputed]
+            if suggested_drafts is None and suggest:
                 pool, zstats = _get_pool_zstats()
-                suggested_drafts = _propose_drafts(conn, window, platform, pool, zstats)
+                raws = draft_suggestions.propose_drafts(conn, window, platform, pool, zstats)
+                suggested_drafts = [_build_draft_result(raw) for raw in raws]
 
             manual_result = None
             manual_error = None
             if archetype is not None:
-                if archetype not in DRAFT_ARCHETYPES:
+                if archetype not in draft_suggestions.ARCHETYPES:
                     raise HTTPException(404, f"archétype inconnu : {archetype!r}")
                 if not seed_picks:
                     manual_error = "Choisis au moins 1 champion avant de compléter la draft."
                 else:
-                    pool, zstats = _get_pool_zstats()
-                    weights = DRAFT_ARCHETYPES[archetype]["weights"]
-                    placed, total, seed_pairs = _seed_from_champions(
-                        conn, window, platform, seed_picks
-                    )
-                    completed = _greedy_complete_draft(
-                        conn,
-                        window,
-                        platform,
-                        placed,
-                        total,
-                        DRAFT_SUGGEST_MIN_TIER,
-                        weights,
-                        zstats,
-                    )
-                    if completed is None:
+                    _, zstats = _get_pool_zstats()
+                    raw = _manual_propose(conn, window, platform, seed_picks, archetype, zstats)
+                    if raw is None:
                         manual_error = (
                             "Pas assez de données fiables pour compléter cette composition —"
                             " essaie d'autres champions ou un autre archétype."
                         )
                     else:
-                        full_placed, full_total = completed
-                        manual_result = _build_draft_result(
-                            conn,
-                            window,
-                            platform,
-                            full_placed,
-                            full_total,
-                            DRAFT_ARCHETYPES[archetype]["label"],
-                            seed_pairs,
-                        )
+                        manual_result = _build_draft_result(raw)
 
         def _draft_url(**overrides: str) -> str:
             params = {
@@ -1562,7 +1059,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                     role: (champ(seed_picks[role]).name if seed_picks.get(role) else "")
                     for role in DRAFT_ROLES
                 },
-                "archetypes": DRAFT_ARCHETYPES,
+                "archetypes": draft_suggestions.ARCHETYPES,
                 "selected_archetype": archetype or "",
                 "manual_result": manual_result,
                 "manual_error": manual_error,

@@ -675,6 +675,55 @@ gagner") avec les données déjà en place.
       les ~26-29s de la v4 (contres + conseils sur le draft complet ajoutent
       ~15 requêtes par carte finale), jugé acceptable pour une action
       "clic et attente" explicite.
+- [x] **Contres/design retravaillés + compositions PRÉCALCULÉES (2026-07-25/26,
+      2 retours utilisateur : "je voulais garder les drafts proposées sans
+      avoir à cliquer" + "le contre n'est pas très compréhensible / améliore
+      le design de Compose")** :
+      - **Contres reformulés** : chaque contre affiche désormais explicitement
+        le champion CONTRÉ ("contre {champion} : {contres}"), pas juste le
+        nom du rôle — l'ancienne formulation ("ADC est le rôle le plus
+        exploitable : Katarina...") ne disait pas contre QUI. Layout en
+        "chips" (rôle + champion + delta), plus lisible qu'un paragraphe.
+      - **Design de "Compose à partir de tes champions"** retravaillé :
+        badges de rôle colorés (mêmes couleurs que le reste du site) à côté
+        de chaque champ de saisie, formulaire réorganisé, barre de
+        chargement (CSS + `htmx-request`, hx-boost déjà actif sur `<body>`)
+        pendant le calcul — vérifié visuellement en navigateur (serveur
+        `uvicorn` local), la barre s'affiche bien pendant la requête AJAX.
+      - **Compositions suggérées PRÉCALCULÉES pour `platform="all"`**
+        (la région par défaut à l'arrivée sur `/draft`, le plus de games) :
+        nouvelles tables `draft_suggestion`/`draft_suggestion_counter`
+        (migration 033, style normalisé cohérent avec le reste du schéma,
+        pas de JSON) ; le moteur de calcul entier (archétypes, algorithme
+        glouton, contres 1v1 — `_sum_synergy`, `_greedy_complete_draft`,
+        `_full_draft_score`, `_draft_counters`, etc.) déménage de
+        `web/app.py` vers un nouveau module autonome
+        `synergy/draft_suggestions.py` (aucune dépendance à `trio_lab.web`,
+        y compris ses propres requêtes SQL déjà écrites côté
+        `web/queries.py` — dupliquées à dessein pour que le module reste
+        importable par le collector sans jamais tirer FastAPI). Rafraîchi
+        dans `collector/service.py` → `refresh_scores`, juste après
+        `resilience.refresh` — même pipeline que score_duo/score_trio/
+        score_matchup/résilience, pas de cron séparé, cadencé par les
+        cycles de collecte (rate limit Riot, déjà plusieurs minutes).
+        Seule "toutes régions" est précalculée (décision explicite, retour
+        utilisateur : chaque région ajouterait ~30-47s à CHAQUE cycle de
+        collecte) — les autres régions gardent le bouton "Proposer des
+        compositions" en calcul à la demande, comme avant ; si rien n'est
+        encore matérialisé pour "toutes régions" (ex. juste après un
+        déploiement, avant le 1er cycle), retombe aussi sur le bouton
+        plutôt qu'une page cassée/vide.
+      - `web/app.py` devient un pur adaptateur de rendu (`_build_draft_result`,
+        `_resolve_seed_pairs`, `_resolve_counters`) : résout les
+        `champion_id` bruts (calculés en direct OU lus depuis
+        `draft_suggestion(_counter)`) en `Champion`/libellés — un seul
+        chemin de rendu pour les 2 sources et les 2 sections de la page.
+      Vérifié : `synergy/draft_suggestions.refresh` matérialise la bonne
+      composition + le bon contre sur un scénario déterministe (tests
+      `tests/synergy/test_draft_suggestions_pg.py`) ; `/draft?platform=all`
+      affiche les compositions précalculées SANS clic, bouton absent
+      (`tests/web/test_app_pg.py`) ; repli sur le bouton vérifié si rien
+      n'est encore matérialisé.
 
 Phase 8 close pour l'instant (draft, insights, résilience, flex) — prochaine idée à définir.
 

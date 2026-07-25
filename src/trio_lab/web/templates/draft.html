@@ -32,22 +32,27 @@
   {% endif %}
   {% if d.counters %}
   <div class="draft-counters">
-    <p class="draft-counters-primary">
-      <strong>{{ d.counters.primary.role_label }}</strong> est le rôle le plus exploitable :
+    <p class="draft-counters-title">Meilleurs contres 1v1 (rôle le plus exploitable en premier)</p>
+    <div class="draft-counters-row">
+      <span class="role-badge role-{{ d.counters.primary.role }}">{{ d.counters.primary.role | upper }}</span>
+      <span class="meta">contre {{ d.counters.primary.against.name }} :</span>
       {% for p in d.counters.primary.picks %}
-      <span class="champ">
+      <span class="champ counter-chip">
         {% if p.champion.icon_url %}<img src="{{ p.champion.icon_url }}" alt="" width="20" height="20">{% endif %}
         {{ p.champion.name }} <span class="pos">{{ p.delta | signed_pct }}</span>
       </span>
       {% endfor %}
-    </p>
-    {% if d.counters.secondary %}
-    <ul class="draft-counters-secondary">
-      {% for s in d.counters.secondary %}
-      <li>{{ s.role_label }} : {{ s.pick.champion.name }} ({{ s.pick.delta | signed_pct }})</li>
-      {% endfor %}
-    </ul>
-    {% endif %}
+    </div>
+    {% for s in d.counters.secondary %}
+    <div class="draft-counters-row">
+      <span class="role-badge role-{{ s.role }}">{{ s.role | upper }}</span>
+      <span class="meta">contre {{ s.against.name }} :</span>
+      <span class="champ counter-chip">
+        {% if s.pick.champion.icon_url %}<img src="{{ s.pick.champion.icon_url }}" alt="" width="20" height="20">{% endif %}
+        {{ s.pick.champion.name }} <span class="pos">{{ s.pick.delta | signed_pct }}</span>
+      </span>
+    </div>
+    {% endfor %}
   </div>
   {% else %}
   <p class="meta sub">Aucun contre 1v1 notable trouvé pour cette composition.</p>
@@ -96,11 +101,14 @@
     <input type="hidden" name="platform" value="{{ platform }}">
     <div class="draft-compose-roles">
       {% for role in draft_roles %}
-      <label>{{ ROLE_LABELS[role] }}
+      <label class="draft-compose-role">
+        <span class="role-badge role-{{ role }}">{{ role | upper }}</span>
         <input name="seed_{{ role }}" value="{{ seed_names[role] }}" list="champion-names" placeholder="champion…">
       </label>
       {% endfor %}
-      <label>Archétype
+    </div>
+    <div class="draft-compose-submit">
+      <label class="draft-compose-archetype">Archétype
         <select name="archetype">
           <option value="">choisir…</option>
           {% for key, a in archetypes.items() %}
@@ -108,8 +116,9 @@
           {% endfor %}
         </select>
       </label>
+      <button type="submit" class="button-like">Compléter la draft</button>
+      <span class="draft-compose-loadbar" aria-hidden="true"></span>
     </div>
-    <button type="submit">Compléter la draft</button>
   </form>
   {% if manual_error %}
   <p class="empty">{{ manual_error }}</p>
@@ -123,14 +132,18 @@
 <section class="draft-suggest">
   <div class="draft-suggest-head">
     <h2>Compositions suggérées</h2>
+    {% if suggested_drafts is none %}
     <a class="button-like" href="{{ suggest_url }}">Proposer des compositions</a>
+    {% endif %}
   </div>
   <p class="meta">Part d'un <strong>duo</strong> (2 champions précis, bien mieux renseigné qu'un trio à
     3) parmi les 10 paires de rôles possibles, puis étend rôle par rôle en ajoutant à chaque étape le
     champion qui maximise un score composé de synergie ET de stats d'archétype — 4 profils pondèrent
     <strong>scaling</strong>, <strong>gold@15</strong>, <strong>CC</strong> et <strong>prise de
     drakes</strong> différemment. Plusieurs duos de départ sont essayés ; la composition FINIE retenue
-    est celle au meilleur score, pas forcément celle du duo de départ le mieux classé isolément.</p>
+    est celle au meilleur score, pas forcément celle du duo de départ le mieux classé isolément.
+    Précalculées automatiquement pour « toutes régions » ; pour une région précise, calcul à la demande
+    (bouton) — plus long (~30-47s).</p>
   {% if suggested_drafts is not none %}
   {% if not suggested_drafts %}
   <p class="empty">Pas assez de duos fiables sur cette fenêtre pour proposer des compositions.</p>
