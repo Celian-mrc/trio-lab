@@ -789,186 +789,6 @@ def test_api_status_reports_collection(pg_sync, client):
     assert sum(d["matches"] for d in payload["matches_per_day"]) == 2
 
 
-def test_draft_page_combines_synergy_and_counter(pg_sync, client):
-    """Simulateur de draft (Phase 8) : edge = Σ synergie alliés + counter
-    ennemi même rôle. Lee Sin (jgl, id 1), Ahri (mid, id 2), Vi (mid, id 4)."""
-    pg_sync.execute(
-        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
-        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
-        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
-        " 0.0, 0.0, 1.0, 'faible')"
-    )
-    pg_sync.execute(
-        "INSERT INTO agg_champion (patch, platform, role, champion_id, games, wins)"
-        " VALUES ('16.13', 'euw1', 'MIDDLE', 2, 100, 55)"
-    )
-    pg_sync.execute(
-        "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
-        " games_eff, wr, synergy, ci_low, ci_high, tier)"
-        " VALUES ('16.13', 'euw1', 'jgl_mid', 1, 2, 60, 60.0, 0.6, 0.08, 0.4, 0.8, 'moyen')"
-    )
-    pg_sync.execute(
-        "INSERT INTO score_matchup (window_label, platform, role, champ_a, champ_b, games,"
-        " games_eff, wr, delta_raw, delta, ci_low, ci_high, tier)"
-        " VALUES ('16.13', 'euw1', 'MIDDLE', 2, 4, 60, 60.0, 0.55, 0.02, 0.02, 0.3, 0.7, 'moyen')"
-    )
-
-    # Grille = celle du seul slot "actif" (façon champ select) — le mettre
-    # explicitement sur blue_mid pour tester ces suggestions.
-    # 1er pick, aucun allié/ennemi verrouillé : repli sur le WR baseline.
-    resp = client.get("/draft", params={"active": "blue_mid"})
-    assert resp.status_code == 200
-    assert "Ahri" in resp.text
-    assert "55.0 % WR" in resp.text
-
-    # Allié jungle verrouillé (Lee Sin) : suggestion mid par synergie seule.
-    resp = client.get("/draft", params={"blue_jgl": "Lee Sin", "active": "blue_mid"})
-    assert resp.status_code == 200
-    assert "+8.0 %" in resp.text  # synergy .08
-
-    # + ennemi mid verrouillé (Vi) : edge cumulé synergie + counter.
-    resp = client.get(
-        "/draft", params={"blue_jgl": "Lee Sin", "red_mid": "Vi", "active": "blue_mid"}
-    )
-    assert resp.status_code == 200
-    assert "+10.0 %" in resp.text  # .08 + .02
-
-    # Ban : Ahri (seule candidate connue pour mid) disparaît de la grille,
-    # y compris du repli baseline.
-    resp = client.get(
-        "/draft",
-        params={"blue_jgl": "Lee Sin", "red_mid": "Vi", "bans": "Ahri", "active": "blue_mid"},
-    )
-    assert resp.status_code == 200
-    assert "Aucun champion disponible" in resp.text
-
-
-def test_draft_page_locked_slot_and_clear_link(pg_sync, client):
-    pg_sync.execute(
-        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
-        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
-        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
-        " 0.0, 0.0, 1.0, 'faible')"
-    )
-    resp = client.get("/draft", params={"blue_jgl": "Lee Sin"})
-    assert resp.status_code == 200
-    assert "Lee Sin" in resp.text
-    assert 'class="draft-clear"' in resp.text
-    # Le slot bleu jungle est verrouillé : pas de champ de recherche visible
-    # pour lui (il reste en hidden dans les formulaires des autres slots).
-    assert 'name="blue_jgl" list="champion-names"' not in resp.text
-
-
-def test_draft_page_blind_grid_sorts_reliable_before_low_sample(pg_sync, client):
-    """Retour utilisateur 2026-07-19 : en mode blind, le WR baseline n'est
-    jamais lissé (contrairement à `edge`) — sans tri par fiabilité, un
-    champion à quelques games peut passer devant un champion à 1000+ games
-    pour un écart de WR qui n'est que du bruit. Vi (10 games, 80 % WR,
-    low_sample) ne doit jamais apparaître avant Lee Sin (1000 games, 55 %
-    WR) dans la grille — les deux restent visibles, juste dans cet ordre."""
-    pg_sync.execute(
-        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
-        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
-        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
-        " 0.0, 0.0, 1.0, 'faible')"
-    )
-    pg_sync.execute(
-        "INSERT INTO agg_champion (patch, platform, role, champion_id, games, wins)"
-        " VALUES ('16.13', 'euw1', 'TOP', 1, 1000, 550),"  # Lee Sin : 55 % WR, gros échantillon
-        "        ('16.13', 'euw1', 'TOP', 4, 10, 8)"  # Vi : 80 % WR, échantillon minuscule
-    )
-    resp = client.get("/draft", params={"active": "blue_top"})
-    assert resp.status_code == 200
-    # Se limiter à la grille (pas au <datalist>, alphabétique, qui mettrait
-    # "Lee Sin" avant "Vi" même si le tri par fiabilité était cassé).
-    grid_html = resp.text.split('<div class="champ-grid">')[1]
-    assert "Lee Sin" in grid_html
-    assert "Vi" in grid_html
-    assert grid_html.index("Lee Sin") < grid_html.index("Vi")
-
-
-def test_draft_page_active_slot_defaults_then_advances_after_pick(pg_sync, client):
-    """Interface façon champ select (retour utilisateur 2026-07-19) : un seul
-    slot "actif" à la fois. Sans param `active`, c'est le 1er slot vide
-    (ordre fixe blue_top puis blue_jgl...). Un pick dans le slot actif
-    avance automatiquement vers le slot vide suivant."""
-    pg_sync.execute(
-        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
-        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
-        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
-        " 0.0, 0.0, 1.0, 'faible')"
-    )
-    resp = client.get("/draft")
-    assert resp.status_code == 200
-    assert "Blue — Top" in resp.text
-
-    # Un pick verrouillé ailleurs (blue_jgl) sans `active` explicite : le
-    # 1er slot vide reste blue_top (l'ordre ignore les slots déjà remplis).
-    resp = client.get("/draft", params={"blue_jgl": "Lee Sin"})
-    assert resp.status_code == 200
-    assert "Blue — Top" in resp.text
-
-    # blue_top rempli : le slot actif par défaut avance à blue_mid (jgl
-    # aussi rempli, sup/bot suivent après mid dans l'ordre des rôles).
-    resp = client.get("/draft", params={"blue_jgl": "Lee Sin", "blue_top": "Thresh"})
-    assert resp.status_code == 200
-    assert "Blue — Mid" in resp.text
-
-
-def test_draft_page_blind_pick_shows_worst_matchup_safety(pg_sync, client):
-    """Sécurité blind pick (retour utilisateur 2026-07-19, clarification :
-    « un blind pick est un pick qui a peu de counter, ou du moins des
-    counters qui n'ont pas un énorme winrate contre ce champion ») : quand
-    aucun ennemi même rôle n'est verrouillé, la grille affiche le NOMBRE de
-    contres notables (delta ≤ DRAFT_NOTABLE_COUNTER_DELTA) et le pire
-    d'entre eux — pas seulement le pire cas isolé (2e retour utilisateur,
-    2026-07-19 : un champion avec dix contres modérés est un risque
-    différent d'un champion avec un seul contre sévère)."""
-    pg_sync.execute(
-        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
-        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
-        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
-        " 0.0, 0.0, 1.0, 'faible')"
-    )
-    pg_sync.execute(
-        "INSERT INTO agg_champion (patch, platform, role, champion_id, games, wins)"
-        " VALUES ('16.13', 'euw1', 'JUNGLE', 1, 100, 50),"
-        "        ('16.13', 'euw1', 'JUNGLE', 2, 100, 50),"
-        "        ('16.13', 'euw1', 'JUNGLE', 4, 100, 50)"
-    )
-    pg_sync.execute(
-        "INSERT INTO score_matchup (window_label, platform, role, champ_a, champ_b, games,"
-        " games_eff, wr, delta_raw, delta, ci_low, ci_high, tier)"
-        # Champion 1 (Lee Sin) : 1 contre notable (-0.1) + 1 sous le seuil (-0.02).
-        " VALUES ('16.13', 'euw1', 'JUNGLE', 1, 5, 60, 60.0, 0.40, -0.1, -0.1, -0.3, 0.1, 'moyen'),"
-        "        ('16.13', 'euw1', 'JUNGLE', 1, 6, 60, 60.0, 0.48, -0.02, -0.02, -0.2,"
-        " 0.2, 'moyen'),"
-        # Champion 2 (Ahri) : données de matchup, mais rien sous le seuil.
-        "        ('16.13', 'euw1', 'JUNGLE', 2, 5, 60, 60.0, 0.49, -0.01, -0.01, -0.2,"
-        " 0.2, 'moyen')"
-        # Champion 4 (Vi) : aucune ligne score_matchup — pas de données.
-    )
-    resp = client.get("/draft", params={"active": "blue_jgl"})
-    assert resp.status_code == 200
-    assert 'class="badge-blind"' in resp.text
-    assert '<span class="sub neg">1 contre notable (pire -10.0 %)</span>' in resp.text
-    assert '<span class="sub pos">aucun contre notable</span>' in resp.text
-    assert '<span class="sub meta">pas de données de contre</span>' in resp.text
-
-    # Un ennemi jungle verrouillé : la synergie/contre réel prime, la
-    # sécurité blind pick disparaît (elle ne dit rien sur CET adversaire) —
-    # aucune des 3 lignes de sécurité par champion ne doit plus apparaître
-    # (le paragraphe d'intro, lui, mentionne toujours "contre notable" en
-    # général : on cible les balises par champion, pas le texte libre).
-    resp = client.get("/draft", params={"active": "blue_jgl", "red_jgl": "Orianna"})
-    assert resp.status_code == 200
-    assert 'class="badge-blind"' not in resp.text
-    assert 'sub neg">1 contre notable' not in resp.text
-    assert 'class="sub pos">aucun contre notable</span>' not in resp.text
-    assert 'class="sub meta">pas de données de contre</span>' not in resp.text
-    assert "pire contre" not in resp.text
-
-
 def test_draft_page_suggest_button_shown_but_not_computed_by_default(pg_sync, client):
     """Compositions suggérées (retour utilisateur 2026-07-24) : le calcul
     (~10-15s, 4 archétypes) ne tourne jamais sur un chargement de page
@@ -1050,17 +870,18 @@ def test_draft_page_suggest_proposes_synergy_based_composition(pg_sync, client):
     # Synergie totale exacte : .30 + .09 + .07 + .05 = .51 (cf. docstring
     # de _seed_suggest_scenario pour le détail des 10 paires couvertes).
     assert "+51.0 %" in resp.text
-    assert "60 games, fiabilité eleve" in resp.text
-    # Lien pour recharger cette composition dans le simulateur, côté Blue.
-    assert "blue_top=Vi" in resp.text
-    assert "blue_jgl=Lee+Sin" in resp.text or "blue_jgl=Lee%20Sin" in resp.text
-    assert "blue_bot=Orianna" in resp.text
+    # Duo de départ (jgl_mid, Lee Sin + Ahri) affiché avec sa fiabilité.
+    assert "Jungle/Mid : Lee Sin + Ahri" in resp.text
+    assert "+30.0 %, fiabilité eleve (60 games)" in resp.text
 
 
 def test_draft_page_suggest_shows_advice_from_seed_duo_stats(pg_sync, client):
     """Les conseils de jeu (retour utilisateur 2026-07-24) traduisent des
-    stats déjà calculées du DUO DE DÉPART (`score_duo`), pas un nouveau
-    calcul — jamais présentés comme une garantie, juste une phrase."""
+    stats moyennes sur les 10 VRAIES paires du draft COMPLET
+    (`_full_draft_stat_averages`), pas seulement du duo de départ (v3,
+    2026-07-25) — jamais présentés comme une garantie, juste une phrase.
+    Toutes les paires portent ici les mêmes scaling/cc/gold_diff_15 pour que
+    la moyenne du draft complet reste ces valeurs, pas seulement le seed."""
     pg_sync.execute(
         "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
         " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
@@ -1087,8 +908,9 @@ def test_draft_page_suggest_shows_advice_from_seed_duo_stats(pg_sync, client):
     for roles, champ_a, champ_b, synergy in rows:
         pg_sync.execute(
             "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
-            " games_eff, wr, synergy, ci_low, ci_high, tier)"
-            " VALUES ('16.13', 'euw1', %s, %s, %s, 60, 60.0, 0.55, %s, 0.0, %s, 'eleve')",
+            " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15)"
+            " VALUES ('16.13', 'euw1', %s, %s, %s, 60, 60.0, 0.55, %s, 0.0, %s, 'eleve',"
+            " 0.08, 70.0, 800.0)",
             (roles, champ_a, champ_b, synergy, synergy),
         )
     resp = client.get("/draft", params={"suggest": "1"})
@@ -1109,7 +931,10 @@ def test_draft_page_suggest_skips_archetypes_without_stat_data(pg_sync, client):
     assert resp.status_code == 200
     assert resp.text.count("draft-suggest-card") == 1
     assert "Meilleure synergie" in resp.text
-    assert "Scaling / fin de partie" not in resp.text
+    # "Scaling / fin de partie" reste dans le <select> du formulaire "Compose
+    # à partir de tes champions" (toujours proposé) : on cible précisément
+    # le titre de carte, pas le texte libre de la page.
+    assert '<h3 class="draft-suggest-label">Scaling / fin de partie</h3>' not in resp.text
 
 
 def test_draft_page_suggest_archetypes_pick_different_seed_duos(pg_sync, client):
@@ -1173,14 +998,132 @@ def test_draft_page_suggest_archetypes_pick_different_seed_duos(pg_sync, client)
     assert resp.status_code == 200
     assert "Meilleure synergie" in resp.text
     assert "Scaling / fin de partie" in resp.text
-    # Preuve indirecte que les 2 profils ont choisi 2 duos de départ
-    # différents (A vs B) : leurs conseils de jeu, dérivés du scaling du
-    # SEED, sont opposés — "Meilleure synergie" (duo A, scaling -10 %)
-    # dit "plus fort tôt", "Scaling" (duo B, scaling +10 %) dit "monte en
-    # puissance". Si les 2 profils avaient choisi le même duo, ces 2
-    # phrases contradictoires ne pourraient pas apparaître ensemble.
-    assert "plus forte tôt que tard" in resp.text
-    assert "monte en puissance" in resp.text
+    # Preuve directe que les 2 profils ont choisi 2 duos de départ
+    # différents (A vs B) : le duo de départ affiché (`seed_pairs`) diffère —
+    # "Meilleure synergie" part du duo A (jgl_mid, Lee Sin + Ahri, synergie
+    # dominante), "Scaling" part du duo B (top_bot, Vi + Orianna, scaling
+    # dominant) — les 2 lignes ne peuvent apparaître ensemble que si les 2
+    # profils ont vraiment choisi 2 duos différents (le draft complet, lui,
+    # peut être identique aux 2 : univers fermé à 5 champions dans ce test).
+    assert "Jungle/Mid : Lee Sin + Ahri" in resp.text
+    assert "+30.0 %, fiabilité eleve (60 games)" in resp.text
+    assert "Top/ADC : Vi + Orianna" in resp.text
+    assert "+5.0 %, fiabilité eleve (60 games)" in resp.text
+
+
+def test_draft_page_suggest_shows_counters(pg_sync, client):
+    """Contres 1v1 (retour utilisateur 2026-07-25) : le rôle le plus
+    exploitable de la composition affiche ses contres — toujours du 1v1 par
+    rôle (`score_matchup`), jamais un contre de la draft entière (Phase 4,
+    abandonné le 2026-07-19, cf. CLAUDE.md)."""
+    _seed_suggest_scenario(
+        pg_sync
+    )  # complète en jgl=Lee Sin(1) mid=Ahri(2) sup=Thresh(3) top=Vi(4) bot=Orianna(5)
+    pg_sync.execute(
+        "INSERT INTO score_matchup (window_label, platform, role, champ_a, champ_b, games,"
+        " games_eff, wr, delta_raw, delta, ci_low, ci_high, tier)"
+        " VALUES ('16.13', 'euw1', 'JUNGLE', 6, 1, 100, 100.0, 0.60, 0.10, 0.10, 0.05, 0.15,"
+        " 'eleve')"
+    )
+    resp = client.get("/draft", params={"suggest": "1"})
+    assert resp.status_code == 200
+    assert "Jungle</strong> est le rôle le plus exploitable" in resp.text
+    assert "Leona" in resp.text
+    assert "+10.0 %" in resp.text
+
+
+def test_draft_page_suggest_no_counters_shows_message(pg_sync, client):
+    """Aucune ligne `score_matchup` du tout : pas de contre notable nulle
+    part, message explicite plutôt qu'une section vide/plantée."""
+    _seed_suggest_scenario(pg_sync)
+    resp = client.get("/draft", params={"suggest": "1"})
+    assert resp.status_code == 200
+    assert "Aucun contre 1v1 notable trouvé pour cette composition." in resp.text
+
+
+def test_draft_page_compose_from_champions_completes_and_shows_reliability(pg_sync, client):
+    """ "Compose à partir de tes champions" (retour utilisateur 2026-07-25) :
+    part de 1-2 champions choisis à la main (pas d'un duo auto-suggéré),
+    complète avec le même algorithme, et affiche la fiabilité de la paire
+    de départ tout comme les compositions auto-suggérées."""
+    _seed_suggest_scenario(pg_sync)
+    resp = client.get(
+        "/draft", params={"seed_jgl": "Lee Sin", "seed_mid": "Ahri", "archetype": "synergy"}
+    )
+    assert resp.status_code == 200
+    assert "Meilleure synergie" in resp.text
+    for name in ("Vi", "Lee Sin", "Ahri", "Orianna", "Thresh"):
+        assert name in resp.text
+    assert "+51.0 %" in resp.text
+    assert "Jungle/Mid : Lee Sin + Ahri" in resp.text
+    assert "+30.0 %, fiabilité eleve (60 games)" in resp.text
+
+
+def test_draft_page_compose_shows_no_data_for_unplayed_pair(pg_sync, client):
+    """Une paire choisie à la main jamais jouée ensemble (pas de ligne
+    `score_duo`) : jamais bloquant (retour utilisateur 2026-07-25), sa
+    fiabilité s'affiche honnêtement comme "aucune donnée", le reste de la
+    draft se complète quand même à partir des autres paires disponibles."""
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    # Toutes les paires structurelles SAUF top_sup (Vi + Thresh, le duo de
+    # départ choisi à la main) : leur paire n'a donc aucune ligne score_duo.
+    rows = (
+        ("jgl_mid", 1, 2, 0.30),
+        ("jgl_sup", 1, 3, 0.05),
+        ("mid_sup", 2, 3, 0.04),
+        ("top_jgl", 4, 1, 0.02),
+        ("top_mid", 4, 2, 0.02),
+        ("jgl_bot", 1, 5, 0.01),
+        ("mid_bot", 2, 5, 0.01),
+        ("bot_sup", 5, 3, 0.01),
+        ("top_bot", 4, 5, 0.02),
+    )
+    for roles, champ_a, champ_b, synergy in rows:
+        pg_sync.execute(
+            "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
+            " games_eff, wr, synergy, ci_low, ci_high, tier)"
+            " VALUES ('16.13', 'euw1', %s, %s, %s, 60, 60.0, 0.55, %s, 0.0, %s, 'eleve')",
+            (roles, champ_a, champ_b, synergy, synergy),
+        )
+    resp = client.get(
+        "/draft", params={"seed_top": "Vi", "seed_sup": "Thresh", "archetype": "synergy"}
+    )
+    assert resp.status_code == 200
+    assert "Top/Support : Vi + Thresh" in resp.text
+    assert "aucune donnée ensemble" in resp.text
+    for name in ("Vi", "Lee Sin", "Ahri", "Orianna", "Thresh"):
+        assert name in resp.text
+
+
+def test_draft_page_compose_requires_at_least_one_champion(pg_sync, client):
+    """Un archétype choisi sans aucun champion : message explicite plutôt
+    que de tenter de compléter un draft sans aucune donnée d'ancrage
+    (`_sum_synergy` ne peut rien couvrir sans au moins 1 champion posé)."""
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    resp = client.get("/draft", params={"archetype": "synergy"})
+    assert resp.status_code == 200
+    assert "Choisis au moins 1 champion" in resp.text
+
+
+def test_draft_page_compose_rejects_unknown_archetype(pg_sync, client):
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    resp = client.get("/draft", params={"seed_top": "Vi", "archetype": "not-a-real-archetype"})
+    assert resp.status_code == 404
 
 
 def test_insights_page_empty_state(pg_sync, client):

@@ -401,10 +401,10 @@ def matchup_candidates(
     enemy_champion_id: int,
     limit: int,
 ) -> list[dict]:
-    """Symétrique de `champion_best_partners` côté counter (simulateur de
-    draft, Phase 8) : `champ_b` (l'ennemi) est fixé, on liste tous les
+    """Symétrique de `champion_best_partners` côté counter (contres d'une
+    composition, `/draft`) : `champ_b` (l'ennemi) est fixé, on liste tous les
     `champ_a` candidats et leur delta — pas de filtre de fiabilité ici,
-    l'appelant (app.py) grise plutôt que masque (retour utilisateur)."""
+    l'appelant (app.py) filtre/affiche selon son propre besoin."""
     with conn.cursor(row_factory=dict_row) as cur:
         return cur.execute(
             """
@@ -422,75 +422,6 @@ def matchup_candidates(
                 "enemy": enemy_champion_id,
                 "limit": limit,
             },
-        ).fetchall()
-
-
-def role_worst_matchups(
-    conn: psycopg.Connection,
-    window: str,
-    platform: str,
-    role: str,
-    *,
-    min_games_eff: float,
-    notable_delta: float,
-) -> dict[int, dict]:
-    """Exposition aux contres par champion pour un rôle — signal de risque
-    « blind pick » (simulateur de draft, Phase 8, retour utilisateur : « un
-    blind pick est un pick qui a peu de counter, ou dont les counters n'ont
-    pas un énorme WR contre lui »). `worst_delta` = pire matchup connu
-    (MIN(delta)) ; `notable_counters` = NOMBRE de matchups au moins aussi
-    mauvais que `notable_delta` — un champion avec un seul pire cas sévère
-    est un risque différent d'un champion avec dix contres modérés, ce que
-    `worst_delta` seul ne distingue pas. Un seul aller-retour par rôle (pas
-    par champion candidat), donc utilisable sur une grille complète."""
-    with conn.cursor(row_factory=dict_row) as cur:
-        rows = cur.execute(
-            """
-            SELECT champ_a AS candidate_champion, min(delta) AS worst_delta,
-                   count(*) FILTER (WHERE delta <= %(notable_delta)s) AS notable_counters
-            FROM score_matchup
-            WHERE window_label = %(window)s AND platform = %(platform)s AND role = %(role)s
-              AND games_eff >= %(min_games_eff)s
-            GROUP BY champ_a
-            """,
-            {
-                "window": window,
-                "platform": platform,
-                "role": role,
-                "min_games_eff": min_games_eff,
-                "notable_delta": notable_delta,
-            },
-        ).fetchall()
-    return {
-        r["candidate_champion"]: {
-            "worst_delta": r["worst_delta"],
-            "notable_counters": r["notable_counters"],
-        }
-        for r in rows
-    }
-
-
-def champion_role_baseline_list(
-    conn: psycopg.Connection, window: str, platform: str, role: str, limit: int
-) -> list[dict]:
-    """Champions triés par WR baseline dans un rôle (simulateur de draft,
-    Phase 8) : repli quand aucun allié/ennemi n'est encore verrouillé (1er
-    pick) — pas de synergie/counter à calculer, juste le WR individuel."""
-    patches = window.split("+")
-    with conn.cursor(row_factory=dict_row) as cur:
-        return cur.execute(
-            """
-            SELECT champion_id AS candidate_champion, sum(games) AS games,
-                   sum(wins)::real / NULLIF(sum(games), 0) AS wr
-            FROM agg_champion
-            WHERE patch = ANY(%(patches)s) AND role = %(role)s
-              AND (%(platform)s = 'all' OR platform = %(platform)s)
-            GROUP BY champion_id
-            HAVING sum(games) > 0
-            ORDER BY wr DESC
-            LIMIT %(limit)s
-            """,
-            {"patches": patches, "platform": platform, "role": role, "limit": limit},
         ).fetchall()
 
 

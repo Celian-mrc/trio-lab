@@ -627,6 +627,54 @@ gagner") avec les données déjà en place.
       construit et compare désormais plusieurs drafts complets par profil
       au lieu de s'arrêter au premier ; jugé acceptable pour une action
       "clic et attente" explicite, pas un chargement de page.
+- [x] **`/draft` : suppression du simulateur pick-par-pick, remplacé par
+      "Compose à partir de tes champions" + contres (2026-07-25, retour
+      utilisateur — "il faut qu'on enlève la partie draft avec la sélection
+      des champions... possibilité de voir les contres d'une composition et
+      de compléter une draft à partir de champions choisis")** :
+      - **Suppression** : `_draft_role_grid`/`_first_empty_slot`, l'état
+        `blue_*`/`red_*`/`active`/`bans` dans l'URL, `role_worst_matchups`/
+        `champion_role_baseline_list` (queries.py, devenues mortes),
+        `DRAFT_SLOT_ORDER`/`DRAFT_RECOMMENDED_COUNT`/`DRAFT_MIN_GAMES_EFF`/
+        `DRAFT_SAFETY_MIN_GAMES_EFF` et tout le CSS/template associés.
+      - **`_greedy_complete_draft` généralisé** : accepte désormais un état
+        de départ `placed` PARTIEL (1 à 4 rôles déjà posés, pas seulement un
+        duo) + `total` — le corps de la boucle gloutonne ne change pas,
+        réutilisé tel quel par les 2 sections de la page.
+      - **`_full_draft_score` refactorée** : extrait `_full_draft_stat_averages`
+        (moyenne d'une liste de colonnes sur les 10 vraies paires d'un draft
+        complet), réutilisée aussi bien pour classer les candidats que pour
+        les conseils de jeu — les conseils portent maintenant sur la moyenne
+        du DRAFT COMPLET, pas seulement le duo de départ (plus honnête,
+        surtout quand le "départ" est 1 à 4 champions choisis à la main).
+      - **Contres (`_draft_counters`)** : toujours du 1v1 par rôle
+        (`score_matchup`, jamais un contre de la draft entière — combinatoire
+        intraitable, cf. Phase 4 ❌ ci-dessus). Rôle le plus exploitable
+        (meilleur delta disponible) = contre PRIMAIRE, jusqu'à
+        `DRAFT_COUNTER_PRIMARY_PICKS` (3) champions ; les
+        `DRAFT_COUNTER_SECONDARY_ROLES` (2) rôles suivants : 1 champion
+        chacun (retour utilisateur : "les deux combinés c'est possible ?").
+        Seuils : `games_eff ≥ 50` (même plancher que l'ancienne sécurité
+        blind pick) + delta ≥ 3 pts de WR — vérifié sur données réelles
+        (16.14+16.13, platform=all) : 945 lignes score_matchup passent les 2
+        filtres, largement assez pour ne jamais starver un rôle.
+      - **"Compose à partir de tes champions"** (`_seed_from_champions`) :
+        1 à 5 champions choisis à la main (état dans l'URL, `seed_top`..
+        `seed_sup` + `archetype`) → même algorithme que les compositions
+        auto-suggérées. Fiabilité de CHAQUE paire déjà choisie affichée
+        honnêtement (y compris "aucune donnée ensemble" si jamais jouée
+        ensemble) — jamais bloquant (retour utilisateur), contrairement aux
+        rôles que le système complète ensuite, qui restent filtrés
+        `DRAFT_SUGGEST_MIN_TIER = "eleve"`. `pool`/`zstats` (coûteux, ~10 000
+        lignes) calculés au plus une fois par requête, partagés entre les 2
+        sections si demandées ensemble.
+      Vérifié en local sur données réelles : composition à partir d'1 seul
+      champion (Malphite top, profil "objectifs") complétée en ~8s (pas de
+      recherche de duo de départ à faire, un seul candidat à construire) ;
+      `/draft?suggest=1` (4 profils + leurs contres) ~47s — plus lent que
+      les ~26-29s de la v4 (contres + conseils sur le draft complet ajoutent
+      ~15 requêtes par carte finale), jugé acceptable pour une action
+      "clic et attente" explicite.
 
 Phase 8 close pour l'instant (draft, insights, résilience, flex) — prochaine idée à définir.
 

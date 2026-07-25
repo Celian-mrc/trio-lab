@@ -1,70 +1,69 @@
 {% extends "base.html" %}
-{% block title %}Simulateur de draft — Trio Lab{% endblock %}
+{% block title %}Compositions et contres — Trio Lab{% endblock %}
 {% block content %}
-<h1>Simulateur de draft</h1>
-<p class="meta">Simule un draft complet façon champ select : verrouille les picks des deux équipes,
-  rôle par rôle. Le rôle actif est surligné à gauche/droite ; la grille ci-dessous liste
-  <strong>tous les champions ayant au moins une game jouée dans ce rôle</strong> sur la fenêtre et la
-  région choisies (pas de WR inventé sur 0 game — sur une seule région et un rôle inhabituel, le
-  roster peut être incomplet ; passer sur « toutes régions » donne la couverture la plus large),
-  triés par valeur ajoutée par rapport à ce qui est déjà posé — synergie avec les alliés verrouillés +
-  contre l'adversaire même rôle s'il est déjà connu — puis par fiabilité (les échantillons trop
-  faibles pour être lus comme un signal restent visibles, mais jamais devant un champion mieux
-  établi). Les {{ draft_recommended_count }} premiers sont marqués « Recommandé » ; le reste du
-  roster reste cliquable, rien n'est masqué. État entièrement dans l'URL : partage le lien pour
-  reprendre où tu en es.</p>
-<p class="meta"><strong>Blind pick</strong> : tant qu'aucun adversaire même rôle n'est verrouillé, le
-  tri ne porte que sur la synergie côté allié (pas de contre à calculer) — la grille affiche alors,
-  pour chaque champion, le NOMBRE de contres notables connus (delta ≤ 3 pts de WR contre lui) et le
-  pire d'entre eux. Un champion avec 0 contre notable encaisse mal aucun contre fort ; un champion
-  avec plusieurs contres notables est un blind pick plus risqué, même si son pire cas n'est pas
-  extrême.</p>
-
-<section class="draft-suggest">
-  <div class="draft-suggest-head">
-    <h2>Compositions suggérées</h2>
-    <a class="button-like" href="{{ suggest_url }}">Proposer des compositions</a>
-  </div>
-  <p class="meta">Indépendant du simulateur ci-dessous, jamais de contre calculé (peu importe qui est en
-    face). Part d'un <strong>duo</strong> (2 champions précis, bien mieux renseigné qu'un trio à 3) parmi
-    les 10 paires de rôles possibles, puis étend rôle par rôle en ajoutant à chaque étape le champion qui
-    maximise la synergie avec tout ce qui est déjà posé. 4 profils proposent chacun un duo de départ
-    différent — <strong>scaling</strong>, <strong>gold@15</strong>, <strong>CC</strong> et
-    <strong>prise de drakes</strong> pesés différemment selon le profil — mais la suite de la
-    composition (une fois le duo choisi) reste toujours par pure synergie, quel que soit le profil.</p>
-  {% if suggested_drafts is not none %}
-  {% if not suggested_drafts %}
-  <p class="empty">Pas assez de duos fiables sur cette fenêtre pour proposer des compositions.</p>
-  {% else %}
-  <div class="draft-suggest-grid">
-    {% for d in suggested_drafts %}
-    <div class="draft-suggest-card">
-      <h3 class="draft-suggest-label">{{ d.label }}</h3>
-      <div class="draft-suggest-members">
-        {% for m in d.members %}
-        <span class="champ" title="{{ m.role_label }}">
-          <span class="role-badge role-{{ m.role }}">{{ m.role | upper }}</span>
-          {% if m.champion.icon_url %}<img src="{{ m.champion.icon_url }}" alt="" width="28" height="28">{% endif %}
-          {{ m.champion.name }}
-        </span>
-        {% endfor %}
-      </div>
-      <p class="meta">Synergie totale :
-        <span class="{{ 'pos' if d.total_synergy > 0 else 'neg' if d.total_synergy < 0 }}">{{ d.total_synergy | signed_pct }}</span>
-        <span class="sub">duo de départ : {{ d.seed_games }} games, fiabilité {{ d.seed_tier }}</span>
-      </p>
-      {% if d.advice %}
-      <ul class="draft-suggest-advice">
-        {% for tip in d.advice %}<li>{{ tip }}</li>{% endfor %}
-      </ul>
-      {% endif %}
-      <a class="draft-suggest-load" href="{{ d.load_url }}">Charger dans le simulateur (côté Blue)</a>
-    </div>
+{% macro draft_card(d) %}
+<div class="draft-suggest-card">
+  <h3 class="draft-suggest-label">{{ d.label }}</h3>
+  <div class="draft-suggest-members">
+    {% for m in d.members %}
+    <span class="champ" title="{{ m.role_label }}">
+      <span class="role-badge role-{{ m.role }}">{{ m.role | upper }}</span>
+      {% if m.champion.icon_url %}<img src="{{ m.champion.icon_url }}" alt="" width="28" height="28">{% endif %}
+      {{ m.champion.name }}
+    </span>
     {% endfor %}
   </div>
+  <p class="meta">Synergie totale :
+    <span class="{{ 'pos' if d.total_synergy > 0 else 'neg' if d.total_synergy < 0 }}">{{ d.total_synergy | signed_pct }}</span>
+  </p>
+  {% if d.seed_pairs %}
+  <ul class="draft-seed-pairs">
+    {% for p in d.seed_pairs %}
+    <li>{{ p.role_label_a }}/{{ p.role_label_b }} : {{ p.champion_a.name }} + {{ p.champion_b.name }} —
+      {% if p.tier %}{{ p.synergy | signed_pct }}, fiabilité {{ p.tier }} ({{ p.games }} games){% else %}aucune donnée ensemble{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
   {% endif %}
+  {% if d.advice %}
+  <ul class="draft-suggest-advice">
+    {% for tip in d.advice %}<li>{{ tip }}</li>{% endfor %}
+  </ul>
   {% endif %}
-</section>
+  {% if d.counters %}
+  <div class="draft-counters">
+    <p class="draft-counters-primary">
+      <strong>{{ d.counters.primary.role_label }}</strong> est le rôle le plus exploitable :
+      {% for p in d.counters.primary.picks %}
+      <span class="champ">
+        {% if p.champion.icon_url %}<img src="{{ p.champion.icon_url }}" alt="" width="20" height="20">{% endif %}
+        {{ p.champion.name }} <span class="pos">{{ p.delta | signed_pct }}</span>
+      </span>
+      {% endfor %}
+    </p>
+    {% if d.counters.secondary %}
+    <ul class="draft-counters-secondary">
+      {% for s in d.counters.secondary %}
+      <li>{{ s.role_label }} : {{ s.pick.champion.name }} ({{ s.pick.delta | signed_pct }})</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+  {% else %}
+  <p class="meta sub">Aucun contre 1v1 notable trouvé pour cette composition.</p>
+  {% endif %}
+</div>
+{% endmacro %}
+<h1>Compositions et contres</h1>
+<p class="meta">Propose des compositions complètes à 5 (indépendantes de l'adversaire) et leurs
+  meilleurs contres — un contre reste toujours du <strong>1v1 par rôle</strong> (même champion contre
+  même champion, ex. top contre top) : contrer une composition entière n'a pas de sens mesurable, un
+  rôle à la fois oui. Le rôle le plus exploitable de la composition affiche jusqu'à
+  {{ draft_counter_primary_picks }} contres ; les {{ draft_counter_secondary_roles }} rôles suivants,
+  un contre chacun.</p>
+<datalist id="champion-names">
+  {% for name in champion_names %}<option value="{{ name }}">{% endfor %}
+</datalist>
 
 <form method="get" action="/draft" class="filters">
   <label>Fenêtre
@@ -77,110 +76,69 @@
       {% for p in platforms %}<option value="{{ p }}" {{ 'selected' if p == platform }}>{{ 'toutes régions' if p == 'all' else p }}</option>{% endfor %}
     </select>
   </label>
-  {% for side in ('blue', 'red') %}{% for role in draft_roles %}
-  <input type="hidden" name="{{ side }}_{{ role }}" value="{{ champ(picks[side][role]).name if picks[side][role] else '' }}">
-  {% endfor %}{% endfor %}
-  <input type="hidden" name="active" value="{{ active or '' }}">
-  <input type="hidden" name="bans" value="{{ bans_raw }}">
+  {% for role in draft_roles %}
+  <input type="hidden" name="seed_{{ role }}" value="{{ seed_names[role] }}">
+  {% endfor %}
+  <input type="hidden" name="archetype" value="{{ selected_archetype }}">
   <button type="submit">Appliquer</button>
 </form>
-<datalist id="champion-names">
-  {% for name in champion_names %}<option value="{{ name }}">{% endfor %}
-</datalist>
 
-<div class="draft-bans">
-  <span class="draft-bans-label">Bans</span>
-  {% for cid in banned if cid not in picks.blue.values() and cid not in picks.red.values() %}
-  {% set c = champ(cid) %}
-  <span class="champ draft-ban-chip">{% if c.icon_url %}<img src="{{ c.icon_url }}" alt="" width="20" height="20">{% endif %}{{ c.name }}</span>
-  {% endfor %}
-  <form method="get" action="/draft" class="draft-ban-form">
-    {% for side in ('blue', 'red') %}{% for role in draft_roles %}
-    <input type="hidden" name="{{ side }}_{{ role }}" value="{{ champ(picks[side][role]).name if picks[side][role] else '' }}">
-    {% endfor %}{% endfor %}
-    <input type="hidden" name="active" value="{{ active or '' }}">
+<section class="draft-compose">
+  <h2>Compose à partir de tes champions</h2>
+  <p class="meta">Choisis 1 à 5 champions (rôle libre) et un archétype : le système complète les rôles
+    restants avec le même algorithme que les compositions suggérées ci-dessous — synergie ET stats de
+    l'archétype pesées à chaque champion ajouté, pas seulement les tiens. La fiabilité de chaque paire
+    que TU choisis est affichée telle quelle, même si elle n'a jamais été jouée ensemble — ça ne bloque
+    jamais la suite, contrairement aux rôles que le système complète, qui restent filtrés sur les
+    duos les plus fiables.</p>
+  <form method="get" action="/draft" class="draft-compose-form">
     <input type="hidden" name="window" value="{{ window }}">
     <input type="hidden" name="platform" value="{{ platform }}">
-    <input name="bans" value="{{ bans_raw }}" list="champion-names" placeholder="ajouter un ban, séparés par des virgules">
-    <button type="submit">OK</button>
-  </form>
-</div>
-
-<div class="draft-board">
-  {% for side, label in (('blue', 'Blue'), ('red', 'Red')) %}
-  <section class="draft-side">
-    <h2>{{ label }}</h2>
-    {% for role in draft_roles %}
-    {% set key = side ~ '_' ~ role %}
-    {% set champion_id = picks[side][role] %}
-    <div class="draft-slot {{ 'active' if key == active }}">
-      <div class="draft-slot-role">{{ ROLE_LABELS[role] }}</div>
-      {% if champion_id %}
-      {% set c = champ(champion_id) %}
-      <a class="champ big draft-locked" href="{{ slot_urls[key] }}" title="Retirer ce pick et resélectionner">
-        {% if c.icon_url %}<img src="{{ c.icon_url }}" alt="" width="32" height="32">{% endif %}
-        {{ c.name }}
-        <span class="draft-clear">✕</span>
-      </a>
-      {% else %}
-      <a class="draft-slot-empty" href="{{ slot_urls[key] }}">
-        {{ 'En cours de sélection…' if key == active else 'Cliquer pour choisir' }}
-      </a>
-      {% endif %}
+    <div class="draft-compose-roles">
+      {% for role in draft_roles %}
+      <label>{{ ROLE_LABELS[role] }}
+        <input name="seed_{{ role }}" value="{{ seed_names[role] }}" list="champion-names" placeholder="champion…">
+      </label>
+      {% endfor %}
+      <label>Archétype
+        <select name="archetype">
+          <option value="">choisir…</option>
+          {% for key, a in archetypes.items() %}
+          <option value="{{ key }}" {{ 'selected' if key == selected_archetype }}>{{ a.label }}</option>
+          {% endfor %}
+        </select>
+      </label>
     </div>
-    {% endfor %}
-  </section>
-  {% endfor %}
-</div>
-
-<section class="draft-grid-panel">
-  {% if grid %}
-  {% set active_side, active_role = active.split('_', 1) %}
-  <div class="draft-grid-header">
-    <h2>{{ 'Blue' if active_side == 'blue' else 'Red' }} — {{ ROLE_LABELS[active_role] }}</h2>
-    {% if grid.blind %}<span class="badge-blind" data-tooltip="Aucun adversaire même rôle verrouillé : tri par synergie alliés uniquement, pire contre connu affiché par champion" aria-label="Aucun adversaire même rôle verrouillé : tri par synergie alliés uniquement, pire contre connu affiché par champion">Blind pick</span>{% endif %}
-  </div>
-  <form method="get" action="/draft" class="draft-pick-form">
-    {% for s2 in ('blue', 'red') %}{% for r2 in draft_roles %}
-    {% if s2 ~ '_' ~ r2 != active %}
-    <input type="hidden" name="{{ s2 }}_{{ r2 }}" value="{{ champ(picks[s2][r2]).name if picks[s2][r2] else '' }}">
-    {% endif %}
-    {% endfor %}{% endfor %}
-    <input type="hidden" name="active" value="{{ active }}">
-    <input type="hidden" name="bans" value="{{ bans_raw }}">
-    <input type="hidden" name="window" value="{{ window }}">
-    <input type="hidden" name="platform" value="{{ platform }}">
-    <input name="{{ active }}" list="champion-names" placeholder="chercher un champion…">
+    <button type="submit">Compléter la draft</button>
   </form>
-  {% if not grid.roster %}
-  <p class="empty">Aucun champion disponible (tous bannis/pris pour ce rôle).</p>
-  {% else %}
-  <div class="champ-grid">
-    {% for r in grid.roster %}
-    {% set c = champ(r.champion_id) %}
-    <a class="champ-tile {{ 'recommended' if r.recommended }} {{ 'low-sample' if r.low_sample }}" href="{{ r.pick_url }}">
-      {% if c.icon_url %}<img src="{{ c.icon_url }}" alt="" width="40" height="40">{% endif %}
-      <span class="champ-tile-name">{{ r.name }}</span>
-      {% if r.edge is not none %}
-      <span class="{{ 'pos' if r.edge > 0 else 'neg' if r.edge < 0 }}" data-tooltip="Σ synergie avec les alliés déjà posés + contre l'adversaire même rôle" aria-label="Σ synergie avec les alliés déjà posés + contre l'adversaire même rôle">{{ r.edge | signed_pct }}</span>
-      {% elif r.wr is not none %}
-      <span class="meta">{{ r.wr | pct }} WR</span>
-      {% endif %}
-      {% if grid.blind %}
-      {% if r.safety is none %}
-      <span class="sub meta">pas de données de contre</span>
-      {% elif r.safety.notable_counters > 0 %}
-      <span class="sub neg">{{ r.safety.notable_counters }} contre{{ 's' if r.safety.notable_counters != 1 else '' }} notable{{ 's' if r.safety.notable_counters != 1 else '' }} (pire {{ r.safety.worst_delta | signed_pct }})</span>
-      {% else %}
-      <span class="sub pos">aucun contre notable</span>
-      {% endif %}
-      {% endif %}
-    </a>
-    {% endfor %}
+  {% if manual_error %}
+  <p class="empty">{{ manual_error }}</p>
+  {% elif manual_result %}
+  <div class="draft-suggest-grid">
+    {{ draft_card(manual_result) }}
   </div>
   {% endif %}
+</section>
+
+<section class="draft-suggest">
+  <div class="draft-suggest-head">
+    <h2>Compositions suggérées</h2>
+    <a class="button-like" href="{{ suggest_url }}">Proposer des compositions</a>
+  </div>
+  <p class="meta">Part d'un <strong>duo</strong> (2 champions précis, bien mieux renseigné qu'un trio à
+    3) parmi les 10 paires de rôles possibles, puis étend rôle par rôle en ajoutant à chaque étape le
+    champion qui maximise un score composé de synergie ET de stats d'archétype — 4 profils pondèrent
+    <strong>scaling</strong>, <strong>gold@15</strong>, <strong>CC</strong> et <strong>prise de
+    drakes</strong> différemment. Plusieurs duos de départ sont essayés ; la composition FINIE retenue
+    est celle au meilleur score, pas forcément celle du duo de départ le mieux classé isolément.</p>
+  {% if suggested_drafts is not none %}
+  {% if not suggested_drafts %}
+  <p class="empty">Pas assez de duos fiables sur cette fenêtre pour proposer des compositions.</p>
   {% else %}
-  <p class="empty">Draft complète — retire un pick à gauche/droite pour continuer.</p>
+  <div class="draft-suggest-grid">
+    {% for d in suggested_drafts %}{{ draft_card(d) }}{% endfor %}
+  </div>
+  {% endif %}
   {% endif %}
 </section>
 {% endblock %}
