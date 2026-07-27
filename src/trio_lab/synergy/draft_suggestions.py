@@ -146,9 +146,10 @@ SEED_SHORTLIST = 8  # duos de départ essayés par profil avant d'abandonner
 # 3 propositions par archétype sur "Compositions suggérées" (retour
 # utilisateur 2026-07-27) : rang 0 = meilleur score, rang 1 = 2e meilleur
 # score suffisamment DIFFÉRENT du rang 0, rang 2 = la plus FIABLE (games_eff
-# le plus élevé sur son duo de départ, pas le score) parmi les candidats
-# restants encore suffisamment différents des rangs 0/1. "Suffisamment
-# différent" = au plus DIVERSITY_MAX_SHARED_CHAMPIONS champions communs
+# MINIMUM sur ses 10 vraies paires — pas seulement le duo de départ, retour
+# utilisateur 2026-07-28 — et pas le score) parmi les candidats restants
+# encore suffisamment différents des rangs 0/1. "Suffisamment différent" =
+# au plus DIVERSITY_MAX_SHARED_CHAMPIONS champions communs
 # (peu importe le rôle) — 3 sur 5 tolère un changement d'1-2 champions,
 # exclut les quasi-doublons (4-5 champions identiques) que produirait sinon
 # un pur classement par score (des seeds différents convergent souvent vers
@@ -533,6 +534,25 @@ def _is_diverse_enough(placed: dict[str, int], already_selected: list[dict[str, 
     )
 
 
+def _min_games_eff(
+    conn: psycopg.Connection, window: str, platform: str, placed: dict[str, int]
+) -> float:
+    """`games_eff` MINIMUM sur les 10 VRAIES paires d'un draft complet —
+    signal de fiabilité de la composition ENTIÈRE (retour utilisateur
+    2026-07-28 : "pourquoi pas tous les duos plutôt que juste le premier ?"),
+    pas seulement son duo de départ (l'ancien signal — le duo de départ
+    n'est qu'un artefact de l'algorithme, jamais montré à l'utilisateur
+    depuis le retour du 2026-07-27). Le MINIMUM, pas la moyenne : une
+    composition n'est fiable que si CHACUNE de ses paires l'est — une seule
+    paire peu jouée ne doit jamais être masquée par 9 autres solides."""
+    return min(
+        _duo_score(conn, window, platform, roles_str, placed[role_a], placed[role_b])["games_eff"]
+        for role_x, role_y in itertools.combinations(DRAFT_ROLES, 2)
+        for roles_str in (_ROLES_BY_PAIR[frozenset({role_x, role_y})],)
+        for role_a, role_b in (DUO_ROLE_KEYS[roles_str],)
+    )
+
+
 def _all_pairs_reliable(
     conn: psycopg.Connection, window: str, platform: str, placed: dict[str, int], min_tier: str
 ) -> bool:
@@ -867,11 +887,16 @@ def propose_drafts(
       la même fin de complétion gloutonne, un pur tri par score produirait
       sinon des quasi-doublons.
     - rang 2 : parmi les candidats restants encore suffisamment différents
-      des rangs 0 et 1, celui dont le duo de départ a le plus de
-      `games_eff` (pas le score) — "une des trois avec une fiabilité très
-      élevée, plus de games que les autres" (retour utilisateur). Les 3
-      candidats passent déjà tous le seuil `MIN_TIER` par construction ;
-      cette 3e place privilégie le VOLUME de données plutôt que le score.
+      des rangs 0 et 1, celui dont le `games_eff` MINIMUM sur ses 10 vraies
+      paires (`_min_games_eff`) est le plus élevé — pas le score, et pas
+      seulement le duo de départ (retour utilisateur 2026-07-28 : le duo de
+      départ n'est qu'un artefact de l'algorithme, jamais montré à
+      l'utilisateur ; la fiabilité de la composition ENTIÈRE compte, bornée
+      par sa paire la MOINS soutenue). "Une des trois avec une fiabilité
+      très élevée, plus de games que les autres" (retour utilisateur
+      2026-07-27). Les 3 candidats passent déjà tous le seuil `MIN_TIER`
+      par construction ; cette 3e place privilégie le VOLUME de données
+      plutôt que le score.
 
     Chaque rang retenu reçoit ensuite SON PROPRE passage de remplacement
     (`refine_draft`, retour utilisateur 2026-07-27 : "est-ce que le système
@@ -934,7 +959,10 @@ def propose_drafts(
                 if i not in selected_idx and _is_diverse_enough(candidates[i][2], selected_placed)
             ]
             if eligible:
-                best_reliable = max(eligible, key=lambda i: candidates[i][1]["games_eff"])
+                best_reliable = max(
+                    eligible,
+                    key=lambda i: _min_games_eff(conn, window, platform, candidates[i][2]),
+                )
                 selected_idx.append(best_reliable)
                 selected_placed.append(candidates[best_reliable][2])
                 selections.append("reliable")

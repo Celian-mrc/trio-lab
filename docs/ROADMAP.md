@@ -983,6 +983,24 @@ gagner") avec les données déjà en place.
       9,2s, 104 lignes de contres écrites. Migration 036 appliquée en prod
       le 2026-07-27, `refresh()` relancé manuellement pour matérialiser les
       nouvelles propositions immédiatement (sinon prochain cycle collector).
+- [x] **Fiabilité du rang 2 jugée sur les 10 paires, pas seulement le duo de
+      départ (2026-07-28, retour utilisateur : "pourquoi pas tous les duos
+      plutôt que juste le premier ?")** : le duo de départ n'est qu'un
+      artefact de l'algorithme (jamais montré à l'utilisateur depuis le
+      retour du 26-07) — une composition peut avoir un duo de départ très
+      joué mais se compléter avec des paires plus rares, rendant l'ancien
+      critère trompeur. Nouvelle fonction `_min_games_eff` : `games_eff`
+      MINIMUM sur les 10 vraies paires (pas la moyenne — une composition
+      n'est fiable que si CHACUNE de ses paires l'est, une seule paire peu
+      jouée ne doit pas être masquée par 9 autres solides), calculé
+      uniquement pour les candidats déjà éligibles par diversité (pas les 8
+      candidats bruts). Test dédié construit exprès pour départager
+      l'ancien critère du nouveau (composition C : duo de départ énorme
+      mais 1 paire quasi jamais jouée → aurait gagné avant ; composition D :
+      duo de départ modeste mais toutes les autres paires solides → gagne
+      maintenant). Coût mesuré sur données réelles : `propose_drafts`
+      passe de ~18s à ~20s, `refresh()` de 9,2s à 15,4s — accepté (le
+      collector tourne en tâche de fond, pas sur une requête utilisateur).
 
 Phase 8 close pour l'instant (draft, insights, résilience, flex) — prochaine idée à définir.
 

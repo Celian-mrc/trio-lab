@@ -228,26 +228,30 @@ def test_propose_drafts_uses_different_seed_duo_per_archetype(pg_sync):
 
 
 def _insert_pentad(
-    conn, base_id: int, seed_synergy: float, seed_games_eff: float, other_synergy: float = 0.01
+    conn,
+    base_id: int,
+    seed_synergy: float,
+    seed_games_eff: float,
+    other_synergy: float = 0.01,
+    other_games_eff: float = 60.0,
 ) -> None:
     """Insère les 10 paires d'un pentade FERMÉ (jgl/mid/sup/top/bot =
     base_id..base_id+4) — jamais de champion partagé avec un autre pentade
     (sert à tester la diversité : 0 champion en commun entre 2 pentades).
-    Seul le duo jgl_mid (le "seed") a une synergie/`games_eff` contrôlées ;
-    les 9 autres paires restent au plancher `other_synergy`, toujours sous
-    n'importe quel seed d'un autre pentade dans ce module de tests."""
+    Le duo jgl_mid (le "seed") a sa PROPRE synergie/`games_eff` ; les 9
+    autres paires partagent `other_synergy`/`other_games_eff`."""
     jgl, mid, sup, top, bot = base_id, base_id + 1, base_id + 2, base_id + 3, base_id + 4
     rows = (
         ("jgl_mid", jgl, mid, seed_synergy, seed_games_eff),
-        ("jgl_sup", jgl, sup, other_synergy, 60.0),
-        ("mid_sup", mid, sup, other_synergy, 60.0),
-        ("top_jgl", top, jgl, other_synergy, 60.0),
-        ("top_mid", top, mid, other_synergy, 60.0),
-        ("top_sup", top, sup, other_synergy, 60.0),
-        ("jgl_bot", jgl, bot, other_synergy, 60.0),
-        ("mid_bot", mid, bot, other_synergy, 60.0),
-        ("bot_sup", bot, sup, other_synergy, 60.0),
-        ("top_bot", top, bot, other_synergy, 60.0),
+        ("jgl_sup", jgl, sup, other_synergy, other_games_eff),
+        ("mid_sup", mid, sup, other_synergy, other_games_eff),
+        ("top_jgl", top, jgl, other_synergy, other_games_eff),
+        ("top_mid", top, mid, other_synergy, other_games_eff),
+        ("top_sup", top, sup, other_synergy, other_games_eff),
+        ("jgl_bot", jgl, bot, other_synergy, other_games_eff),
+        ("mid_bot", mid, bot, other_synergy, other_games_eff),
+        ("bot_sup", bot, sup, other_synergy, other_games_eff),
+        ("top_bot", top, bot, other_synergy, other_games_eff),
     )
     for roles, champ_a, champ_b, synergy, games_eff in rows:
         conn.execute(
@@ -258,19 +262,45 @@ def _insert_pentad(
         )
 
 
-def test_propose_drafts_third_variant_is_the_most_reliable(pg_sync):
-    """3e proposition = la plus FIABLE (`games_eff` le plus élevé sur son
-    duo de départ), PAS le 3e meilleur score — retour utilisateur
-    2026-07-27 : "une des trois avec une fiabilité très élevée, plus de
-    games que les autres". 3 pentades DISJOINTS (aucun champion en commun,
-    diversité triviale) : A (champs 1-5, synergie de seed la + haute,
-    games_eff modéré) → rang 0 ; B (6-10, 2e synergie, games_eff modéré) →
-    rang 1 ; C (11-15, synergie de seed la + FAIBLE des 3 candidats mais
-    games_eff BEAUCOUP plus élevé) → doit quand même gagner le rang 2,
-    malgré un score plus faible que toutes les autres paires du pool."""
-    _insert_pentad(pg_sync, 1, seed_synergy=0.30, seed_games_eff=200.0)
-    _insert_pentad(pg_sync, 6, seed_synergy=0.20, seed_games_eff=200.0)
-    _insert_pentad(pg_sync, 11, seed_synergy=0.15, seed_games_eff=5000.0)
+def test_propose_drafts_third_variant_uses_reliability_of_the_whole_composition(pg_sync):
+    """3e proposition = la composition la plus fiable sur ses 10 VRAIES
+    paires, PAS seulement son duo de départ (retour utilisateur 2026-07-28 :
+    "pourquoi pas tous les duos plutôt que juste le premier ?"). 4 pentades
+    DISJOINTS : A (1-5) et B (6-10) gagnent les rangs 0/1 par score (poids
+    de départ élevés, fiabilité uniforme et sans intérêt ici). Entre C
+    (11-15) et D (16-20), candidats au rang 2 : C a un duo de départ
+    ÉNORME (`games_eff`=5000) mais UNE autre paire (mid_sup) quasi jamais
+    jouée (50) — son minimum sur les 10 paires n'est que 50. D a un duo de
+    départ plus modeste (300) mais TOUTES ses 9 autres paires solides
+    (2000) — son minimum (300) dépasse celui de C. Le rang 2 doit choisir
+    D : preuve que la fiabilité est jugée sur la composition ENTIÈRE — avec
+    l'ancien critère (seed seul), C aurait gagné (5000 > 300)."""
+    _insert_pentad(pg_sync, 1, seed_synergy=0.30, seed_games_eff=1000.0, other_games_eff=1000.0)
+    _insert_pentad(pg_sync, 6, seed_synergy=0.20, seed_games_eff=1000.0, other_games_eff=1000.0)
+    # C (11-15) : duo de départ énorme, mais 1 paire (mid_sup) quasi jamais jouée.
+    jgl, mid, sup, top, bot = 11, 12, 13, 14, 15
+    c_rows = (
+        ("jgl_mid", jgl, mid, 0.15, 5000.0),
+        ("jgl_sup", jgl, sup, 0.01, 1000.0),
+        ("mid_sup", mid, sup, 0.01, 50.0),  # le maillon faible de C
+        ("top_jgl", top, jgl, 0.01, 1000.0),
+        ("top_mid", top, mid, 0.01, 1000.0),
+        ("top_sup", top, sup, 0.01, 1000.0),
+        ("jgl_bot", jgl, bot, 0.01, 1000.0),
+        ("mid_bot", mid, bot, 0.01, 1000.0),
+        ("bot_sup", bot, sup, 0.01, 1000.0),
+        ("top_bot", top, bot, 0.01, 1000.0),
+    )
+    for roles, champ_a, champ_b, synergy, games_eff in c_rows:
+        pg_sync.execute(
+            "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
+            " games_eff, wr, synergy, ci_low, ci_high, tier)"
+            " VALUES ('16.13', 'all', %s, %s, %s, 60, %s, 0.55, %s, 0.0, %s, 'eleve')",
+            (roles, champ_a, champ_b, games_eff, synergy, synergy),
+        )
+    # D (16-20) : duo de départ modeste, mais TOUTES les autres paires solides.
+    _insert_pentad(pg_sync, 16, seed_synergy=0.10, seed_games_eff=300.0, other_games_eff=2000.0)
+
     pool, zstats = draft_suggestions.pool_and_zstats(pg_sync, "16.13", "all")
     results = draft_suggestions.propose_drafts(pg_sync, "16.13", "all", pool, zstats)
     synergy_results = [r for r in results if r["archetype"] == "synergy"]
@@ -281,7 +311,7 @@ def test_propose_drafts_third_variant_is_the_most_reliable(pg_sync):
     assert by_rank[1]["selection"] == "diverse"
     assert set(by_rank[1]["members"].values()) == {6, 7, 8, 9, 10}
     assert by_rank[2]["selection"] == "reliable"
-    assert set(by_rank[2]["members"].values()) == {11, 12, 13, 14, 15}
+    assert set(by_rank[2]["members"].values()) == {16, 17, 18, 19, 20}
 
 
 def test_propose_drafts_never_forces_three_variants(pg_sync):
