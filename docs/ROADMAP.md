@@ -914,6 +914,27 @@ gagner") avec les données déjà en place.
       `refresh()` du collector, automatique — pas d'action manuelle requise
       (même mécanisme que les révisions de poids précédentes).
 
+- [x] **Autocomplétion des champions au lieu de la liste complète au clic
+      (2026-07-27, retour utilisateur : "ça ouvre un grand menu inutile, je
+      veux juste la complétion quand l'utilisateur commence à écrire")** :
+      `<input list="champion-names">` (`/draft`, `/duos`, `/tierlist`)
+      partage un seul `<datalist>` rendu côté serveur avec les ~170
+      champions — au focus natif du navigateur, ça affichait la liste
+      entière. Nouveau `static/champion-autocomplete.js` : vide le datalist
+      au premier focus (liste complète mémorisée sur l'élément via
+      `_allOptions`, pour la retrouver après vidage) puis le repeuple
+      seulement avec les correspondances (sous-chaîne, 20 max) au fil de la
+      frappe. Délégué sur `document` (`focus` en capture, `input` en bulle)
+      plutôt que bindé aux inputs directement — même raison que
+      sort.js/thresholds.js : htmx (`hx-boost`) remplace le DOM à chaque
+      navigation, un binding pris avant un swap ne survivrait pas. Aucun
+      framework de test JS dans ce repo (sort.js/thresholds.js n'en ont pas
+      non plus) : vérifié manuellement (serveur local + Chrome, clic réel
+      via CDP — un `.focus()` déclenché en JS pur ne génère pas d'event
+      `focus` fiable dans ce contexte d'automatisation, piège découvert en
+      testant) sur `/draft` et `/duos` : datalist vide au clic, repeuplé en
+      tapant, re-vidé en changeant de champ vide.
+
 Phase 8 close pour l'instant (draft, insights, résilience, flex) — prochaine idée à définir.
 
 **Gap constaté en marge de cette révision (2026-07-19)** : `agg_matchup`/
