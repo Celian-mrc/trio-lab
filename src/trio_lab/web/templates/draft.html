@@ -46,6 +46,11 @@
   <p class="meta">Synergie totale :
     <span class="{{ 'pos' if d.total_synergy > 0 else 'neg' if d.total_synergy < 0 }}">{{ d.total_synergy | signed_pct }}</span>
   </p>
+  {% if d.wr %}
+  <p class="meta">Winrate estimé : {{ d.wr.value | pct }}
+    <span class="sub">[{{ d.wr.ci_low | pct }} – {{ d.wr.ci_high | pct }}]</span>
+  </p>
+  {% endif %}
   {% if d.seed_pairs %}
   <ul class="draft-seed-pairs">
     {% for p in d.seed_pairs %}

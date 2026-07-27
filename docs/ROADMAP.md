@@ -773,6 +773,23 @@ gagner") avec les données déjà en place.
       déterministe (`tests/synergy/test_draft_suggestions_pg.py`) ; carte
       web affiche "Points forts"/"domine" + les poids
       (`tests/web/test_app_pg.py`).
+- [x] **Winrate + intervalle de confiance affichés (2026-07-27, retour
+      utilisateur : "en plus du taux de synergie, le winrate avec son IC ?")** :
+      `score_duo.wr`/`ci_low`/`ci_high` (intervalle de Wilson, déjà calculés
+      par paire) moyennés sur les 10 vraies paires de la composition —
+      même mécanisme que `advice_stats` (scaling/cc/gold) : moyenne simple,
+      pas une combinaison statistique rigoureuse des IC, cohérent avec le
+      reste des stats affichées sur ces cartes. `DISPLAY_STAT_COLUMNS`
+      (nouvelle constante) regroupe les 6 colonnes moyennées (scaling/cc/
+      gold + wr/ci_low/ci_high) pour un seul aller-retour sur les 10 paires,
+      réutilisée par le calcul en direct ET `refresh`. Migration 035 :
+      `draft_suggestion` gagne `wr`/`wr_ci_low`/`wr_ci_high` (déjà appliquée
+      en prod). Affiché juste sous "Synergie totale" : "Winrate estimé :
+      55.0 % [0.0 % – 5.1 %]".
+      Vérifié avec des valeurs exactes calculées à la main (wr uniforme sur
+      les 10 paires, ci_high = moyenne des synergies) : `tests/web/
+      test_app_pg.py` (rendu HTML) et `tests/synergy/
+      test_draft_suggestions_pg.py` (colonnes `draft_suggestion`).
 
 Phase 8 close pour l'instant (draft, insights, résilience, flex) — prochaine idée à définir.
 

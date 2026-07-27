@@ -918,7 +918,7 @@ def draft_suggestions(conn: psycopg.Connection, window: str, platform: str) -> l
             SELECT archetype, label, top_champion, jgl_champion, mid_champion,
                    bot_champion, sup_champion, total_synergy, seed_roles,
                    seed_champ_a, seed_champ_b, seed_synergy, seed_games, seed_tier,
-                   advice_scaling, advice_cc, advice_gold15
+                   advice_scaling, advice_cc, advice_gold15, wr, wr_ci_low, wr_ci_high
             FROM draft_suggestion
             WHERE window_label = %s AND platform = %s
             ORDER BY archetype
@@ -965,6 +965,9 @@ def draft_suggestions(conn: psycopg.Connection, window: str, platform: str) -> l
                 "scaling": row["advice_scaling"],
                 "cc_blended_pct": row["advice_cc"],
                 "gold_diff_15": row["advice_gold15"],
+                "wr": row["wr"],
+                "ci_low": row["wr_ci_low"],
+                "ci_high": row["wr_ci_high"],
             }
             if row["advice_scaling"] is not None
             else None

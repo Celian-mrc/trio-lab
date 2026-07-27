@@ -936,11 +936,20 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             if stats
             else []
         )
+        # Winrate + IC : moyenne simple sur les 10 vraies paires (comme les
+        # autres stats affichées ici), pas une combinaison statistique
+        # rigoureuse des intervalles — retour utilisateur 2026-07-27.
+        wr = (
+            {"value": stats["wr"], "ci_low": stats["ci_low"], "ci_high": stats["ci_high"]}
+            if stats
+            else None
+        )
         return {
             "label": raw["label"],
             "weights": _archetype_weights_display(raw["archetype"]),
             "members": members,
             "total_synergy": raw["total_synergy"],
+            "wr": wr,
             "seed_pairs": _resolve_seed_pairs(raw["seed_pairs"]),
             "advice": advice,
             "counters": _resolve_counters(raw["counters"]),
@@ -977,7 +986,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             "total_synergy": full_total,
             "seed_pairs": seed_pairs,
             "advice_stats": draft_suggestions.full_draft_stat_averages(
-                conn, window, platform, full_placed, ("scaling", "cc_blended_pct", "gold_diff_15")
+                conn, window, platform, full_placed, draft_suggestions.DISPLAY_STAT_COLUMNS
             ),
             "counters": draft_suggestions.draft_counters(conn, window, platform, full_placed),
             "strengths": draft_suggestions.draft_strengths(conn, window, platform, full_placed),

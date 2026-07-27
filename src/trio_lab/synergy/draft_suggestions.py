@@ -143,6 +143,14 @@ MIN_TIER = "eleve"
 ADVICE_SCALING_NOTABLE = 0.03
 ADVICE_CC_NOTABLE = 40.0
 ADVICE_GOLD15_NOTABLE = 350.0
+# Colonnes moyennées sur les 10 vraies paires d'un draft complet
+# (`full_draft_stat_averages`) pour l'affichage : scaling/CC/gold servent
+# aux conseils de jeu (`draft_advice`), wr/ci_low/ci_high au winrate +
+# intervalle de confiance affiché à côté de la synergie totale (retour
+# utilisateur 2026-07-27) — moyenne simple sur les 10 paires, pas une
+# combinaison statistique rigoureuse des IC, même esprit que les autres
+# stats affichées ici.
+DISPLAY_STAT_COLUMNS = ("scaling", "cc_blended_pct", "gold_diff_15", "wr", "ci_low", "ci_high")
 
 # Contres 1v1 : mêmes seuils que l'ancienne sécurité blind pick (retour
 # utilisateur 2026-07-19), vérifiés sur données réelles (16.14+16.13,
@@ -225,7 +233,7 @@ def _duo_score(
     with conn.cursor(row_factory=dict_row) as cur:
         return cur.execute(
             f"""
-            SELECT roles, champ_a, champ_b, games, games_eff, wr, synergy, tier,
+            SELECT roles, champ_a, champ_b, games, games_eff, wr, ci_low, ci_high, synergy, tier,
                    {_STAT_COLUMNS_SQL}
             FROM score_duo
             WHERE window_label = %s AND platform = %s AND roles = %s
@@ -690,10 +698,11 @@ def propose_drafts(
 
     Retourne, par archétype réussi : `{archetype, label, members (dict
     rôle→champion_id), total_synergy, seed_pairs (1 entrée, le duo de
-    départ), advice_stats (moyennes scaling/cc/gold sur les 10 vraies
-    paires, ou None), counters (points faibles), strengths (points forts)}`
-    — brut (`champion_id`, pas de nom/icône), même forme que lue depuis
-    `draft_suggestion(_counter)` matérialisées par `refresh`, pour que le
+    départ), advice_stats (moyennes scaling/cc/gold/wr/ci_low/ci_high sur
+    les 10 vraies paires, `DISPLAY_STAT_COLUMNS`, ou None), counters (points
+    faibles), strengths (points forts)}` — brut (`champion_id`, pas de
+    nom/icône), même forme que lue depuis `draft_suggestion(_counter)`
+    matérialisées par `refresh`, pour que le
     rendu (`web/app.py`) traite les 2 sources de façon identique."""
     results: list[dict] = []
     for key, archetype in ARCHETYPES.items():
@@ -735,7 +744,7 @@ def propose_drafts(
                     }
                 ],
                 "advice_stats": full_draft_stat_averages(
-                    conn, window, platform, placed, ("scaling", "cc_blended_pct", "gold_diff_15")
+                    conn, window, platform, placed, DISPLAY_STAT_COLUMNS
                 ),
                 "counters": draft_counters(conn, window, platform, placed),
                 "strengths": draft_strengths(conn, window, platform, placed),
@@ -751,12 +760,14 @@ _INSERT_SUGGESTION_SQL = """
         (window_label, platform, archetype, label,
          top_champion, jgl_champion, mid_champion, bot_champion, sup_champion,
          total_synergy, seed_roles, seed_champ_a, seed_champ_b, seed_synergy,
-         seed_games, seed_tier, advice_scaling, advice_cc, advice_gold15)
+         seed_games, seed_tier, advice_scaling, advice_cc, advice_gold15,
+         wr, wr_ci_low, wr_ci_high)
     VALUES
         (%(window_label)s, %(platform)s, %(archetype)s, %(label)s,
          %(top_champion)s, %(jgl_champion)s, %(mid_champion)s, %(bot_champion)s, %(sup_champion)s,
          %(total_synergy)s, %(seed_roles)s, %(seed_champ_a)s, %(seed_champ_b)s, %(seed_synergy)s,
-         %(seed_games)s, %(seed_tier)s, %(advice_scaling)s, %(advice_cc)s, %(advice_gold15)s)
+         %(seed_games)s, %(seed_tier)s, %(advice_scaling)s, %(advice_cc)s, %(advice_gold15)s,
+         %(wr)s, %(wr_ci_low)s, %(wr_ci_high)s)
 """
 _INSERT_COUNTER_SQL = """
     INSERT INTO draft_suggestion_counter
@@ -850,6 +861,9 @@ def refresh(window: PatchWindow, platform: str, *, dsn: str | None = None) -> in
                         "advice_scaling": stats.get("scaling"),
                         "advice_cc": stats.get("cc_blended_pct"),
                         "advice_gold15": stats.get("gold_diff_15"),
+                        "wr": stats.get("wr"),
+                        "wr_ci_low": stats.get("ci_low"),
+                        "wr_ci_high": stats.get("ci_high"),
                     },
                 )
                 _write_matchup_picks(

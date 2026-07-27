@@ -971,6 +971,12 @@ def test_draft_page_suggest_shows_advice_from_seed_duo_stats(pg_sync, client):
     assert "monte en puissance" in resp.text  # scaling > seuil notable
     assert "contrôle de foule" in resp.text  # cc_blended_pct >= seuil notable
     assert "économique attendu tôt" in resp.text  # gold_diff_15 > seuil notable
+    # Winrate + IC (retour utilisateur 2026-07-27) : moyenne simple sur les
+    # 10 vraies paires, wr=0.55 partout -> 55.0 % ; ci_low=0.0 partout -> 0.0 % ;
+    # ci_high = synergie de chaque paire (.30+.05+.04+.02+.02+.03+.01+.01+.01+.02)/10
+    # = .051 -> 5.1 %.
+    assert "Winrate estimé : 55.0 %" in resp.text
+    assert "[0.0 % – 5.1 %]" in resp.text
 
 
 def test_draft_page_suggest_skips_archetypes_without_stat_data(pg_sync, client):

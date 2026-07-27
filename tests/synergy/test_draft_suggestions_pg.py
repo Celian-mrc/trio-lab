@@ -38,11 +38,14 @@ def _seed_scenario(conn) -> None:
     scénario déterministe que `_seed_suggest_scenario` côté web, plus un
     contre 1v1 notable (champion 6 contre le jungler, champion 1 — point
     FAIBLE) et un matchup notable dans l'autre sens (le jungler, champion 1,
-    bat le champion 7 — point FORT, retour utilisateur 2026-07-26)."""
+    bat le champion 7 — point FORT, retour utilisateur 2026-07-26). wr/scaling/
+    cc/gold identiques sur les 10 paires (retour utilisateur 2026-07-27,
+    winrate + IC) pour que la moyenne du draft complet reste ces valeurs."""
     conn.execute(
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
-        " games_eff, wr, synergy, ci_low, ci_high, tier)"
-        " VALUES ('16.13', 'all', 'jgl_mid', 1, 2, 60, 60.0, 0.55, 0.30, 0.0, 0.30, 'eleve')"
+        " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15)"
+        " VALUES ('16.13', 'all', 'jgl_mid', 1, 2, 60, 60.0, 0.55, 0.30, 0.0, 0.30, 'eleve',"
+        " 0.08, 70.0, 800.0)"
     )
     rows = (
         ("jgl_sup", 1, 3, 0.05),
@@ -58,8 +61,9 @@ def _seed_scenario(conn) -> None:
     for roles, champ_a, champ_b, synergy in rows:
         conn.execute(
             "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
-            " games_eff, wr, synergy, ci_low, ci_high, tier)"
-            " VALUES ('16.13', 'all', %s, %s, %s, 60, 60.0, 0.55, %s, 0.0, %s, 'eleve')",
+            " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15)"
+            " VALUES ('16.13', 'all', %s, %s, %s, 60, 60.0, 0.55, %s, 0.0, %s, 'eleve',"
+            " 0.08, 70.0, 800.0)",
             (roles, champ_a, champ_b, synergy, synergy),
         )
     conn.execute(
@@ -74,9 +78,12 @@ def _seed_scenario(conn) -> None:
 
 def test_refresh_materializes_composition_and_counter(pg_sync):
     """`refresh` écrit la composition gagnante (ici "Meilleure synergie",
-    seule archétype possible sans scaling/cc/gold/drakes renseignés) et son
-    contre 1v1 dans les 2 tables — mêmes champions/synergie que le calcul en
-    direct (`propose_drafts`), cf. tests web équivalents."""
+    seule archétype possible : `drakes` n'est pas renseigné, les 3 profils
+    pondérés ne peuvent pas compléter) et son contre 1v1 dans les 2 tables —
+    mêmes champions/synergie que le calcul en direct (`propose_drafts`), cf.
+    tests web équivalents. Vérifie aussi le winrate + IC moyennés (retour
+    utilisateur 2026-07-27) : wr=0.55 partout -> 0.55 ; ci_low=0.0 partout
+    -> 0.0 ; ci_high = synergie de chaque paire, moyenne = 0.051."""
     _seed_scenario(pg_sync)
     window = make_window(["16.13"])
     n = draft_suggestions.refresh(window, "all", dsn=TEST_DSN)
@@ -85,14 +92,29 @@ def test_refresh_materializes_composition_and_counter(pg_sync):
     with pg_sync.cursor() as cur:
         cur.execute(
             "SELECT archetype, label, top_champion, jgl_champion, mid_champion, bot_champion,"
-            " sup_champion, total_synergy, seed_roles, seed_champ_a, seed_champ_b, seed_tier"
+            " sup_champion, total_synergy, seed_roles, seed_champ_a, seed_champ_b, seed_tier,"
+            " wr, wr_ci_low, wr_ci_high"
             " FROM draft_suggestion WHERE window_label = '16.13' AND platform = 'all'"
         )
         rows = cur.fetchall()
         assert len(rows) == 1
-        archetype, label, top, jgl, mid, bot, sup, total, seed_roles, seed_a, seed_b, seed_tier = (
-            rows[0]
-        )
+        (
+            archetype,
+            label,
+            top,
+            jgl,
+            mid,
+            bot,
+            sup,
+            total,
+            seed_roles,
+            seed_a,
+            seed_b,
+            seed_tier,
+            wr,
+            wr_ci_low,
+            wr_ci_high,
+        ) = rows[0]
         assert archetype == "synergy"
         assert label == "Meilleure synergie"
         assert (top, jgl, mid, bot, sup) == (4, 1, 2, 5, 3)
@@ -100,6 +122,9 @@ def test_refresh_materializes_composition_and_counter(pg_sync):
         assert seed_roles == "jgl_mid"
         assert (seed_a, seed_b) == (1, 2)
         assert seed_tier == "eleve"
+        assert wr == pytest.approx(0.55, abs=1e-6)
+        assert wr_ci_low == pytest.approx(0.0, abs=1e-6)
+        assert wr_ci_high == pytest.approx(0.051, abs=1e-6)
 
         cur.execute(
             "SELECT direction, kind, rank, role, against_champion, champion_id, delta"
