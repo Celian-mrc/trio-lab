@@ -352,18 +352,19 @@ th[data-tooltip]::after, label[data-tooltip]::after {
 }
 .draft-suggest-card {
   background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 0.9rem 1.1rem; display: flex; flex-direction: column; gap: 0.6rem;
+  padding: 0.9rem 1.1rem; display: grid; grid-row: span 8; grid-template-rows: subgrid; gap: 0.6rem;
 }
 .draft-suggest-label {
-  margin: 0; font-size: 0.85rem; font-weight: 600; color: var(--accent);
+  grid-row: 1; margin: 0; font-size: 0.85rem; font-weight: 600; color: var(--accent);
   text-transform: uppercase; letter-spacing: 0.03em;
 }
-.draft-suggest-weights { margin: 0; font-size: 0.72rem; }
-.draft-suggest-members { display: flex; flex-direction: column; gap: 0.4rem; }
+.draft-suggest-weights { grid-row: 2; margin: 0; font-size: 0.72rem; align-self: start; }
+.draft-suggest-members { grid-row: 3; display: flex; flex-direction: column; gap: 0.4rem; align-self: start; }
 .draft-suggest-members .champ { gap: 0.5rem; }
+.draft-suggest-synergy { grid-row: 4; margin: 0; align-self: start; }
 .draft-suggest-advice {
-  margin: 0; padding-left: 1.1rem; font-size: 0.8rem; color: var(--muted-fg);
-  display: flex; flex-direction: column; gap: 0.3rem;
+  grid-row: 6; margin: 0; padding-left: 1.1rem; font-size: 0.8rem; color: var(--muted-fg);
+  display: flex; flex-direction: column; gap: 0.3rem; align-self: start;
 }
 .draft-suggest-load {
   align-self: flex-start; color: var(--accent); text-decoration: none; font-size: 0.82rem;
@@ -371,13 +372,16 @@ th[data-tooltip]::after, label[data-tooltip]::after {
 }
 .draft-suggest-load:hover { background: var(--muted); }
 .draft-seed-pairs {
-  margin: 0; padding-left: 1.1rem; font-size: 0.78rem; color: var(--muted-fg);
-  display: flex; flex-direction: column; gap: 0.2rem;
+  grid-row: 5; margin: 0; padding-left: 1.1rem; font-size: 0.78rem; color: var(--muted-fg);
+  display: flex; flex-direction: column; gap: 0.2rem; align-self: start;
 }
 .draft-counters {
   border-top: 1px dashed var(--border); padding-top: 0.5rem; font-size: 0.8rem;
-  display: flex; flex-direction: column; gap: 0.4rem;
+  display: flex; flex-direction: column; gap: 0.4rem; align-self: start;
 }
+.draft-counters-strengths { grid-row: 7; }
+.draft-counters-weaknesses { grid-row: 8; }
+.draft-suggest-no-counters { grid-row: 7 / 9; margin: 0; align-self: start; }
 .draft-counters-title {
   margin: 0; font-size: 0.7rem; color: var(--muted-fg); text-transform: uppercase;
   letter-spacing: 0.03em; font-weight: 500;

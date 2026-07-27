@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Compositions et contres — Trio Lab{% endblock %}
 {% block content %}
-{% macro matchup_block(title, block, verb, color) %}
-<div class="draft-counters">
+{% macro matchup_block(title, block, verb, color, extra_class) %}
+<div class="draft-counters {{ extra_class }}">
   <p class="draft-counters-title">{{ title }}</p>
   <div class="draft-counters-row">
     <span class="role-badge role-{{ block.primary.role }}">{{ block.primary.role | upper }}</span>
@@ -43,7 +43,7 @@
     </span>
     {% endfor %}
   </div>
-  <p class="meta">Synergie :
+  <p class="meta draft-suggest-synergy">Synergie :
     <span class="{{ 'pos' if d.total_synergy > 0 else 'neg' if d.total_synergy < 0 }}">{{ d.total_synergy | signed_pct }}</span>
     {% if d.wr %}
     · Winrate : {{ d.wr.value | pct }} <span class="sub">[{{ d.wr.ci_low | pct }} – {{ d.wr.ci_high | pct }}]</span>
@@ -64,13 +64,13 @@
   </ul>
   {% endif %}
   {% if d.strengths %}
-  {{ matchup_block("Points forts", d.strengths, "domine :", "pos") }}
+  {{ matchup_block("Points forts", d.strengths, "domine :", "pos", "draft-counters-strengths") }}
   {% endif %}
   {% if d.counters %}
-  {{ matchup_block("Points faibles", d.counters, "puni(e) par :", "neg") }}
+  {{ matchup_block("Points faibles", d.counters, "puni(e) par :", "neg", "draft-counters-weaknesses") }}
   {% endif %}
   {% if not d.strengths and not d.counters %}
-  <p class="meta">Aucun contre 1v1 notable.</p>
+  <p class="meta draft-suggest-no-counters">Aucun contre 1v1 notable.</p>
   {% endif %}
 </div>
 {% endmacro %}

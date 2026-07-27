@@ -850,6 +850,21 @@ gagner") avec les données déjà en place.
       textes exacts asserted dans `tests/web/test_app_pg.py` mis à jour en
       conséquence (334 tests passent).
 
+- [x] **Cartes `/draft` alignées entre elles (2026-07-27, retour utilisateur :
+      "manque de structure cohérente, les données d'une card à une autre
+      devraient être alignées")** : CSS Grid + `subgrid` sur `.draft-suggest-
+      grid`/`.draft-suggest-card` — 8 lignes de grille partagées entre toutes
+      les cartes d'une même rangée (titre, poids, membres, synergie/winrate,
+      duo de départ, conseils, points forts, points faibles), chaque section
+      épinglée à une ligne fixe via `grid-row` explicite sur sa classe. Une
+      section absente sur une carte (ex. pas de conseils) laisse juste un
+      trou dans SA colonne — les sections suivantes des AUTRES cartes restent
+      alignées sur la même hauteur. `matchup_block` prend un paramètre
+      `extra_class` pour distinguer points forts (ligne 7) de points faibles
+      (ligne 8). Vérifié visuellement (serveur local + Chrome, 4 archétypes
+      côte à côte) : titres, listes de champions et sections de contres
+      démarrent tous à la même hauteur d'une carte à l'autre.
+
 Phase 8 close pour l'instant (draft, insights, résilience, flex) — prochaine idée à définir.
 
 **Gap constaté en marge de cette révision (2026-07-19)** : `agg_matchup`/
