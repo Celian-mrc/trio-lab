@@ -227,6 +227,76 @@ def test_propose_drafts_uses_different_seed_duo_per_archetype(pg_sync):
     assert {scaling_seed["champ_a"], scaling_seed["champ_b"]} == {4, 5}
 
 
+def _insert_pentad(
+    conn, base_id: int, seed_synergy: float, seed_games_eff: float, other_synergy: float = 0.01
+) -> None:
+    """Insère les 10 paires d'un pentade FERMÉ (jgl/mid/sup/top/bot =
+    base_id..base_id+4) — jamais de champion partagé avec un autre pentade
+    (sert à tester la diversité : 0 champion en commun entre 2 pentades).
+    Seul le duo jgl_mid (le "seed") a une synergie/`games_eff` contrôlées ;
+    les 9 autres paires restent au plancher `other_synergy`, toujours sous
+    n'importe quel seed d'un autre pentade dans ce module de tests."""
+    jgl, mid, sup, top, bot = base_id, base_id + 1, base_id + 2, base_id + 3, base_id + 4
+    rows = (
+        ("jgl_mid", jgl, mid, seed_synergy, seed_games_eff),
+        ("jgl_sup", jgl, sup, other_synergy, 60.0),
+        ("mid_sup", mid, sup, other_synergy, 60.0),
+        ("top_jgl", top, jgl, other_synergy, 60.0),
+        ("top_mid", top, mid, other_synergy, 60.0),
+        ("top_sup", top, sup, other_synergy, 60.0),
+        ("jgl_bot", jgl, bot, other_synergy, 60.0),
+        ("mid_bot", mid, bot, other_synergy, 60.0),
+        ("bot_sup", bot, sup, other_synergy, 60.0),
+        ("top_bot", top, bot, other_synergy, 60.0),
+    )
+    for roles, champ_a, champ_b, synergy, games_eff in rows:
+        conn.execute(
+            "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
+            " games_eff, wr, synergy, ci_low, ci_high, tier)"
+            " VALUES ('16.13', 'all', %s, %s, %s, 60, %s, 0.55, %s, 0.0, %s, 'eleve')",
+            (roles, champ_a, champ_b, games_eff, synergy, synergy),
+        )
+
+
+def test_propose_drafts_third_variant_is_the_most_reliable(pg_sync):
+    """3e proposition = la plus FIABLE (`games_eff` le plus élevé sur son
+    duo de départ), PAS le 3e meilleur score — retour utilisateur
+    2026-07-27 : "une des trois avec une fiabilité très élevée, plus de
+    games que les autres". 3 pentades DISJOINTS (aucun champion en commun,
+    diversité triviale) : A (champs 1-5, synergie de seed la + haute,
+    games_eff modéré) → rang 0 ; B (6-10, 2e synergie, games_eff modéré) →
+    rang 1 ; C (11-15, synergie de seed la + FAIBLE des 3 candidats mais
+    games_eff BEAUCOUP plus élevé) → doit quand même gagner le rang 2,
+    malgré un score plus faible que toutes les autres paires du pool."""
+    _insert_pentad(pg_sync, 1, seed_synergy=0.30, seed_games_eff=200.0)
+    _insert_pentad(pg_sync, 6, seed_synergy=0.20, seed_games_eff=200.0)
+    _insert_pentad(pg_sync, 11, seed_synergy=0.15, seed_games_eff=5000.0)
+    pool, zstats = draft_suggestions.pool_and_zstats(pg_sync, "16.13", "all")
+    results = draft_suggestions.propose_drafts(pg_sync, "16.13", "all", pool, zstats)
+    synergy_results = [r for r in results if r["archetype"] == "synergy"]
+    assert len(synergy_results) == 3
+    by_rank = {r["suggestion_rank"]: r for r in synergy_results}
+    assert by_rank[0]["selection"] == "score"
+    assert set(by_rank[0]["members"].values()) == {1, 2, 3, 4, 5}
+    assert by_rank[1]["selection"] == "diverse"
+    assert set(by_rank[1]["members"].values()) == {6, 7, 8, 9, 10}
+    assert by_rank[2]["selection"] == "reliable"
+    assert set(by_rank[2]["members"].values()) == {11, 12, 13, 14, 15}
+
+
+def test_propose_drafts_never_forces_three_variants(pg_sync):
+    """Un seul pentade disponible : 1 seule proposition, jamais un doublon
+    forcé pour atteindre 3 (retour utilisateur implicite du design — cf.
+    docstring `propose_drafts`)."""
+    _insert_pentad(pg_sync, 1, seed_synergy=0.30, seed_games_eff=200.0)
+    pool, zstats = draft_suggestions.pool_and_zstats(pg_sync, "16.13", "all")
+    results = draft_suggestions.propose_drafts(pg_sync, "16.13", "all", pool, zstats)
+    synergy_results = [r for r in results if r["archetype"] == "synergy"]
+    assert len(synergy_results) == 1
+    assert synergy_results[0]["suggestion_rank"] == 0
+    assert synergy_results[0]["selection"] == "score"
+
+
 # --- refine_draft : passage de remplacement post-construction (retour
 # utilisateur 2026-07-27, "est-ce que le système essaie de remplacer le duo
 # de base par un autre pour voir s'il n'y a pas une meilleure option ?") ---

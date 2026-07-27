@@ -26,12 +26,12 @@
   {% endfor %}
 </div>
 {% endmacro %}
-{% macro draft_card(d) %}
-<div class="draft-suggest-card">
-  <h3 class="draft-suggest-label">{{ d.label }}</h3>
+{% macro draft_variant_body(d, active, index=0) %}
+<div class="draft-suggest-body" data-variant-index="{{ index }}"{{ '' if active else ' hidden' }}>
   {% if d.weights %}
   <p class="draft-suggest-weights meta">
     {% for w in d.weights %}{{ w.label }} {{ w.value | pct(0) }}{% if not loop.last %} · {% endif %}{% endfor %}
+    {%- if d.selection == 'reliable' %} · la plus fiable{% endif %}
   </p>
   {% endif %}
   <div class="draft-suggest-members">
@@ -72,6 +72,27 @@
   {% if not d.strengths and not d.counters %}
   <p class="meta draft-suggest-no-counters">Aucun contre 1v1 notable.</p>
   {% endif %}
+</div>
+{% endmacro %}
+{% macro draft_card(d) %}
+<div class="draft-suggest-card">
+  <h3 class="draft-suggest-label">{{ d.label }}</h3>
+  {{ draft_variant_body(d, true) }}
+</div>
+{% endmacro %}
+{% macro draft_group(g) %}
+<div class="draft-suggest-card">
+  <div class="draft-suggest-head-row">
+    <h3 class="draft-suggest-label">{{ g.label }}</h3>
+    {% if g.variants | length > 1 %}
+    <div class="draft-variant-tabs">
+      {% for v in g.variants %}
+      <button type="button" class="draft-variant-tab{{ ' active' if loop.first }}" data-variant-index="{{ loop.index0 }}">{{ loop.index }}</button>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% for v in g.variants %}{{ draft_variant_body(v, loop.first, loop.index0) }}{% endfor %}
 </div>
 {% endmacro %}
 <h1>Compositions et contres</h1>
@@ -142,7 +163,7 @@
   <p class="empty">Pas assez de duos fiables sur cette fenêtre.</p>
   {% else %}
   <div class="draft-suggest-grid">
-    {% for d in suggested_drafts %}{{ draft_card(d) }}{% endfor %}
+    {% for g in suggested_drafts %}{{ draft_group(g) }}{% endfor %}
   </div>
   {% endif %}
   {% endif %}

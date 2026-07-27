@@ -358,6 +358,25 @@ th[data-tooltip]::after, label[data-tooltip]::after {
   grid-row: 1; margin: 0; font-size: 0.85rem; font-weight: 600; color: var(--accent);
   text-transform: uppercase; letter-spacing: 0.03em;
 }
+.draft-suggest-head-row {
+  grid-row: 1; display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
+}
+.draft-suggest-head-row .draft-suggest-label { grid-row: auto; }
+.draft-variant-tabs { display: flex; gap: 0.3rem; flex-shrink: 0; }
+.draft-variant-tab {
+  width: 1.4rem; height: 1.4rem; border-radius: 50%; border: 1px solid var(--border);
+  background: transparent; color: var(--muted-fg); font-size: 0.7rem; line-height: 1;
+  padding: 0; cursor: pointer;
+}
+.draft-variant-tab:hover:not(.active) { border-color: var(--accent); color: var(--accent); }
+.draft-variant-tab.active { background: var(--accent); color: var(--primary-fg); border-color: var(--accent); }
+/* `display: contents` : le wrapper disparaît de la boîte, ses enfants
+   (weights/members/synergie/...) restent des enfants directs de la grille
+   de `.draft-suggest-card` et gardent leur `grid-row` d'origine (subgrid) —
+   permet de basculer entre 1/2/3 propositions par archétype sans casser
+   l'alignement entre cartes (retour utilisateur 2026-07-27). */
+.draft-suggest-body { display: contents; }
+.draft-suggest-body[hidden] { display: none; }
 .draft-suggest-weights { grid-row: 2; margin: 0; font-size: 0.72rem; align-self: start; }
 .draft-suggest-members { grid-row: 3; display: flex; flex-direction: column; gap: 0.4rem; align-self: start; }
 .draft-suggest-members .champ { gap: 0.5rem; }

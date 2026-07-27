@@ -1061,6 +1061,55 @@ def test_draft_page_suggest_renders_both_archetypes_from_shared_champion_pool(pg
     assert "Scaling / fin de partie" in resp.text
 
 
+def _insert_pentad(conn, base_id: int, seed_synergy: float, platform: str = "euw1") -> None:
+    """Version web de `synergy/test_draft_suggestions_pg._insert_pentad` :
+    10 paires d'un pentade FERMÉ (jgl/mid/sup/top/bot = base_id..base_id+4),
+    jamais de champion partagé avec un autre pentade — sert à tester le
+    rendu des boutons 1/2/3 (retour utilisateur 2026-07-27) sans dépendre de
+    l'algorithme de sélection déjà couvert côté synergy."""
+    jgl, mid, sup, top, bot = base_id, base_id + 1, base_id + 2, base_id + 3, base_id + 4
+    rows = (
+        ("jgl_mid", jgl, mid, seed_synergy),
+        ("jgl_sup", jgl, sup, 0.01),
+        ("mid_sup", mid, sup, 0.01),
+        ("top_jgl", top, jgl, 0.01),
+        ("top_mid", top, mid, 0.01),
+        ("top_sup", top, sup, 0.01),
+        ("jgl_bot", jgl, bot, 0.01),
+        ("mid_bot", mid, bot, 0.01),
+        ("bot_sup", bot, sup, 0.01),
+        ("top_bot", top, bot, 0.01),
+    )
+    for roles, champ_a, champ_b, synergy in rows:
+        conn.execute(
+            "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
+            " games_eff, wr, synergy, ci_low, ci_high, tier)"
+            " VALUES ('16.13', %s, %s, %s, %s, 60, 60.0, 0.55, %s, 0.0, %s, 'eleve')",
+            (platform, roles, champ_a, champ_b, synergy, synergy),
+        )
+
+
+def test_draft_page_suggest_shows_variant_tabs_for_multiple_propositions(pg_sync, client):
+    """Boutons 1/2/3 (retour utilisateur 2026-07-27) : 2 pentades disjoints
+    (aucun champion en commun) produisent 2 propositions DIVERSES pour
+    "Meilleure synergie" — la carte doit afficher 2 boutons d'onglet, et
+    seule la 1ère variante est visible par défaut (la 2e porte `hidden`)."""
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    _insert_pentad(pg_sync, 1, seed_synergy=0.30)
+    _insert_pentad(pg_sync, 6, seed_synergy=0.20)
+    resp = client.get("/draft", params={"suggest": "1"})
+    assert resp.status_code == 200
+    assert resp.text.count('class="draft-variant-tab active"') == 1
+    assert resp.text.count("draft-variant-tab") >= 2
+    assert resp.text.count('data-variant-index="0"') >= 1
+    assert resp.text.count('data-variant-index="1" hidden') >= 1
+
+
 def test_draft_page_suggest_shows_counters(pg_sync, client):
     """Contres 1v1 (retour utilisateur 2026-07-25) : le rôle le plus
     exploitable de la composition affiche ses contres — toujours du 1v1 par

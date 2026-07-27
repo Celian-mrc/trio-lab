@@ -143,6 +143,17 @@ ARCHETYPES: dict[str, dict] = {
     },
 }
 SEED_SHORTLIST = 8  # duos de départ essayés par profil avant d'abandonner
+# 3 propositions par archétype sur "Compositions suggérées" (retour
+# utilisateur 2026-07-27) : rang 0 = meilleur score, rang 1 = 2e meilleur
+# score suffisamment DIFFÉRENT du rang 0, rang 2 = la plus FIABLE (games_eff
+# le plus élevé sur son duo de départ, pas le score) parmi les candidats
+# restants encore suffisamment différents des rangs 0/1. "Suffisamment
+# différent" = au plus DIVERSITY_MAX_SHARED_CHAMPIONS champions communs
+# (peu importe le rôle) — 3 sur 5 tolère un changement d'1-2 champions,
+# exclut les quasi-doublons (4-5 champions identiques) que produirait sinon
+# un pur classement par score (des seeds différents convergent souvent vers
+# la même fin de complétion gloutonne).
+DIVERSITY_MAX_SHARED_CHAMPIONS = 3
 # Pool de duos candidats : sans plafond explicite, une lecture paginée par
 # défaut limiterait aux 50 meilleurs en synergie BRUTE, ce qui empêcherait
 # les archétypes non-synergie de considérer un duo hors de ce top-50 (bug
@@ -507,6 +518,21 @@ def greedy_complete_draft(
     return placed, total
 
 
+def _champion_set(placed: dict[str, int]) -> frozenset[int]:
+    return frozenset(placed.values())
+
+
+def _is_diverse_enough(placed: dict[str, int], already_selected: list[dict[str, int]]) -> bool:
+    """`placed` diffère assez de CHAQUE composition déjà retenue (au plus
+    `DIVERSITY_MAX_SHARED_CHAMPIONS` champions en commun, peu importe le
+    rôle) — cf. commentaire sur `DIVERSITY_MAX_SHARED_CHAMPIONS`."""
+    candidate = _champion_set(placed)
+    return all(
+        len(candidate & _champion_set(other)) <= DIVERSITY_MAX_SHARED_CHAMPIONS
+        for other in already_selected
+    )
+
+
 def _all_pairs_reliable(
     conn: psycopg.Connection, window: str, platform: str, placed: dict[str, int], min_tier: str
 ) -> bool:
@@ -827,26 +853,44 @@ def propose_drafts(
     pool: list[dict],
     zstats: dict[str, tuple[float, float]],
 ) -> list[dict]:
-    """Une composition par archétype de `ARCHETYPES` (jamais un archétype
-    sans composition silencieusement omis : il n'apparaît juste pas). Essaie
-    TOUS les duos de départ du short-list (pas seulement le premier qui
-    complète) et garde la composition FINIE dont le score archétype sur ses
-    10 vraies paires (`full_draft_score`) est le meilleur, puis lui applique
-    UN passage de remplacement (`refine_draft`, retour utilisateur
-    2026-07-27 : "est-ce que le système essaie de remplacer le duo de base
-    par un autre ?") — rien n'est verrouillé ici, le duo de départ lui-même
-    peut être remplacé si un meilleur candidat existe compte tenu du reste
-    de la composition. Si le raffinement touche l'un des 2 rôles du duo de
-    départ, `seed_pairs` est recalculé sur l'état FINAL (jamais l'ancien duo
-    devenu incomplet/inexact à afficher).
+    """Jusqu'à 3 compositions par archétype de `ARCHETYPES` (retour
+    utilisateur 2026-07-27 : "des boutons 1/2/3... 3 propositions par
+    archétype" — jamais un archétype sans composition silencieusement omis :
+    il n'apparaît juste pas, jamais forcé à 3 non plus si la diversité
+    manque). Essaie TOUS les duos de départ du short-list (pas seulement le
+    premier qui complète), calcule le score archétype de chaque composition
+    FINIE sur ses 10 vraies paires (`full_draft_score`), puis sélectionne :
 
-    Retourne, par archétype réussi : `{archetype, label, members (dict
-    rôle→champion_id), total_synergy, seed_pairs (1 entrée, le duo de
-    départ), advice_stats (moyennes scaling/cc/gold/wr/ci_low/ci_high sur
-    les 10 vraies paires, `DISPLAY_STAT_COLUMNS`, ou None), counters (points
-    faibles), strengths (points forts)}` — brut (`champion_id`, pas de
-    nom/icône), même forme que lue depuis `draft_suggestion(_counter)`
-    matérialisées par `refresh`, pour que le
+    - rang 0 : le meilleur score.
+    - rang 1 : le 2e meilleur score suffisamment DIFFÉRENT du rang 0
+      (`_is_diverse_enough`) — des seeds différents convergent souvent vers
+      la même fin de complétion gloutonne, un pur tri par score produirait
+      sinon des quasi-doublons.
+    - rang 2 : parmi les candidats restants encore suffisamment différents
+      des rangs 0 et 1, celui dont le duo de départ a le plus de
+      `games_eff` (pas le score) — "une des trois avec une fiabilité très
+      élevée, plus de games que les autres" (retour utilisateur). Les 3
+      candidats passent déjà tous le seuil `MIN_TIER` par construction ;
+      cette 3e place privilégie le VOLUME de données plutôt que le score.
+
+    Chaque rang retenu reçoit ensuite SON PROPRE passage de remplacement
+    (`refine_draft`, retour utilisateur 2026-07-27 : "est-ce que le système
+    essaie de remplacer le duo de base par un autre ?") — rien n'est
+    verrouillé, le duo de départ lui-même peut être remplacé. Si 2 rangs
+    convergent vers exactement les mêmes 5 champions APRÈS ce raffinement
+    (rare mais possible), le doublon est supprimé plutôt qu'affiché 2 fois.
+    Si le raffinement touche l'un des 2 rôles du duo de départ, `seed_pairs`
+    est recalculé sur l'état FINAL (jamais l'ancien duo devenu
+    incomplet/inexact à afficher).
+
+    Retourne une liste PLATE (pas groupée par archétype) — chaque entrée :
+    `{archetype, label, suggestion_rank (0-2), selection ("score"|"diverse"|
+    "reliable"), members (dict rôle→champion_id), total_synergy, seed_pairs
+    (1 entrée, le duo de départ), advice_stats (moyennes scaling/cc/gold/wr/
+    ci_low/ci_high sur les 10 vraies paires, `DISPLAY_STAT_COLUMNS`, ou
+    None), counters (points faibles), strengths (points forts)}` — brut
+    (`champion_id`, pas de nom/icône), même forme que lue depuis
+    `draft_suggestion(_counter)` matérialisées par `refresh`, pour que le
     rendu (`web/app.py`) traite les 2 sources de façon identique."""
     results: list[dict] = []
     for key, archetype in ARCHETYPES.items():
@@ -868,39 +912,75 @@ def propose_drafts(
             candidates.append((score, seed_row, placed, total))
         if not candidates:
             continue
-        _, seed_row, placed, total = max(candidates, key=lambda c: c[0])
-        role_a, role_b = DUO_ROLE_KEYS[seed_row["roles"]]
-        placed, total = refine_draft(
-            conn, window, platform, placed, total, MIN_TIER, weights, zstats
-        )
-        seed_roles_str = seed_row["roles"]
-        final_seed = _duo_score(
-            conn, window, platform, seed_roles_str, placed[role_a], placed[role_b]
-        )
-        results.append(
-            {
-                "archetype": key,
-                "label": archetype["label"],
-                "members": placed,
-                "total_synergy": total,
-                "seed_pairs": [
-                    {
-                        "role_a": role_a,
-                        "role_b": role_b,
-                        "champ_a": placed[role_a],
-                        "champ_b": placed[role_b],
-                        "synergy": final_seed["synergy"] if final_seed else None,
-                        "games": final_seed["games"] if final_seed else 0,
-                        "tier": final_seed["tier"] if final_seed else None,
-                    }
-                ],
-                "advice_stats": full_draft_stat_averages(
-                    conn, window, platform, placed, DISPLAY_STAT_COLUMNS
-                ),
-                "counters": draft_counters(conn, window, platform, placed),
-                "strengths": draft_strengths(conn, window, platform, placed),
-            }
-        )
+
+        by_score = sorted(range(len(candidates)), key=lambda i: -candidates[i][0])
+        selected_idx: list[int] = []
+        selected_placed: list[dict[str, int]] = []
+        selections: list[str] = []
+
+        for i in by_score:
+            if len(selected_idx) >= 2:
+                break
+            placed_i = candidates[i][2]
+            if _is_diverse_enough(placed_i, selected_placed):
+                selected_idx.append(i)
+                selected_placed.append(placed_i)
+                selections.append("score" if not selections else "diverse")
+
+        if len(selected_idx) == 2:
+            eligible = [
+                i
+                for i in by_score
+                if i not in selected_idx and _is_diverse_enough(candidates[i][2], selected_placed)
+            ]
+            if eligible:
+                best_reliable = max(eligible, key=lambda i: candidates[i][1]["games_eff"])
+                selected_idx.append(best_reliable)
+                selected_placed.append(candidates[best_reliable][2])
+                selections.append("reliable")
+
+        seen_final: list[frozenset[int]] = []
+        rank = 0
+        for i, selection in zip(selected_idx, selections, strict=True):
+            _, seed_row, placed, total = candidates[i]
+            placed, total = refine_draft(
+                conn, window, platform, placed, total, MIN_TIER, weights, zstats
+            )
+            final_set = _champion_set(placed)
+            if final_set in seen_final:
+                continue  # raffinement convergé vers un rang déjà retenu
+            seen_final.append(final_set)
+            role_a, role_b = DUO_ROLE_KEYS[seed_row["roles"]]
+            final_seed = _duo_score(
+                conn, window, platform, seed_row["roles"], placed[role_a], placed[role_b]
+            )
+            results.append(
+                {
+                    "archetype": key,
+                    "label": archetype["label"],
+                    "suggestion_rank": rank,
+                    "selection": selection,
+                    "members": placed,
+                    "total_synergy": total,
+                    "seed_pairs": [
+                        {
+                            "role_a": role_a,
+                            "role_b": role_b,
+                            "champ_a": placed[role_a],
+                            "champ_b": placed[role_b],
+                            "synergy": final_seed["synergy"] if final_seed else None,
+                            "games": final_seed["games"] if final_seed else 0,
+                            "tier": final_seed["tier"] if final_seed else None,
+                        }
+                    ],
+                    "advice_stats": full_draft_stat_averages(
+                        conn, window, platform, placed, DISPLAY_STAT_COLUMNS
+                    ),
+                    "counters": draft_counters(conn, window, platform, placed),
+                    "strengths": draft_strengths(conn, window, platform, placed),
+                }
+            )
+            rank += 1
     return results
 
 
@@ -908,30 +988,36 @@ def propose_drafts(
 
 _INSERT_SUGGESTION_SQL = """
     INSERT INTO draft_suggestion
-        (window_label, platform, archetype, label,
+        (window_label, platform, archetype, suggestion_rank, selection, label,
          top_champion, jgl_champion, mid_champion, bot_champion, sup_champion,
          total_synergy, seed_roles, seed_champ_a, seed_champ_b, seed_synergy,
          seed_games, seed_tier, advice_scaling, advice_cc, advice_gold15,
          wr, wr_ci_low, wr_ci_high)
     VALUES
-        (%(window_label)s, %(platform)s, %(archetype)s, %(label)s,
-         %(top_champion)s, %(jgl_champion)s, %(mid_champion)s, %(bot_champion)s, %(sup_champion)s,
-         %(total_synergy)s, %(seed_roles)s, %(seed_champ_a)s, %(seed_champ_b)s, %(seed_synergy)s,
-         %(seed_games)s, %(seed_tier)s, %(advice_scaling)s, %(advice_cc)s, %(advice_gold15)s,
-         %(wr)s, %(wr_ci_low)s, %(wr_ci_high)s)
+        (%(window_label)s, %(platform)s, %(archetype)s, %(suggestion_rank)s, %(selection)s,
+         %(label)s, %(top_champion)s, %(jgl_champion)s, %(mid_champion)s, %(bot_champion)s,
+         %(sup_champion)s, %(total_synergy)s, %(seed_roles)s, %(seed_champ_a)s, %(seed_champ_b)s,
+         %(seed_synergy)s, %(seed_games)s, %(seed_tier)s, %(advice_scaling)s, %(advice_cc)s,
+         %(advice_gold15)s, %(wr)s, %(wr_ci_low)s, %(wr_ci_high)s)
 """
 _INSERT_COUNTER_SQL = """
     INSERT INTO draft_suggestion_counter
-        (window_label, platform, archetype, direction, kind, rank, role,
+        (window_label, platform, archetype, suggestion_rank, direction, kind, rank, role,
          against_champion, champion_id, delta)
     VALUES
-        (%(window_label)s, %(platform)s, %(archetype)s, %(direction)s, %(kind)s, %(rank)s,
-         %(role)s, %(against_champion)s, %(champion_id)s, %(delta)s)
+        (%(window_label)s, %(platform)s, %(archetype)s, %(suggestion_rank)s, %(direction)s,
+         %(kind)s, %(rank)s, %(role)s, %(against_champion)s, %(champion_id)s, %(delta)s)
 """
 
 
 def _write_matchup_picks(
-    cur, window: PatchWindow, platform: str, archetype: str, direction: str, picks: dict | None
+    cur,
+    window: PatchWindow,
+    platform: str,
+    archetype: str,
+    suggestion_rank: int,
+    direction: str,
+    picks: dict | None,
 ) -> None:
     """Écrit un bloc primaire/secondaire (`draft_counters`/`draft_strengths`)
     dans `draft_suggestion_counter` — `direction` distingue points
@@ -947,6 +1033,7 @@ def _write_matchup_picks(
                 "window_label": window.label,
                 "platform": platform,
                 "archetype": archetype,
+                "suggestion_rank": suggestion_rank,
                 "direction": direction,
                 "kind": "primary",
                 "rank": rank,
@@ -963,6 +1050,7 @@ def _write_matchup_picks(
                 "window_label": window.label,
                 "platform": platform,
                 "archetype": archetype,
+                "suggestion_rank": suggestion_rank,
                 "direction": direction,
                 "kind": "secondary",
                 "rank": rank,
@@ -976,9 +1064,9 @@ def _write_matchup_picks(
 
 def refresh(window: PatchWindow, platform: str, *, dsn: str | None = None) -> int:
     """Matérialise les compositions suggérées de `platform` dans
-    `draft_suggestion(_counter)`. Retourne le nombre d'archétypes écrits
-    (0 à 4). DELETE + INSERT (même raisonnement que
-    `resilience`/`win_factors`/`gold_factors`)."""
+    `draft_suggestion(_counter)`. Retourne le nombre de compositions écrites
+    (0 à 12 : jusqu'à 3 par archétype, cf. `propose_drafts`). DELETE +
+    INSERT (même raisonnement que `resilience`/`win_factors`/`gold_factors`)."""
     with psycopg.connect(db.require_dsn(dsn)) as conn:
         pool, zstats = pool_and_zstats(conn, window.label, platform)
         drafts = propose_drafts(conn, window.label, platform, pool, zstats)
@@ -996,6 +1084,8 @@ def refresh(window: PatchWindow, platform: str, *, dsn: str | None = None) -> in
                         "window_label": window.label,
                         "platform": platform,
                         "archetype": d["archetype"],
+                        "suggestion_rank": d["suggestion_rank"],
+                        "selection": d["selection"],
                         "label": d["label"],
                         "top_champion": d["members"]["top"],
                         "jgl_champion": d["members"]["jgl"],
@@ -1018,13 +1108,28 @@ def refresh(window: PatchWindow, platform: str, *, dsn: str | None = None) -> in
                     },
                 )
                 _write_matchup_picks(
-                    cur, window, platform, d["archetype"], "weakness", d["counters"]
+                    cur,
+                    window,
+                    platform,
+                    d["archetype"],
+                    d["suggestion_rank"],
+                    "weakness",
+                    d["counters"],
                 )
                 _write_matchup_picks(
-                    cur, window, platform, d["archetype"], "strength", d["strengths"]
+                    cur,
+                    window,
+                    platform,
+                    d["archetype"],
+                    d["suggestion_rank"],
+                    "strength",
+                    d["strengths"],
                 )
     logger.info(
-        "draft_suggestions %s/%s rafraîchies : %d archétype(s)", window.label, platform, len(drafts)
+        "draft_suggestions %s/%s rafraîchies : %d composition(s)",
+        window.label,
+        platform,
+        len(drafts),
     )
     return len(drafts)
 

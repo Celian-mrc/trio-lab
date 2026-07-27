@@ -935,6 +935,55 @@ gagner") avec les données déjà en place.
       testant) sur `/draft` et `/duos` : datalist vide au clic, repeuplé en
       tapant, re-vidé en changeant de champ vide.
 
+- [x] **Jusqu'à 3 propositions par archétype, boutons 1/2/3 (2026-07-27,
+      retour utilisateur : "des boutons 1,2,3... 3 propositions par
+      archétype" + "une avec fiabilité très élevée, plus de games que les
+      autres")** : `propose_drafts` gardait déjà jusqu'à `SEED_SHORTLIST`
+      (8) compositions complètes calculées par archétype, n'en gardait que
+      la meilleure — les 7 autres étaient jetées. Sélection étendue, sans
+      calcul supplémentaire côté "essayer des seeds" :
+      - **Rang 0** : meilleur score (comportement inchangé).
+      - **Rang 1** : 2e meilleur score suffisamment DIFFÉRENT du rang 0
+        (`_is_diverse_enough`, au plus `DIVERSITY_MAX_SHARED_CHAMPIONS`=3
+        champions communs sur 5, peu importe le rôle) — des seeds
+        différents convergent souvent vers la même fin de complétion
+        gloutonne, un pur tri par score aurait sinon produit des
+        quasi-doublons.
+      - **Rang 2** : parmi les candidats restants encore diversifiés vis-à-
+        vis des rangs 0/1, celui dont le duo de départ a le plus de
+        `games_eff` (pas le score) — "la plus fiable". Tous les candidats
+        passent déjà `MIN_TIER` ("eleve") par construction ; ce rang
+        privilégie le VOLUME de données plutôt que le score.
+      - Jamais forcé à 3 : si la diversité manque, moins de propositions
+        (`test_propose_drafts_never_forces_three_variants`).
+      - Chaque rang retenu reçoit SON PROPRE passage `refine_draft` ; si 2
+        rangs convergent vers les mêmes 5 champions après raffinement, le
+        doublon est supprimé (jamais affiché 2 fois).
+      - Migration 036 : `suggestion_rank`/`selection`
+        ("score"|"diverse"|"reliable") ajoutés à la clé de
+        `draft_suggestion`/`draft_suggestion_counter` — chaque proposition
+        a ses PROPRES contres/points forts, pas partagés entre rangs.
+      - Web : `_group_draft_variants` regroupe la liste plate par
+        archétype ; template `draft_group`/`draft_variant_body` (CSS
+        `display: contents` sur le wrapper de variante — les enfants
+        restent des enfants directs de la grille `subgrid` de la carte,
+        l'alignement entre cartes tient même en changeant d'onglet) ;
+        nouveau `static/draft-variant-tabs.js` (délégué sur `document`,
+        même raison que sort.js/thresholds.js) bascule l'onglet actif sans
+        aller-retour serveur — les 3 variantes sont déjà toutes rendues
+        côté serveur, seule leur visibilité change.
+      - Scope volontairement limité à "Compositions suggérées" — "Compose à
+        partir de tes champions" garde 1 seule proposition par archétype
+        (l'utilisateur a déjà fixé son point de départ).
+      Coût mesuré sur données réelles (16.14+16.13, `platform=all`) :
+      `propose_drafts` ~18s pour 11 compositions (4 archétypes, 1 sans
+      diversité suffisante) contre ~17s pour 4 compositions avant ce
+      changement — l'essentiel du coût était déjà dans l'essai des 8 seeds,
+      pas dans le nombre de résultats gardés. `refresh()` (avec écriture) :
+      9,2s, 104 lignes de contres écrites. Migration 036 appliquée en prod
+      le 2026-07-27, `refresh()` relancé manuellement pour matérialiser les
+      nouvelles propositions immédiatement (sinon prochain cycle collector).
+
 Phase 8 close pour l'instant (draft, insights, résilience, flex) — prochaine idée à définir.
 
 **Gap constaté en marge de cette révision (2026-07-19)** : `agg_matchup`/

@@ -905,23 +905,24 @@ def draft_suggestions(conn: psycopg.Connection, window: str, platform: str) -> l
     fenêtre/plateforme (web/app.py retombe alors sur le calcul à la demande).
 
     Retourne la MÊME forme brute que
-    `synergy.draft_suggestions.propose_drafts` (une entrée par archétype :
-    `members` dict de rôle→champion_id, `seed_pairs` à 1 entrée, `advice_stats`,
-    `counters` (points faibles) et `strengths` (points forts) bruts) —
-    web/app.py rend les 2 sources de façon identique. `seed_roles` (ex.
-    'jgl_mid') se scinde directement en `role_a`/`role_b` : format garanti
-    "{role_court}_{role_court}" par construction (`refresh`).
+    `synergy.draft_suggestions.propose_drafts` (jusqu'à 3 entrées par
+    archétype, `suggestion_rank`/`selection` distinguent les variantes :
+    `members` dict de rôle→champion_id, `seed_pairs` à 1 entrée,
+    `advice_stats`, `counters` (points faibles) et `strengths` (points
+    forts) bruts) — web/app.py rend les 2 sources de façon identique.
+    `seed_roles` (ex. 'jgl_mid') se scinde directement en `role_a`/`role_b` :
+    format garanti "{role_court}_{role_court}" par construction (`refresh`).
     """
     with conn.cursor(row_factory=dict_row) as cur:
         rows = cur.execute(
             """
-            SELECT archetype, label, top_champion, jgl_champion, mid_champion,
-                   bot_champion, sup_champion, total_synergy, seed_roles,
+            SELECT archetype, suggestion_rank, selection, label, top_champion, jgl_champion,
+                   mid_champion, bot_champion, sup_champion, total_synergy, seed_roles,
                    seed_champ_a, seed_champ_b, seed_synergy, seed_games, seed_tier,
                    advice_scaling, advice_cc, advice_gold15, wr, wr_ci_low, wr_ci_high
             FROM draft_suggestion
             WHERE window_label = %s AND platform = %s
-            ORDER BY archetype
+            ORDER BY archetype, suggestion_rank
             """,
             (window, platform),
         ).fetchall()
@@ -929,19 +930,21 @@ def draft_suggestions(conn: psycopg.Connection, window: str, platform: str) -> l
             return []
         counter_rows = cur.execute(
             """
-            SELECT archetype, direction, kind, rank, role, against_champion, champion_id, delta
+            SELECT archetype, suggestion_rank, direction, kind, rank, role, against_champion,
+                   champion_id, delta
             FROM draft_suggestion_counter
             WHERE window_label = %s AND platform = %s
-            ORDER BY archetype, direction, kind, rank
+            ORDER BY archetype, suggestion_rank, direction, kind, rank
             """,
             (window, platform),
         ).fetchall()
 
-    # (archetype, direction) -> {"primary": ..., "secondary": [...]}
-    picks_by_key: dict[tuple[str, str], dict] = {}
+    # (archetype, suggestion_rank, direction) -> {"primary": ..., "secondary": [...]}
+    picks_by_key: dict[tuple[str, int, str], dict] = {}
     for r in counter_rows:
         entry = picks_by_key.setdefault(
-            (r["archetype"], r["direction"]), {"primary": None, "secondary": []}
+            (r["archetype"], r["suggestion_rank"], r["direction"]),
+            {"primary": None, "secondary": []},
         )
         pick = {"champion_id": r["champion_id"], "delta": r["delta"]}
         if r["kind"] == "primary":
@@ -975,6 +978,8 @@ def draft_suggestions(conn: psycopg.Connection, window: str, platform: str) -> l
         results.append(
             {
                 "archetype": row["archetype"],
+                "suggestion_rank": row["suggestion_rank"],
+                "selection": row["selection"],
                 "label": row["label"],
                 "members": {
                     "top": row["top_champion"],
@@ -996,8 +1001,12 @@ def draft_suggestions(conn: psycopg.Connection, window: str, platform: str) -> l
                     }
                 ],
                 "advice_stats": advice_stats,
-                "counters": picks_by_key.get((row["archetype"], "weakness")),
-                "strengths": picks_by_key.get((row["archetype"], "strength")),
+                "counters": picks_by_key.get(
+                    (row["archetype"], row["suggestion_rank"], "weakness")
+                ),
+                "strengths": picks_by_key.get(
+                    (row["archetype"], row["suggestion_rank"], "strength")
+                ),
             }
         )
     return results

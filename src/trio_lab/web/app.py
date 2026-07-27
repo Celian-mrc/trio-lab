@@ -955,6 +955,9 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             else None
         )
         return {
+            "archetype": raw["archetype"],
+            "suggestion_rank": raw["suggestion_rank"],
+            "selection": raw["selection"],
             "label": raw["label"],
             "weights": _archetype_weights_display(raw["archetype"]),
             "members": members,
@@ -965,6 +968,22 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             "counters": _resolve_counters(raw["counters"]),
             "strengths": _resolve_counters(raw["strengths"]),
         }
+
+    def _group_draft_variants(rendered: list[dict]) -> list[dict]:
+        """Regroupe une liste PLATE de variantes rendues (`_build_draft_result`,
+        1 entrée par `(archetype, suggestion_rank)`) par archétype, dans
+        l'ordre de première apparition — jusqu'à 3 boutons 1/2/3 par groupe
+        sur "Compositions suggérées" (retour utilisateur 2026-07-27),
+        `draft.html` n'affichant que le contenu de la variante active."""
+        groups: dict[str, dict] = {}
+        order: list[str] = []
+        for r in rendered:
+            key = r["archetype"]
+            if key not in groups:
+                groups[key] = {"label": r["label"], "variants": []}
+                order.append(key)
+            groups[key]["variants"].append(r)
+        return [groups[k] for k in order]
 
     def _manual_propose(
         conn,
@@ -1007,6 +1026,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         )
         return {
             "archetype": archetype_key,
+            "suggestion_rank": 0,
+            "selection": "score",
             "label": draft_suggestions.ARCHETYPES[archetype_key]["label"],
             "members": full_placed,
             "total_synergy": full_total,
@@ -1067,20 +1088,23 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             # utilisateur 2026-07-25 : "je voulais garder les drafts
             # proposées sans avoir à cliquer"). Pour toute autre région (ou
             # si rien n'est encore matérialisé, ex. juste après un déploiement),
-            # calcul à la demande derrière le bouton, comme avant.
+            # calcul à la demande derrière le bouton, comme avant. Jusqu'à 3
+            # variantes par archétype (retour utilisateur 2026-07-27, boutons
+            # 1/2/3) : `propose_drafts`/`queries.draft_suggestions` renvoient
+            # une liste PLATE, regroupée ici par archétype pour le template.
             suggested_drafts = None
             if platform == "all":
                 precomputed = queries.draft_suggestions(conn, window, platform)
                 if precomputed:
-                    suggested_drafts = [
-                        _build_draft_result(raw, include_seed_pairs=False) for raw in precomputed
-                    ]
+                    suggested_drafts = _group_draft_variants(
+                        [_build_draft_result(raw, include_seed_pairs=False) for raw in precomputed]
+                    )
             if suggested_drafts is None and suggest:
                 pool, zstats = _get_pool_zstats()
                 raws = draft_suggestions.propose_drafts(conn, window, platform, pool, zstats)
-                suggested_drafts = [
-                    _build_draft_result(raw, include_seed_pairs=False) for raw in raws
-                ]
+                suggested_drafts = _group_draft_variants(
+                    [_build_draft_result(raw, include_seed_pairs=False) for raw in raws]
+                )
 
             # Formulaire soumis dès que 1 champion ou un archétype est fourni
             # — une page fraîche n'a ni l'un ni l'autre dans l'URL. Archétype
