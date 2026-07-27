@@ -1183,9 +1183,14 @@ def test_draft_page_no_custom_weights_shows_neither_card_nor_error(pg_sync, clie
 def test_draft_page_compose_with_custom_weights(pg_sync, client):
     """ "Compose à partir de tes champions" avec archétype "custom" (retour
     utilisateur 2026-07-28, "on puisse aussi personnaliser les poids") :
-    les poids soumis via les mêmes champs `w_<axe>` que "Personnalise tes
-    poids" s'appliquent aussi à la complétion des champions choisis à la
-    main — carte "Personnalisé" dans `manual_results`, pas d'erreur."""
+    les poids soumis via les champs `cw_<axe>`, PROPRES à ce formulaire —
+    distincts de `w_<axe>` ("Personnalise tes poids", retour utilisateur
+    "pourquoi il devrait partager les mêmes poids personnalisés ?" — 2
+    formulaires, 2 états indépendants) — s'appliquent à la complétion des
+    champions choisis à la main. Seuls `cw_*` sont soumis ici (jamais
+    `w_*`) : si le test passait à cause du 5e archétype auto-suggéré de
+    "Personnalise tes poids" plutôt que de `manual_results`, ce serait un
+    faux positif — n'arrive plus avec des champs séparés."""
     _seed_suggest_scenario(pg_sync)
     resp = client.get(
         "/draft",
@@ -1193,18 +1198,23 @@ def test_draft_page_compose_with_custom_weights(pg_sync, client):
             "seed_jgl": "Lee Sin",
             "seed_mid": "Ahri",
             "archetype": "custom",
-            "w_synergy": "100",
-            "w_scaling": "0",
-            "w_cc": "0",
-            "w_gold": "0",
-            "w_drakes": "0",
-            "w_soul": "0",
+            "cw_synergy": "100",
+            "cw_scaling": "0",
+            "cw_cc": "0",
+            "cw_gold": "0",
+            "cw_drakes": "0",
+            "cw_soul": "0",
         },
     )
     assert resp.status_code == 200
     assert '<h3 class="draft-suggest-label">Personnalisé</h3>' in resp.text
     for name in ("Vi", "Lee Sin", "Ahri", "Orianna", "Thresh"):
         assert name in resp.text
+    # Indépendance des 2 formulaires (retour utilisateur 2026-07-28) : seuls
+    # `cw_*` ont été soumis, jamais `w_*` — "Personnalise tes poids" (5e
+    # archétype auto-suggéré) ne doit ni afficher de carte, ni d'erreur.
+    assert '<div class="draft-custom-result">' not in resp.text
+    assert "La somme des poids doit faire 100" not in resp.text
 
 
 def test_draft_page_compose_custom_archetype_without_weights_shows_error(pg_sync, client):
@@ -1216,8 +1226,7 @@ def test_draft_page_compose_custom_archetype_without_weights_shows_error(pg_sync
         "/draft", params={"seed_jgl": "Lee Sin", "seed_mid": "Ahri", "archetype": "custom"}
     )
     assert resp.status_code == 200
-    # Apostrophe échappée en HTML (d&#39;abord) : on évite le caractère.
-    assert "abord tes poids personnalisés" in resp.text
+    assert "Renseigne des poids qui totalisent 100 % ci-dessus." in resp.text
 
 
 def test_draft_page_suggest_shows_counters(pg_sync, client):

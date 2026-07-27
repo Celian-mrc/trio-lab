@@ -1066,6 +1066,46 @@ gagner") avec les données déjà en place.
         sur le HTML brut. Corrigé en filtrant `v or ""` avant de passer les
         valeurs au template.
 
+- [x] **Poids personnalisés de "Compose à partir de tes champions" rendus
+      indépendants de "Personnalise tes poids" (2026-07-28, retour
+      utilisateur : "pourquoi il devrait partager les mêmes poids
+      personnalisés ?")** : rien ne justifiait que le 5e archétype
+      auto-suggéré et une composition bâtie à partir de SES champions soient
+      forcés au même réglage — 2 usages différents (l'un part de zéro, l'un
+      part de champions déjà choisis), 2 formulaires, désormais 2 états
+      indépendants :
+      - Champs `cw_<axe>` (au lieu de `w_<axe>` partagés) — parsés par la
+        même fonction `_parse_custom_weights` (déjà générique), juste
+        appelée 2 fois avec 2 dicts bruts différents.
+      - Les 6 champs de poids sont désormais affichés DIRECTEMENT dans
+        "Compose à partir de tes champions" (à côté du `<select>`
+        archétype), révélés seulement quand "Personnalisé" est choisi —
+        résout aussi la confusion du libellé "Personnalisé (poids
+        ci-dessous)" (retour utilisateur, "je comprends pas trop le poids
+        ci-dessous") qui renvoyait vers une section distante de la page.
+        État initial correct côté serveur (`hidden` posé selon
+        `selected_archetype`), nouveau `static/draft-custom-archetype.js`
+        gère seulement la bascule EN DIRECT pendant que l'utilisateur
+        change de sélection (même pattern délégué que
+        sort.js/thresholds.js).
+      - **Bug trouvé pendant la vérification visuelle** (pas par les tests,
+        qui ne rendent jamais le CSS) : `.draft-compose-weights { display:
+        grid; ... }` (règle auteur) l'emportait sur la règle `[hidden] {
+        display: none }` du navigateur (origine user-agent, toujours
+        perdante face à l'auteur à spécificité égale) — les champs
+        restaient visibles même avec l'attribut `hidden` posé. Même piège
+        déjà rencontré et corrigé pour `.draft-suggest-body` (boutons
+        1/2/3) ; oublié cette fois-ci. Corrigé avec `.draft-compose-weights
+        [hidden] { display: none; }`.
+      - **Faux positif de test découvert en écrivant les tests** : un
+        premier test soumettait par erreur `w_synergy` (au lieu de
+        `cw_synergy`) et passait quand même — non pas parce que "Compose à
+        partir de tes champions" fonctionnait, mais parce que le 5e
+        archétype auto-suggéré de "Personnalise tes poids" produisait
+        accidentellement la même carte "Personnalisé" ailleurs sur la page.
+        Corrigé en soumettant strictement `cw_*` et en vérifiant l'absence
+        de `draft-custom-result` dans la réponse.
+
 Phase 8 close pour l'instant (draft, insights, résilience, flex) — prochaine idée à définir.
 
 **Gap constaté en marge de cette révision (2026-07-19)** : `agg_matchup`/

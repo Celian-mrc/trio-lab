@@ -320,6 +320,10 @@ th[data-tooltip]::after, label[data-tooltip]::after {
   border-radius: var(--radius); padding: 0.35rem 0.55rem; font-size: 0.85rem;
 }
 .draft-compose-submit select option { background: var(--card); color: var(--foreground); }
+.draft-compose-weights {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr)); gap: 0.6rem;
+}
+.draft-compose-weights[hidden] { display: none; }
 .draft-compose-loadbar {
   width: 6rem; height: 3px; border-radius: 3px; overflow: hidden; background: var(--muted);
   position: relative; opacity: 0; transition: opacity 150ms ease-in;

@@ -1095,6 +1095,12 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         w_gold: str | None = None,
         w_drakes: str | None = None,
         w_soul: str | None = None,
+        cw_synergy: str | None = None,
+        cw_scaling: str | None = None,
+        cw_cc: str | None = None,
+        cw_gold: str | None = None,
+        cw_drakes: str | None = None,
+        cw_soul: str | None = None,
     ):
         raw_seeds = {
             "top": seed_top,
@@ -1123,6 +1129,26 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         }
         current_weight_params = {f"w_{axis}": v or "" for axis, v in raw_weights.items()}
         custom_weights, custom_error = _parse_custom_weights(raw_weights)
+
+        # Poids personnalisés pour "Compose à partir de tes champions" —
+        # champs `cw_<axe>` SÉPARÉS de `w_<axe>` (retour utilisateur
+        # 2026-07-28 : "pourquoi il devrait partager les mêmes poids
+        # personnalisés ?") : rien ne justifie que le 5e archétype
+        # auto-suggéré et une composition bâtie à partir de TES champions
+        # utilisent forcément le même réglage — 2 formulaires, 2 états
+        # indépendants.
+        raw_manual_weights = {
+            "synergy": cw_synergy,
+            "scaling": cw_scaling,
+            "cc": cw_cc,
+            "gold": cw_gold,
+            "drakes": cw_drakes,
+            "soul": cw_soul,
+        }
+        current_manual_weight_params = {
+            f"cw_{axis}": v or "" for axis, v in raw_manual_weights.items()
+        }
+        manual_custom_weights, manual_custom_error = _parse_custom_weights(raw_manual_weights)
 
         with request.app.state.pool.connection() as conn:
             window, platform, context = resolve_context(conn, window, platform)
@@ -1202,20 +1228,19 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                     raise HTTPException(404, f"archétype inconnu : {archetype!r}")
                 if not seed_picks:
                     manual_error = "Choisis au moins 1 champion avant de compléter la draft."
-                elif archetype == "custom" and custom_weights is None:
-                    # "Personnalisé" choisi mais poids absents/invalides — même
-                    # message que "Personnalise tes poids" si soumis (retour
-                    # utilisateur 2026-07-28), jamais un plantage silencieux.
-                    manual_error = custom_error or (
-                        "Renseigne d'abord tes poids personnalisés ci-dessous"
-                        ' (section "Personnalise tes poids").'
+                elif archetype == "custom" and manual_custom_weights is None:
+                    # "Personnalisé" choisi mais poids absents/invalides —
+                    # jamais un plantage silencieux (retour utilisateur
+                    # 2026-07-28).
+                    manual_error = manual_custom_error or (
+                        "Renseigne des poids qui totalisent 100 % ci-dessus."
                     )
                 else:
                     _, zstats = _get_pool_zstats()
                     keys = [archetype] if archetype else list(draft_suggestions.ARCHETYPES)
                     for key in keys:
                         if key == "custom":
-                            label, weights = "Personnalisé", custom_weights
+                            label, weights = "Personnalisé", manual_custom_weights
                         else:
                             label = draft_suggestions.ARCHETYPES[key]["label"]
                             weights = draft_suggestions.ARCHETYPES[key]["weights"]
@@ -1234,6 +1259,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             params = {
                 **current_seed_params,
                 **current_weight_params,
+                **current_manual_weight_params,
                 "archetype": archetype or "",
                 **overrides,
                 "window": window or "",
@@ -1263,6 +1289,9 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 "custom_weight_axes": CUSTOM_WEIGHT_AXES,
                 "custom_weight_axis_labels": DRAFT_ARCHETYPE_AXIS_LABELS,
                 "custom_weight_values": {axis: v or "" for axis, v in raw_weights.items()},
+                "manual_custom_weight_values": {
+                    axis: v or "" for axis, v in raw_manual_weights.items()
+                },
             },
         )
 

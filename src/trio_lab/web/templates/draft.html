@@ -117,6 +117,7 @@
   <input type="hidden" name="archetype" value="{{ selected_archetype }}">
   {% for axis in custom_weight_axes %}
   <input type="hidden" name="w_{{ axis }}" value="{{ custom_weight_values[axis] }}">
+  <input type="hidden" name="cw_{{ axis }}" value="{{ manual_custom_weight_values[axis] }}">
   {% endfor %}
   <button type="submit">Appliquer</button>
 </form>
@@ -126,9 +127,6 @@
   <form method="get" action="/draft" class="draft-compose-form">
     <input type="hidden" name="window" value="{{ window }}">
     <input type="hidden" name="platform" value="{{ platform }}">
-    {% for axis in custom_weight_axes %}
-    <input type="hidden" name="w_{{ axis }}" value="{{ custom_weight_values[axis] }}">
-    {% endfor %}
     <div class="draft-compose-roles">
       {% for role in draft_roles %}
       <label class="draft-compose-role">
@@ -143,10 +141,18 @@
         {% for key, a in archetypes.items() %}
         <option value="{{ key }}" {{ 'selected' if key == selected_archetype }}>{{ a.label }}</option>
         {% endfor %}
-        <option value="custom" {{ 'selected' if selected_archetype == 'custom' }}>Personnalisé (poids ci-dessous)</option>
+        <option value="custom" {{ 'selected' if selected_archetype == 'custom' }}>Personnalisé</option>
       </select>
       <button type="submit" class="button-like">Compléter la draft</button>
       <span class="draft-compose-loadbar" aria-hidden="true"></span>
+    </div>
+    <div class="draft-compose-weights"{{ '' if selected_archetype == 'custom' else ' hidden' }}>
+      {% for axis in custom_weight_axes %}
+      <label class="draft-custom-field">
+        {{ custom_weight_axis_labels[axis] }}
+        <input type="number" name="cw_{{ axis }}" value="{{ manual_custom_weight_values[axis] }}" min="0" max="100" step="1" placeholder="0">
+      </label>
+      {% endfor %}
     </div>
   </form>
   {% if manual_error %}
