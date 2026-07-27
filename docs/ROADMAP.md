@@ -790,6 +790,44 @@ gagner") avec les données déjà en place.
       les 10 paires, ci_high = moyenne des synergies) : `tests/web/
       test_app_pg.py` (rendu HTML) et `tests/synergy/
       test_draft_suggestions_pg.py` (colonnes `draft_suggestion`).
+- [x] **`refine_draft` : un passage de remplacement post-construction
+      (2026-07-27, retour utilisateur : "est-ce que le système essaie de
+      remplacer le duo de base par un autre pour voir s'il n'y a pas une
+      meilleure option ?")** : le glouton ne revient jamais en arrière — un
+      champion posé tôt (le duo de départ compris) peut ne plus être
+      optimal une fois les autres connus. Après une composition complète à
+      5, UN SEUL passage (pas itéré jusqu'à convergence, gain marginal jugé
+      faible face au coût — discussion utilisateur) : pour chaque rôle NON
+      verrouillé, cherche le meilleur candidat compte tenu des 4 AUTRES
+      champions actuels et remplace SEULEMENT si strictement mieux sur le
+      score composé de l'archétype. Les remplacements s'enchaînent dans le
+      même passage (un rôle remplacé devient un ancrage à jour pour les
+      rôles suivants).
+      - `_combined_score` extraite (partagée avec `greedy_complete_draft`,
+        avant dupliquée).
+      - Garde-fou `_all_pairs_reliable` : un remplacement en cascade peut en
+        théorie laisser un rôle NON remplacé désaccordé avec un
+        remplacement survenu après lui dans le même passage (jamais
+        revérifié) — revalidation des 10 vraies paires en fin de passage,
+        repli sur la composition D'ORIGINE si une paire n'est plus fiable
+        (jamais un résultat dégradé silencieusement).
+      - **`propose_drafts`** (compositions suggérées) : rien n'est
+        verrouillé, le duo de départ lui-même est éligible au remplacement
+        — si l'un de ses 2 rôles change, `seed_pairs` est recalculé sur
+        l'état FINAL (jamais l'ancien duo affiché comme "de départ" alors
+        qu'il ne l'est plus).
+      - **`_manual_propose`** ("Compose à partir de tes champions") :
+        `locked_roles = seed_picks` — les champions choisis à la main par
+        l'utilisateur ne sont JAMAIS remplacés, seuls les rôles complétés
+        par le système sont éligibles.
+      Vérifié : un scénario où un meilleur candidat existe (`tests/synergy/
+      test_draft_suggestions_pg.py`) confirme le remplacement ET l'ajustement
+      exact du total de synergie ; un 2e test confirme qu'un rôle verrouillé
+      n'est jamais touché même quand un meilleur candidat existe. Coût
+      mesuré sur données réelles (16.14+16.13, région non précalculée) :
+      ~17s pour les 4 profils — dans le même ordre de grandeur qu'avant
+      (~26-47s), pas de régression notable malgré le passage
+      supplémentaire.
 
 Phase 8 close pour l'instant (draft, insights, résilience, flex) — prochaine idée à définir.
 

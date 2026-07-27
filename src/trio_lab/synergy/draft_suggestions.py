@@ -404,6 +404,37 @@ def _sum_synergy(
     return result
 
 
+def _combined_score(
+    data: dict, n_anchors: int, weights: dict[str, float], zstats: dict[str, tuple[float, float]]
+) -> float | None:
+    """Score composé (Σ poids × z-score) d'un candidat face à `n_anchors`
+    ancrages, à partir de `data` (une entrée de `_sum_synergy` :
+    `{"synergy_sum": ..., "stats": {col: moyenne}}`) — factorisé entre
+    `greedy_complete_draft` (compléter un rôle vide) et `refine_draft`
+    (comparer le champion en place à un remplaçant potentiel). `None` si un
+    axe pondéré manque (candidat écarté du classement, jamais traité comme
+    0)."""
+    combined = 0.0
+    for axis, weight in weights.items():
+        if weight == 0:
+            continue
+        col = ARCHETYPE_STAT_COLUMNS[axis]
+        value = data["synergy_sum"] / n_anchors if col == "synergy" else data["stats"].get(col)
+        if value is None:
+            return None
+        mean, std = zstats[col]
+        combined += weight * (value - mean) / std
+    return combined
+
+
+def _stat_columns_for(weights: dict[str, float]) -> list[str]:
+    return [
+        col
+        for axis, col in ARCHETYPE_STAT_COLUMNS.items()
+        if col != "synergy" and weights.get(axis, 0)
+    ]
+
+
 def greedy_complete_draft(
     conn: psycopg.Connection,
     window: str,
@@ -427,11 +458,7 @@ def greedy_complete_draft(
     choisis à la main."""
     placed = dict(placed)  # ne jamais muter le dict de l'appelant
     remaining = [r for r in DRAFT_ROLES if r not in placed]
-    stat_columns = [
-        col
-        for axis, col in ARCHETYPE_STAT_COLUMNS.items()
-        if col != "synergy" and weights.get(axis, 0)
-    ]
+    stat_columns = _stat_columns_for(weights)
     while remaining:
         best: tuple[str, int, float, float] | None = None  # role, cid, synergy_sum, combined_z
         for role in remaining:
@@ -445,23 +472,8 @@ def greedy_complete_draft(
             n_anchors = len(anchors)
             role_best: tuple[int, float, float] | None = None  # cid, synergy_sum, combined_z
             for cid, data in scores.items():
-                combined = 0.0
-                skip = False
-                for axis, weight in weights.items():
-                    if weight == 0:
-                        continue
-                    col = ARCHETYPE_STAT_COLUMNS[axis]
-                    value = (
-                        data["synergy_sum"] / n_anchors
-                        if col == "synergy"
-                        else data["stats"].get(col)
-                    )
-                    if value is None:
-                        skip = True
-                        break
-                    mean, std = zstats[col]
-                    combined += weight * (value - mean) / std
-                if skip:
+                combined = _combined_score(data, n_anchors, weights, zstats)
+                if combined is None:
                     continue
                 if role_best is None or combined > role_best[2]:
                     role_best = (cid, data["synergy_sum"], combined)
@@ -476,6 +488,115 @@ def greedy_complete_draft(
         placed[role] = cid
         total += synergy_sum
         remaining.remove(role)
+    return placed, total
+
+
+def _all_pairs_reliable(
+    conn: psycopg.Connection, window: str, platform: str, placed: dict[str, int], min_tier: str
+) -> bool:
+    """Vérifie que les 10 VRAIES paires d'un draft complet `placed` sont
+    toutes au moins `min_tier` — garde-fou après `refine_draft` : un
+    remplacement en cascade (rôle B choisi en fonction du rôle A déjà
+    remplacé) valide toujours la paire (A_new, B_new) au moment du choix de
+    B, mais ne revalide jamais rétroactivement un rôle NON remplacé face à
+    un remplacement survenu APRÈS lui dans le passage — cette fonction
+    referme ce trou avant de livrer le résultat."""
+    tiers_ok = _TIER_AT_LEAST[min_tier]
+    for role_x, role_y in itertools.combinations(DRAFT_ROLES, 2):
+        roles_str = _ROLES_BY_PAIR[frozenset({role_x, role_y})]
+        role_a, role_b = DUO_ROLE_KEYS[roles_str]
+        row = _duo_score(conn, window, platform, roles_str, placed[role_a], placed[role_b])
+        if row is None or row["tier"] not in tiers_ok:
+            return False
+    return True
+
+
+def refine_draft(
+    conn: psycopg.Connection,
+    window: str,
+    platform: str,
+    placed: dict[str, int],
+    total: float,
+    min_tier: str,
+    weights: dict[str, float],
+    zstats: dict[str, tuple[float, float]],
+    *,
+    locked_roles: frozenset[str] = frozenset(),
+) -> tuple[dict[str, int], float]:
+    """UN SEUL passage de remplacement sur un draft COMPLET à 5 (retour
+    utilisateur 2026-07-27 : "est-ce que le système essaie de remplacer le
+    duo de base par un autre pour voir s'il n'y a pas une meilleure
+    option ?"). Le glouton (`greedy_complete_draft`) ne revient jamais en
+    arrière : un champion posé tôt (le duo de départ compris), bon en
+    isolation, peut ne plus être optimal une fois les autres connus.
+
+    Pour chaque rôle NON verrouillé (`locked_roles` — jamais les rôles
+    choisis à la main par l'utilisateur, cf. `_manual_propose`), cherche le
+    meilleur candidat compte tenu des 4 AUTRES champions actuels (déjà
+    remplacés ou non plus tôt dans CE MÊME passage — les remplacements
+    s'enchaînent, pas de retour au point de départ) et substitue SEULEMENT
+    si ce candidat fait STRICTEMENT mieux que le champion en place sur le
+    score composé de l'archétype. Toujours 1 passage (pas itéré jusqu'à
+    convergence) : plusieurs duos de départ sont déjà essayés en amont
+    (`propose_drafts`), le gain marginal d'itérer serait probablement
+    faible face au coût (retour utilisateur, discussion).
+
+    Un remplacement en cascade peut laisser un rôle NON remplacé désaccordé
+    avec un remplacement survenu après lui (jamais revérifié après coup) —
+    `_all_pairs_reliable` valide le résultat final ; en cas d'échec (rare),
+    repli sur `placed`/`total` D'ORIGINE plutôt que de livrer une
+    composition avec une paire non fiable."""
+    original_placed, original_total = placed, total
+    placed = dict(placed)
+    stat_columns = _stat_columns_for(weights)
+    changed = False
+    for role in DRAFT_ROLES:
+        if role in locked_roles:
+            continue
+        current_champ = placed[role]
+        anchors = [
+            (_ROLES_BY_PAIR[frozenset({role, other_role})], other_role, other_champ)
+            for other_role, other_champ in placed.items()
+            if other_role != role
+        ]
+        scores = _sum_synergy(conn, window, platform, anchors, min_tier, stat_columns)
+        if not scores:
+            continue
+        n_anchors = len(anchors)
+        current_data = scores.get(current_champ)
+        current_combined = (
+            _combined_score(current_data, n_anchors, weights, zstats)
+            if current_data is not None
+            else None
+        )
+        best: tuple[int, float, float] | None = None  # cid, synergy_sum, combined
+        for cid, data in scores.items():
+            combined = _combined_score(data, n_anchors, weights, zstats)
+            if combined is None:
+                continue
+            if best is None or combined > best[2]:
+                best = (cid, data["synergy_sum"], combined)
+        if best is None:
+            continue
+        cid, synergy_sum, combined = best
+        if cid == current_champ:
+            continue
+        if current_data is None or current_combined is None:
+            # Le champion en place n'apparaît pas parmi les candidats fiables
+            # retrouvés pour ce jeu d'ancrages (peut arriver après un
+            # remplacement en cascade plus tôt dans ce passage) : comparer à
+            # une base inconnue serait arbitraire, on laisse ce rôle tel
+            # quel — `_all_pairs_reliable` traitera le cas si besoin.
+            continue
+        if combined <= current_combined:
+            continue
+        total += synergy_sum - current_data["synergy_sum"]
+        placed[role] = cid
+        changed = True
+    if not changed:
+        return original_placed, original_total
+    if not _all_pairs_reliable(conn, window, platform, placed, min_tier):
+        return original_placed, original_total
     return placed, total
 
 
@@ -694,7 +815,14 @@ def propose_drafts(
     sans composition silencieusement omis : il n'apparaît juste pas). Essaie
     TOUS les duos de départ du short-list (pas seulement le premier qui
     complète) et garde la composition FINIE dont le score archétype sur ses
-    10 vraies paires (`full_draft_score`) est le meilleur.
+    10 vraies paires (`full_draft_score`) est le meilleur, puis lui applique
+    UN passage de remplacement (`refine_draft`, retour utilisateur
+    2026-07-27 : "est-ce que le système essaie de remplacer le duo de base
+    par un autre ?") — rien n'est verrouillé ici, le duo de départ lui-même
+    peut être remplacé si un meilleur candidat existe compte tenu du reste
+    de la composition. Si le raffinement touche l'un des 2 rôles du duo de
+    départ, `seed_pairs` est recalculé sur l'état FINAL (jamais l'ancien duo
+    devenu incomplet/inexact à afficher).
 
     Retourne, par archétype réussi : `{archetype, label, members (dict
     rôle→champion_id), total_synergy, seed_pairs (1 entrée, le duo de
@@ -726,6 +854,13 @@ def propose_drafts(
             continue
         _, seed_row, placed, total = max(candidates, key=lambda c: c[0])
         role_a, role_b = DUO_ROLE_KEYS[seed_row["roles"]]
+        placed, total = refine_draft(
+            conn, window, platform, placed, total, MIN_TIER, weights, zstats
+        )
+        seed_roles_str = seed_row["roles"]
+        final_seed = _duo_score(
+            conn, window, platform, seed_roles_str, placed[role_a], placed[role_b]
+        )
         results.append(
             {
                 "archetype": key,
@@ -736,11 +871,11 @@ def propose_drafts(
                     {
                         "role_a": role_a,
                         "role_b": role_b,
-                        "champ_a": seed_row["champ_a"],
-                        "champ_b": seed_row["champ_b"],
-                        "synergy": seed_row["synergy"],
-                        "games": seed_row["games"],
-                        "tier": seed_row["tier"],
+                        "champ_a": placed[role_a],
+                        "champ_b": placed[role_b],
+                        "synergy": final_seed["synergy"] if final_seed else None,
+                        "games": final_seed["games"] if final_seed else 0,
+                        "tier": final_seed["tier"] if final_seed else None,
                     }
                 ],
                 "advice_stats": full_draft_stat_averages(

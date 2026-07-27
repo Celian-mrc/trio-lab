@@ -968,7 +968,12 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         "Compose à partir de tes champions" — 1 seul résultat, pas de
         recherche parmi plusieurs seeds (l'utilisateur a déjà fixé son point
         de départ, `seed_picks`, 1 à 5 rôles). `None` si la complétion des
-        rôles restants échoue (pas assez de données fiables)."""
+        rôles restants échoue (pas assez de données fiables).
+
+        Un passage de remplacement (`refine_draft`, retour utilisateur
+        2026-07-27) s'applique ensuite — mais AVEC `seed_picks` verrouillés :
+        l'utilisateur a choisi ces champions exprès, le raffinement ne peut
+        toucher que les rôles que LE SYSTÈME a complétés lui-même."""
         weights = draft_suggestions.ARCHETYPES[archetype_key]["weights"]
         placed, total, seed_pairs = draft_suggestions.seed_from_champions(
             conn, window, platform, seed_picks
@@ -979,6 +984,17 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         if completed is None:
             return None
         full_placed, full_total = completed
+        full_placed, full_total = draft_suggestions.refine_draft(
+            conn,
+            window,
+            platform,
+            full_placed,
+            full_total,
+            draft_suggestions.MIN_TIER,
+            weights,
+            zstats,
+            locked_roles=frozenset(seed_picks),
+        )
         return {
             "archetype": archetype_key,
             "label": draft_suggestions.ARCHETYPES[archetype_key]["label"],

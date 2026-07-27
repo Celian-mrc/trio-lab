@@ -162,3 +162,76 @@ def test_refresh_writes_nothing_when_no_archetype_completes(pg_sync):
     with pg_sync.cursor() as cur:
         cur.execute("SELECT count(*) FROM draft_suggestion")
         assert cur.fetchone()[0] == 0
+
+
+# --- refine_draft : passage de remplacement post-construction (retour
+# utilisateur 2026-07-27, "est-ce que le système essaie de remplacer le duo
+# de base par un autre pour voir s'il n'y a pas une meilleure option ?") ---
+
+
+def test_refine_draft_replaces_a_role_with_a_better_candidate(pg_sync):
+    """Le champion 6 (alternative BOT) est strictement meilleur que le
+    champion 5 (bot actuel) sur les 4 paires qui le concernent — un seul
+    passage doit le repérer et l'utiliser à la place, le duo de départ
+    (jgl/mid) compris dans les rôles éligibles au remplacement."""
+    _seed_scenario(pg_sync)  # jgl=1 mid=2 sup=3 top=4 bot=5 (bot=5 sous-optimal)
+    pg_sync.execute(
+        "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
+        " games_eff, wr, synergy, ci_low, ci_high, tier)"
+        " VALUES ('16.13', 'all', 'jgl_bot', 1, 6, 60, 60.0, 0.55, 0.05, 0.0, 0.05, 'eleve'),"
+        "        ('16.13', 'all', 'mid_bot', 2, 6, 60, 60.0, 0.55, 0.05, 0.0, 0.05, 'eleve'),"
+        "        ('16.13', 'all', 'bot_sup', 6, 3, 60, 60.0, 0.55, 0.05, 0.0, 0.05, 'eleve'),"
+        "        ('16.13', 'all', 'top_bot', 4, 6, 60, 60.0, 0.55, 0.05, 0.0, 0.05, 'eleve')"
+    )
+    weights = draft_suggestions.ARCHETYPES["synergy"]["weights"]  # {"synergy": 1.0}
+    pool, zstats = draft_suggestions.pool_and_zstats(pg_sync, "16.13", "all")
+    placed = {"top": 4, "jgl": 1, "mid": 2, "bot": 5, "sup": 3}
+    # Vraie Σ synergie des 10 paires initiales (cf. _seed_scenario) : la
+    # même valeur que dans test_refresh_materializes_composition_and_counter.
+    total = 0.30 + 0.05 + 0.04 + 0.02 + 0.02 + 0.03 + 0.01 + 0.01 + 0.01 + 0.02
+    refined_placed, refined_total = draft_suggestions.refine_draft(
+        pg_sync, "16.13", "all", placed, total, "eleve", weights, zstats
+    )
+    assert refined_placed["bot"] == 6
+    # top/jgl/mid/sup inchangés : aucun meilleur candidat pour eux ici.
+    assert refined_placed["top"] == 4
+    assert refined_placed["jgl"] == 1
+    assert refined_placed["mid"] == 2
+    assert refined_placed["sup"] == 3
+    # Total ajusté exactement de la différence des 4 paires touchées :
+    # nouvelles (0.05×4 = 0.20) − anciennes (0.01+0.01+0.01+0.02 = 0.05) = +0.15.
+    assert refined_total == pytest.approx(total + 0.15, abs=1e-6)
+
+
+def test_refine_draft_never_replaces_locked_roles(pg_sync):
+    """ "Compose à partir de tes champions" verrouille les rôles choisis à la
+    main (retour utilisateur : l'utilisateur les a choisis exprès) — même si
+    un meilleur candidat existe pour ce rôle, `refine_draft` ne doit jamais
+    le toucher quand il est dans `locked_roles`."""
+    _seed_scenario(pg_sync)
+    pg_sync.execute(
+        "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
+        " games_eff, wr, synergy, ci_low, ci_high, tier)"
+        " VALUES ('16.13', 'all', 'jgl_bot', 1, 6, 60, 60.0, 0.55, 0.05, 0.0, 0.05, 'eleve'),"
+        "        ('16.13', 'all', 'mid_bot', 2, 6, 60, 60.0, 0.55, 0.05, 0.0, 0.05, 'eleve'),"
+        "        ('16.13', 'all', 'bot_sup', 6, 3, 60, 60.0, 0.55, 0.05, 0.0, 0.05, 'eleve'),"
+        "        ('16.13', 'all', 'top_bot', 4, 6, 60, 60.0, 0.55, 0.05, 0.0, 0.05, 'eleve')"
+    )
+    weights = draft_suggestions.ARCHETYPES["synergy"]["weights"]
+    pool, zstats = draft_suggestions.pool_and_zstats(pg_sync, "16.13", "all")
+    placed = {"top": 4, "jgl": 1, "mid": 2, "bot": 5, "sup": 3}
+    total = 0.30 + 0.05 + 0.04 + 0.02 + 0.02 + 0.03 + 0.01 + 0.01 + 0.01 + 0.02
+    refined_placed, refined_total = draft_suggestions.refine_draft(
+        pg_sync,
+        "16.13",
+        "all",
+        placed,
+        total,
+        "eleve",
+        weights,
+        zstats,
+        locked_roles=frozenset({"bot"}),
+    )
+    assert refined_placed["bot"] == 5  # jamais remplacé, malgré le champion 6 meilleur
+    assert refined_placed == placed
+    assert refined_total == pytest.approx(total, abs=1e-6)
