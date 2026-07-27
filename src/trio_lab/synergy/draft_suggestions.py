@@ -6,7 +6,7 @@ Partie d'un DUO (2 champions précis, `score_duo` — bien plus de données
 qu'un trio à 3 champions précis, cf. abandon du counter trio en Phase 4,
 CLAUDE.md), puis étend rôle par rôle SANS ordre fixe : à chaque étape, le
 (rôle, champion) qui maximise un score composé (Σ poids × z-score) mêlant
-synergie ET stats d'archétype (scaling/CC/gold@15/drakes) — `synergy` est un
+synergie ET stats d'archétype (scaling/CC/gold@15/drakes/âme) — `synergy` est un
 axe pondéré parmi les autres, pas un cas à part (retour utilisateur
 2026-07-25 : "un champion d'un duo fait forcément partie d'un autre duo",
 l'archétype doit peser sur CHAQUE champion ajouté, pas seulement le duo de
@@ -78,12 +78,12 @@ _TIER_AT_LEAST = {
     "moyen": ("moyen", "eleve"),
     "eleve": ("eleve",),
 }
-_STAT_COLUMNS_SQL = "scaling, cc_blended_pct, gold_diff_15, drakes"
+_STAT_COLUMNS_SQL = "scaling, cc_blended_pct, gold_diff_15, drakes, soul_rate"
 
 # 4 profils de poids ("archétypes", poids arbitraires mais justifiés, pas de
 # test statistique dessus). "synergy" pesé comme les autres axes (100 % pour
 # "Meilleure synergie", 30 % pour les 3 profils pondérés — le reste sur
-# scaling/CC/gold/drakes, poids d'origine × 0,7, pour ne pas sacrifier la
+# scaling/CC/gold/drakes/âme, poids d'origine × 0,7, pour ne pas sacrifier la
 # synergie pure au profit du profil). Validé sur données réelles avant de
 # figer (cf. docs/ROADMAP.md).
 ARCHETYPE_STAT_COLUMNS = {
@@ -92,6 +92,7 @@ ARCHETYPE_STAT_COLUMNS = {
     "cc": "cc_blended_pct",
     "gold": "gold_diff_15",
     "drakes": "drakes",
+    "soul": "soul_rate",
 }
 ARCHETYPES: dict[str, dict] = {
     "synergy": {"label": "Meilleure synergie", "weights": {"synergy": 1.0}},
@@ -102,7 +103,13 @@ ARCHETYPES: dict[str, dict] = {
             "scaling": 0.385,
             "cc": 0.14,
             "gold": 0.07,
-            "drakes": 0.105,
+            # `soul` (taux d'obtention de l'âme, retour utilisateur
+            # 2026-07-27) plutôt que `drakes` (taux brut sur toute la
+            # partie, sans lien avec "fin de partie") : l'âme suppose 4
+            # drakes non-elder cumulés, signal propre de fermeture de game
+            # longue — poids repris tel quel de `drakes` (0.105), substitué
+            # sans nouveau calibrage.
+            "soul": 0.105,
         },
     },
     "early": {
@@ -111,8 +118,17 @@ ARCHETYPES: dict[str, dict] = {
             "synergy": 0.30,
             "scaling": 0.0,
             "cc": 0.175,
-            "gold": 0.315,
-            "drakes": 0.21,
+            # `drakes` abaissé (retour utilisateur 2026-07-27) : c'est un
+            # taux calculé sur TOUTE la partie (aucune coupure temporelle),
+            # pas un signal spécifiquement précoce — pesait presque autant
+            # que dans "Contrôle des objectifs" (0.21 vs 0.315), diluant la
+            # distinction entre les 2 profils. Ramené au niveau "axe
+            # secondaire" (0.07, même niveau que gold/scaling dans les
+            # profils où ils ne sont pas l'identité) ; le delta (0.14)
+            # reporté sur `gold` (0.315 → 0.455), l'axe qui EST l'identité
+            # "early" (gold@15).
+            "gold": 0.455,
+            "drakes": 0.07,
         },
     },
     "objectives": {

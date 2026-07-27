@@ -179,18 +179,21 @@ def test_propose_drafts_uses_different_seed_duo_per_archetype(pg_sync):
     pg_sync.execute(
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
         " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15,"
-        " drakes)"
+        " drakes, soul_rate)"
         " VALUES ('16.13', 'all', 'jgl_mid', 1, 2, 60, 60.0, 0.55, 0.30, 0.0, 0.30, 'eleve',"
-        " -0.10, 20.0, 100.0, 0.02)"
+        " -0.10, 20.0, 100.0, 0.02, 0.10)"
     )
     # Duo B (top_bot, champ 4/5) : synergie bien plus faible (+5 %) mais
-    # scaling fortement positif — perd "Meilleure synergie", gagne "Scaling".
+    # scaling fortement positif — perd "Meilleure synergie", gagne "Scaling"
+    # (poids `soul` désormais, retour utilisateur 2026-07-27 — cf.
+    # ARCHETYPES["scaling"] — d'où soul_rate renseigné ici comme les autres
+    # colonnes archétype, pour que ce duo reste éligible).
     pg_sync.execute(
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
         " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15,"
-        " drakes)"
+        " drakes, soul_rate)"
         " VALUES ('16.13', 'all', 'top_bot', 4, 5, 60, 60.0, 0.55, 0.05, 0.0, 0.05, 'eleve',"
-        " 0.10, 20.0, 100.0, 0.02)"
+        " 0.10, 20.0, 100.0, 0.02, 0.10)"
     )
     # Paires structurelles restantes : stats archétype neutres partout, pour
     # ne pas disqualifier un candidat faute de donnée.
@@ -208,9 +211,9 @@ def test_propose_drafts_uses_different_seed_duo_per_archetype(pg_sync):
         pg_sync.execute(
             "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
             " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct,"
-            " gold_diff_15, drakes)"
+            " gold_diff_15, drakes, soul_rate)"
             " VALUES ('16.13', 'all', %s, %s, %s, 60, 60.0, 0.55, %s, 0.0, %s, 'eleve',"
-            " 0.0, 20.0, 100.0, 0.02)",
+            " 0.0, 20.0, 100.0, 0.02, 0.10)",
             (roles, champ_a, champ_b, synergy, synergy),
         )
     pool, zstats = draft_suggestions.pool_and_zstats(pg_sync, "16.13", "all")

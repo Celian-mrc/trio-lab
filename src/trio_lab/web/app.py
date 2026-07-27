@@ -51,6 +51,7 @@ DRAFT_ARCHETYPE_AXIS_LABELS = {
     "cc": "CC",
     "gold": "Gold@15",
     "drakes": "Drakes",
+    "soul": "Âme",
 }
 # Volontairement limité au trio jgl/mid/sup : gate la route /champion/{role}
 # (page individuelle par champion, jamais généralisée à top/bot — Phase 7 ne

@@ -881,6 +881,39 @@ gagner") avec les données déjà en place.
       (`test_propose_drafts_uses_different_seed_duo_per_archetype`), plus
       approprié maintenant que ce détail n'est plus rendu.
 
+- [x] **Poids des archétypes revus (2026-07-27, retour utilisateur après
+      relecture des poids affichés)** : `drakes` (taux de dragons pris,
+      calculé sur TOUTE la partie — `stats/aggregate.py`, sans coupure
+      temporelle) pesait presque autant dans "Avantage early / lane" (21 %)
+      que dans "Contrôle des objectifs" (31.5 %), diluant la distinction
+      entre les 2 profils sans être un signal vraiment précoce.
+      - **"Avantage early / lane"** : `drakes` abaissé 0.21 → 0.07 (niveau
+        "axe secondaire", comme les axes non-identitaires des autres
+        profils), le delta (0.14) reporté sur `gold` (`gold_diff_15`),
+        l'axe qui EST l'identité de ce profil (0.315 → 0.455).
+      - **"Scaling / fin de partie"** : `drakes` remplacé par `soul_rate`
+        (`score_duo.soul_rate`, taux d'obtention de l'âme — 4 drakes
+        non-elder cumulés, dérivé du COMPTE de drakes, jamais de l'event
+        `DRAGON_SOUL_GIVEN` qui n'est qu'une annonce et pas l'obtention,
+        cf. mémoire `riot-timeline-quirks` et le commentaire dans
+        `stats/extract.py`) — signal propre de fermeture de game longue,
+        plus cohérent avec l'identité "fin de partie" qu'un taux d'intake
+        brut par minute. Poids repris tel quel (0.105), substitué sans
+        nouveau calibrage. Déjà agrégé jusqu'à `score_duo` (migrations
+        007/008, déjà affiché sur `/duos`) — aucune migration ni nouveau
+        pipeline nécessaire, juste ajouté à `ARCHETYPE_STAT_COLUMNS`/
+        `_STAT_COLUMNS_SQL`.
+      - "Contrôle des objectifs" inchangé (`drakes` reste son identité,
+        31.5 %, cohérent).
+      Vérifié sur données réelles (16.14+16.13, euw1, calcul en direct) :
+      les 2 profils complètent toujours, poids affichés corrects ("Scaling"
+      → "Synergie 30 % · Scaling 38 % · CC 14 % · Gold@15 7 % · Âme 10 %",
+      "Early" → "Synergie 30 % · CC 18 % · Gold@15 46 % · Drakes 7 %").
+      Les compositions PRÉCALCULÉES (`platform=all`, table
+      `draft_suggestion`) reprennent les nouveaux poids au prochain cycle
+      `refresh()` du collector, automatique — pas d'action manuelle requise
+      (même mécanisme que les révisions de poids précédentes).
+
 Phase 8 close pour l'instant (draft, insights, résilience, flex) — prochaine idée à définir.
 
 **Gap constaté en marge de cette révision (2026-07-19)** : `agg_matchup`/

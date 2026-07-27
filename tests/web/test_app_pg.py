@@ -1016,9 +1016,9 @@ def test_draft_page_suggest_renders_both_archetypes_from_shared_champion_pool(pg
     pg_sync.execute(
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
         " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15,"
-        " drakes)"
+        " drakes, soul_rate)"
         " VALUES ('16.13', 'euw1', 'jgl_mid', 1, 2, 60, 60.0, 0.55, 0.30, 0.0, 0.30, 'eleve',"
-        " -0.10, 20.0, 100.0, 0.02)"
+        " -0.10, 20.0, 100.0, 0.02, 0.10)"
     )
     # Duo B (top_bot, champ 4/5) : synergie bien plus faible (+5 %) mais
     # scaling fortement positif (+10 %, "scaling") — perd "Meilleure
@@ -1026,15 +1026,16 @@ def test_draft_page_suggest_renders_both_archetypes_from_shared_champion_pool(pg
     pg_sync.execute(
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
         " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15,"
-        " drakes)"
+        " drakes, soul_rate)"
         " VALUES ('16.13', 'euw1', 'top_bot', 4, 5, 60, 60.0, 0.55, 0.05, 0.0, 0.05, 'eleve',"
-        " 0.10, 20.0, 100.0, 0.02)"
+        " 0.10, 20.0, 100.0, 0.02, 0.10)"
     )
     # Paires structurelles restantes : stats archétype neutres et
-    # identiques partout (scaling=0.0, cc/gold/drakes = les mêmes valeurs
-    # que les 2 duos de départ) — comme ça un candidat n'est jamais exclu
-    # faute de donnée, et son z-score sur ces axes est ~0 (n'influence pas
-    # le classement, seule la synergie et le scaling des SEEDS discriminent).
+    # identiques partout (scaling=0.0, cc/gold/drakes/âme = les mêmes
+    # valeurs que les 2 duos de départ) — comme ça un candidat n'est jamais
+    # exclu faute de donnée, et son z-score sur ces axes est ~0 (n'influence
+    # pas le classement, seule la synergie et le scaling des SEEDS
+    # discriminent).
     rows = (
         ("jgl_sup", 1, 3, 0.05),
         ("mid_sup", 2, 3, 0.04),
@@ -1049,9 +1050,9 @@ def test_draft_page_suggest_renders_both_archetypes_from_shared_champion_pool(pg
         pg_sync.execute(
             "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
             " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct,"
-            " gold_diff_15, drakes)"
+            " gold_diff_15, drakes, soul_rate)"
             " VALUES ('16.13', 'euw1', %s, %s, %s, 60, 60.0, 0.55, %s, 0.0, %s, 'eleve',"
-            " 0.0, 20.0, 100.0, 0.02)",
+            " 0.0, 20.0, 100.0, 0.02, 0.10)",
             (roles, champ_a, champ_b, synergy, synergy),
         )
     resp = client.get("/draft", params={"suggest": "1"})
@@ -1146,7 +1147,7 @@ def test_draft_page_compose_without_archetype_proposes_one_per_archetype(pg_sync
         " 0.0, 0.0, 1.0, 'faible')"
     )
     # Toutes les paires (index : 1=jgl, 2=mid, 3=sup, 4=top, 5=bot) portent
-    # les mêmes scaling/cc/gold/drakes : les 4 archétypes doivent pouvoir
+    # les mêmes scaling/cc/gold/drakes/âme : les 4 archétypes doivent pouvoir
     # compléter (seule la synergie discrimine encore leur classement interne).
     rows = (
         ("jgl_mid", 1, 2, 0.30),
@@ -1164,9 +1165,9 @@ def test_draft_page_compose_without_archetype_proposes_one_per_archetype(pg_sync
         pg_sync.execute(
             "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
             " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct,"
-            " gold_diff_15, drakes)"
+            " gold_diff_15, drakes, soul_rate)"
             " VALUES ('16.13', 'euw1', %s, %s, %s, 60, 60.0, 0.55, %s, 0.0, %s, 'eleve',"
-            " 0.05, 20.0, 100.0, 0.02)",
+            " 0.05, 20.0, 100.0, 0.02, 0.10)",
             (roles, champ_a, champ_b, synergy, synergy),
         )
     resp = client.get("/draft", params={"seed_jgl": "Lee Sin", "seed_mid": "Ahri"})
