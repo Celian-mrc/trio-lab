@@ -1012,6 +1012,37 @@ gagner") avec les données déjà en place.
       pour le survol. Test web étendu à 3 pentades (au lieu de 2) pour
       couvrir concrètement le rang "fiable".
 
+- [x] **"Personnalise tes poids" — 5e archétype à poids libres (2026-07-28,
+      retour utilisateur : "que l'utilisateur décide lui-même des poids
+      afin d'avoir un archétype custom" + "un 5ème archétype fixe selon les
+      poids de l'utilisateur")** :
+      - `synergy.draft_suggestions.propose_for_weights` (ex-`_propose_for_
+        weights`, rendue publique) : logique par-archétype extraite de
+        `propose_drafts` (seeds/diversité/fiabilité, cf. entrées
+        précédentes) — `propose_drafts` devient une simple boucle sur les 4
+        archétypes fixes appelant cette fonction, réutilisée telle quelle
+        pour un 5e jeu de poids.
+      - 6 champs (Synergie/Scaling/CC/Gold@15/Drakes/Âme) — validation
+        stricte (`_parse_custom_weights`) : la somme doit faire 100 % (±0.5
+        pour l'arrondi), jamais une répartition automatique silencieuse ;
+        poids négatifs refusés ; page fraîche (aucun champ rempli) → ni
+        carte ni erreur, pas un cas d'échec.
+      - Section dédiée "Personnalise tes poids", sous "Compositions
+        suggérées" — la carte générée a sa PROPRE place (pas mélangée à la
+        grille des 4 archétypes fixes, jamais 5 cartes sur une ligne).
+      - TOUJOURS en direct, y compris sur la région par défaut où les 4
+        autres sont précalculées : un poids personnalisé ne peut jamais
+        être matérialisé à l'avance par le collector (il ne connaît pas les
+        poids d'un futur visiteur). Coût mesuré sur données réelles :
+        ~4,2s pour un jeu de poids (3 variantes, mêmes boutons 1/2/3 que
+        les archétypes fixes, réutilisation directe de `draft_group`).
+      - `weights` ajouté au dict brut retourné par `propose_for_weights`/
+        `_manual_propose` : `_archetype_weights_display` (web/app.py) prend
+        désormais un dict de poids directement plutôt qu'une clé
+        d'archétype à chercher dans `ARCHETYPES` (repli sur `ARCHETYPES`
+        pour les lignes précalculées, qui ne stockent que des archétypes
+        fixes de toute façon).
+
 Phase 8 close pour l'instant (draft, insights, résilience, flex) — prochaine idée à définir.
 
 **Gap constaté en marge de cette révision (2026-07-19)** : `agg_matchup`/

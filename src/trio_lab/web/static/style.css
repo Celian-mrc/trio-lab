@@ -333,6 +333,26 @@ th[data-tooltip]::after, label[data-tooltip]::after {
   0% { left: -40%; }
   100% { left: 100%; }
 }
+.draft-custom {
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 1rem 1.2rem; margin: 1.25rem 0; display: flex; flex-direction: column; gap: 0.9rem;
+}
+.draft-custom h2 { margin: 0; }
+.draft-custom-form { display: flex; flex-direction: column; gap: 0.9rem; }
+.draft-custom-fields {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr)); gap: 0.6rem;
+}
+.draft-custom-field {
+  display: flex; flex-direction: column; gap: 0.25rem;
+  background: var(--muted); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 0.4rem 0.6rem; font-size: 0.72rem; color: var(--muted-fg);
+}
+.draft-custom-field input {
+  background: transparent; color: var(--foreground); border: none;
+  font-size: 0.95rem; padding: 0; width: 100%;
+}
+.draft-custom-field input:focus { outline: none; }
+.draft-custom-result { max-width: 22rem; }
 
 /* --- Compositions suggérées (draft, retour utilisateur 2026-07-24) :
    calculées uniquement sur clic (bouton .button-like, jamais au chargement

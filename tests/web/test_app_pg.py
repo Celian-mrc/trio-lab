@@ -1118,6 +1118,68 @@ def test_draft_page_suggest_shows_variant_tabs_for_multiple_propositions(pg_sync
     assert 'data-selection="reliable" title="La plus fiable"' in resp.text
 
 
+def test_draft_page_custom_weights_shows_own_section(pg_sync, client):
+    """ "Personnalise tes poids" (retour utilisateur 2026-07-28, "que
+    l'utilisateur décide lui-même des poids afin d'avoir un archétype
+    custom") : poids valides (somme = 100) → une composition apparaît dans
+    sa PROPRE section (`draft-custom-result`), jamais mélangée à la grille
+    des 4 archétypes fixes."""
+    _seed_suggest_scenario(pg_sync)
+    resp = client.get(
+        "/draft",
+        params={
+            "w_synergy": "100",
+            "w_scaling": "0",
+            "w_cc": "0",
+            "w_gold": "0",
+            "w_drakes": "0",
+            "w_soul": "0",
+        },
+    )
+    assert resp.status_code == 200
+    assert "Personnalisé" in resp.text
+    assert '<div class="draft-custom-result">' in resp.text
+    for name in ("Vi", "Lee Sin", "Ahri", "Orianna", "Thresh"):
+        assert name in resp.text
+
+
+def test_draft_page_custom_weights_requires_sum_to_100(pg_sync, client):
+    """Somme ≠ 100 : message d'erreur explicite, jamais une correction
+    silencieuse (retour utilisateur : préciser que la somme doit faire
+    100 %)."""
+    _seed_suggest_scenario(pg_sync)
+    resp = client.get(
+        "/draft",
+        params={"w_synergy": "50", "w_scaling": "20", "w_cc": "0", "w_gold": "0"},
+    )
+    assert resp.status_code == 200
+    assert "La somme des poids doit faire 100" in resp.text
+    assert "70" in resp.text  # rappelle la somme actuelle
+    assert '<div class="draft-custom-result">' not in resp.text
+
+
+def test_draft_page_custom_weights_rejects_negative(pg_sync, client):
+    """Poids négatif : message d'erreur, jamais silencieusement clampé à 0."""
+    _seed_suggest_scenario(pg_sync)
+    resp = client.get(
+        "/draft",
+        params={"w_synergy": "-10", "w_scaling": "110", "w_cc": "0", "w_gold": "0"},
+    )
+    assert resp.status_code == 200
+    assert "ne peuvent pas être négatifs" in resp.text
+
+
+def test_draft_page_no_custom_weights_shows_neither_card_nor_error(pg_sync, client):
+    """Page fraîche (aucun champ de poids rempli) : ni carte, ni message
+    d'erreur — le formulaire "Personnalise tes poids" n'a jamais été
+    soumis, ce n'est pas un cas d'échec."""
+    _seed_suggest_scenario(pg_sync)
+    resp = client.get("/draft")
+    assert resp.status_code == 200
+    assert '<div class="draft-custom-result">' not in resp.text
+    assert "La somme des poids doit faire 100" not in resp.text
+
+
 def test_draft_page_suggest_shows_counters(pg_sync, client):
     """Contres 1v1 (retour utilisateur 2026-07-25) : le rôle le plus
     exploitable de la composition affiche ses contres — toujours du 1v1 par

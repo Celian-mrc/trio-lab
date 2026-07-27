@@ -53,6 +53,9 @@ DRAFT_ARCHETYPE_AXIS_LABELS = {
     "drakes": "Drakes",
     "soul": "Âme",
 }
+# Ordre d'affichage des champs du formulaire "Personnalise tes poids"
+# (retour utilisateur 2026-07-28) — mêmes clés que ARCHETYPE_STAT_COLUMNS.
+CUSTOM_WEIGHT_AXES = ("synergy", "scaling", "cc", "gold", "drakes", "soul")
 # Volontairement limité au trio jgl/mid/sup : gate la route /champion/{role}
 # (page individuelle par champion, jamais généralisée à top/bot — Phase 7 ne
 # généralise que le duo, cf. docs/ROADMAP.md). Exposé en global Jinja pour que
@@ -906,11 +909,12 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             ],
         }
 
-    def _archetype_weights_display(archetype_key: str) -> list[dict]:
-        """Poids de chaque axe pour cet archétype, prêts à afficher (retour
-        utilisateur 2026-07-26) — axes à poids nul omis (ex. scaling=0 pour
-        "Avantage early / lane")."""
-        weights = draft_suggestions.ARCHETYPES[archetype_key]["weights"]
+    def _archetype_weights_display(weights: dict[str, float]) -> list[dict]:
+        """Poids de chaque axe, prêts à afficher (retour utilisateur
+        2026-07-26) — axes à poids nul omis (ex. scaling=0 pour "Avantage
+        early / lane"). Prend directement le dict de poids (pas une clé
+        d'archétype) : fonctionne aussi bien pour les 4 archétypes fixes que
+        pour des poids personnalisés (retour utilisateur 2026-07-28)."""
         return [
             {"label": DRAFT_ARCHETYPE_AXIS_LABELS[axis], "value": value}
             for axis, value in weights.items()
@@ -954,12 +958,13 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             if stats
             else None
         )
+        weights = raw.get("weights") or draft_suggestions.ARCHETYPES[raw["archetype"]]["weights"]
         return {
             "archetype": raw["archetype"],
             "suggestion_rank": raw["suggestion_rank"],
             "selection": raw["selection"],
             "label": raw["label"],
-            "weights": _archetype_weights_display(raw["archetype"]),
+            "weights": _archetype_weights_display(weights),
             "members": members,
             "total_synergy": raw["total_synergy"],
             "wr": wr,
@@ -1028,6 +1033,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             "archetype": archetype_key,
             "suggestion_rank": 0,
             "selection": "score",
+            "weights": weights,
             "label": draft_suggestions.ARCHETYPES[archetype_key]["label"],
             "members": full_placed,
             "total_synergy": full_total,
@@ -1038,6 +1044,33 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             "counters": draft_suggestions.draft_counters(conn, window, platform, full_placed),
             "strengths": draft_suggestions.draft_strengths(conn, window, platform, full_placed),
         }
+
+    def _parse_custom_weights(
+        raw_weights: dict[str, str | None],
+    ) -> tuple[dict[str, float] | None, str | None]:
+        """Lit les 6 champs `w_<axe>` du formulaire "Personnalise tes poids"
+        (retour utilisateur 2026-07-28 : "que l'utilisateur décide lui-même
+        des poids") — `(None, None)` si le formulaire n'a jamais été soumis
+        (tous les champs vides, cas de la page fraîche), `(None, message)`
+        si soumis mais invalide (jamais une correction silencieuse — poids
+        négatif ou somme ≠ 100, tolérance ±0.5 pour l'arrondi d'un champ
+        décimal), `(weights, None)` sinon — fractions de 1 (mêmes clés que
+        `ARCHETYPE_STAT_COLUMNS`), prêtes pour `propose_for_weights`."""
+        if not any(v for v in raw_weights.values()):
+            return None, None
+        try:
+            values = {
+                axis: float(raw_weights[axis]) if raw_weights[axis] else 0.0
+                for axis in CUSTOM_WEIGHT_AXES
+            }
+        except ValueError:
+            return None, "Poids invalides : utilise des nombres."
+        if any(v < 0 for v in values.values()):
+            return None, "Les poids ne peuvent pas être négatifs."
+        total = sum(values.values())
+        if abs(total - 100.0) > 0.5:
+            return None, f"La somme des poids doit faire 100 % (actuellement {total:.0f} %)."
+        return {axis: v / 100.0 for axis, v in values.items()}, None
 
     @app.get("/draft", response_class=HTMLResponse)
     def draft_page(
@@ -1051,6 +1084,12 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         seed_bot: str | None = None,
         seed_sup: str | None = None,
         archetype: str | None = None,
+        w_synergy: str | None = None,
+        w_scaling: str | None = None,
+        w_cc: str | None = None,
+        w_gold: str | None = None,
+        w_drakes: str | None = None,
+        w_soul: str | None = None,
     ):
         raw_seeds = {
             "top": seed_top,
@@ -1063,6 +1102,22 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         # pour le reconstruire tel quel après un changement de fenêtre/région
         # (même principe que filters_qs ailleurs sur le site).
         current_seed_params = {f"seed_{role}": v or "" for role, v in raw_seeds.items()}
+
+        # "Personnalise tes poids" (retour utilisateur 2026-07-28) : 5e
+        # archétype dans "Compositions suggérées", TOUJOURS en direct (même
+        # sur la région par défaut où les 4 autres sont précalculées — un
+        # poids personnalisé ne peut jamais être matérialisé à l'avance par
+        # le collector, qui ne connaît pas les poids d'un futur visiteur).
+        raw_weights = {
+            "synergy": w_synergy,
+            "scaling": w_scaling,
+            "cc": w_cc,
+            "gold": w_gold,
+            "drakes": w_drakes,
+            "soul": w_soul,
+        }
+        current_weight_params = {f"w_{axis}": v or "" for axis, v in raw_weights.items()}
+        custom_weights, custom_error = _parse_custom_weights(raw_weights)
 
         with request.app.state.pool.connection() as conn:
             window, platform, context = resolve_context(conn, window, platform)
@@ -1106,6 +1161,25 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                     [_build_draft_result(raw, include_seed_pairs=False) for raw in raws]
                 )
 
+            # 5e archétype "Personnalise tes poids" : sa propre section, à
+            # part des 4 fixes (retour utilisateur 2026-07-28 — éviter de
+            # forcer une 5e carte dans la grille des 4 archétypes fixes).
+            custom_draft = None
+            if custom_weights is not None:
+                pool, zstats = _get_pool_zstats()
+                custom_raws = draft_suggestions.propose_for_weights(
+                    conn, window, platform, pool, zstats, "custom", "Personnalisé", custom_weights
+                )
+                if custom_raws:
+                    custom_draft = _group_draft_variants(
+                        [_build_draft_result(raw, include_seed_pairs=False) for raw in custom_raws]
+                    )[0]
+                else:
+                    custom_error = (
+                        "Pas assez de données fiables pour cette répartition de poids —"
+                        " essaie d'autres valeurs."
+                    )
+
             # Formulaire soumis dès que 1 champion ou un archétype est fourni
             # — une page fraîche n'a ni l'un ni l'autre dans l'URL. Archétype
             # non précisé (retour utilisateur 2026-07-26) : une proposition
@@ -1135,6 +1209,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         def _draft_url(**overrides: str) -> str:
             params = {
                 **current_seed_params,
+                **current_weight_params,
                 "archetype": archetype or "",
                 **overrides,
                 "window": window or "",
@@ -1159,6 +1234,11 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 "selected_archetype": archetype or "",
                 "manual_results": manual_results,
                 "manual_error": manual_error,
+                "custom_draft": custom_draft,
+                "custom_error": custom_error,
+                "custom_weight_axes": CUSTOM_WEIGHT_AXES,
+                "custom_weight_axis_labels": DRAFT_ARCHETYPE_AXIS_LABELS,
+                "custom_weight_values": raw_weights,
             },
         )
 

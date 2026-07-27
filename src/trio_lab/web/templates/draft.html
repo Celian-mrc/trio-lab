@@ -168,4 +168,30 @@
   {% endif %}
   {% endif %}
 </section>
+
+<section class="draft-custom">
+  <h2>Personnalise tes poids</h2>
+  <form method="get" action="/draft" class="draft-custom-form">
+    <input type="hidden" name="window" value="{{ window }}">
+    <input type="hidden" name="platform" value="{{ platform }}">
+    {% for role in draft_roles %}
+    <input type="hidden" name="seed_{{ role }}" value="{{ seed_names[role] }}">
+    {% endfor %}
+    <input type="hidden" name="archetype" value="{{ selected_archetype }}">
+    <div class="draft-custom-fields">
+      {% for axis in custom_weight_axes %}
+      <label class="draft-custom-field">
+        {{ custom_weight_axis_labels[axis] }}
+        <input type="number" name="w_{{ axis }}" value="{{ custom_weight_values[axis] }}" min="0" max="100" step="1" placeholder="0">
+      </label>
+      {% endfor %}
+    </div>
+    <button type="submit" class="button-like">Générer ma composition</button>
+  </form>
+  {% if custom_error %}
+  <p class="empty">{{ custom_error }}</p>
+  {% elif custom_draft %}
+  <div class="draft-custom-result">{{ draft_group(custom_draft) }}</div>
+  {% endif %}
+</section>
 {% endblock %}

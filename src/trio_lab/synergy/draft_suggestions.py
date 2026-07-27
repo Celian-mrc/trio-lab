@@ -866,20 +866,25 @@ def draft_strengths(
     )
 
 
-def propose_drafts(
+def propose_for_weights(
     conn: psycopg.Connection,
     window: str,
     platform: str,
     pool: list[dict],
     zstats: dict[str, tuple[float, float]],
+    archetype_key: str,
+    label: str,
+    weights: dict[str, float],
 ) -> list[dict]:
-    """Jusqu'à 3 compositions par archétype de `ARCHETYPES` (retour
-    utilisateur 2026-07-27 : "des boutons 1/2/3... 3 propositions par
-    archétype" — jamais un archétype sans composition silencieusement omis :
-    il n'apparaît juste pas, jamais forcé à 3 non plus si la diversité
-    manque). Essaie TOUS les duos de départ du short-list (pas seulement le
-    premier qui complète), calcule le score archétype de chaque composition
-    FINIE sur ses 10 vraies paires (`full_draft_score`), puis sélectionne :
+    """Jusqu'à 3 compositions pour UN jeu de poids donné (retour utilisateur
+    2026-07-27 : "des boutons 1/2/3... 3 propositions par archétype" —
+    jamais forcé à 3 si la diversité manque). Factorisée hors de
+    `propose_drafts` (retour utilisateur 2026-07-28, poids personnalisés)
+    pour être réutilisable aussi bien par les 4 archétypes fixes que par un
+    5e jeu de poids choisi par l'utilisateur. Essaie TOUS les duos de départ
+    du short-list (pas seulement le premier qui complète), calcule le score
+    de chaque composition FINIE sur ses 10 vraies paires
+    (`full_draft_score`), puis sélectionne :
 
     - rang 0 : le meilleur score.
     - rang 1 : le 2e meilleur score suffisamment DIFFÉRENT du rang 0
@@ -908,107 +913,127 @@ def propose_drafts(
     est recalculé sur l'état FINAL (jamais l'ancien duo devenu
     incomplet/inexact à afficher).
 
-    Retourne une liste PLATE (pas groupée par archétype) — chaque entrée :
-    `{archetype, label, suggestion_rank (0-2), selection ("score"|"diverse"|
-    "reliable"), members (dict rôle→champion_id), total_synergy, seed_pairs
-    (1 entrée, le duo de départ), advice_stats (moyennes scaling/cc/gold/wr/
-    ci_low/ci_high sur les 10 vraies paires, `DISPLAY_STAT_COLUMNS`, ou
-    None), counters (points faibles), strengths (points forts)}` — brut
-    (`champion_id`, pas de nom/icône), même forme que lue depuis
-    `draft_suggestion(_counter)` matérialisées par `refresh`, pour que le
-    rendu (`web/app.py`) traite les 2 sources de façon identique."""
+    Retourne une liste (0 à 3 entrées) : `{archetype, label, suggestion_rank
+    (0-2), selection ("score"|"diverse"|"reliable"), weights, members (dict
+    rôle→champion_id), total_synergy, seed_pairs (1 entrée, le duo de
+    départ), advice_stats (moyennes scaling/cc/gold/wr/ci_low/ci_high sur
+    les 10 vraies paires, `DISPLAY_STAT_COLUMNS`, ou None), counters (points
+    faibles), strengths (points forts)}` — brut (`champion_id`, pas de
+    nom/icône), même forme que lue depuis `draft_suggestion(_counter)`
+    matérialisées par `refresh`, pour que le rendu (`web/app.py`) traite
+    les 2 sources de façon identique."""
+    seeds = archetype_seed_order(pool, weights, zstats)
+    candidates: list[tuple[float, dict, dict, float]] = []
+    for seed_row in seeds[:SEED_SHORTLIST]:
+        role_a, role_b = DUO_ROLE_KEYS[seed_row["roles"]]
+        seed_placed = {role_a: seed_row["champ_a"], role_b: seed_row["champ_b"]}
+        completed = greedy_complete_draft(
+            conn, window, platform, seed_placed, seed_row["synergy"], MIN_TIER, weights, zstats
+        )
+        if completed is None:
+            continue
+        placed, total = completed
+        score = full_draft_score(conn, window, platform, placed, weights, zstats)
+        if score is None:
+            continue
+        candidates.append((score, seed_row, placed, total))
+    if not candidates:
+        return []
+
+    by_score = sorted(range(len(candidates)), key=lambda i: -candidates[i][0])
+    selected_idx: list[int] = []
+    selected_placed: list[dict[str, int]] = []
+    selections: list[str] = []
+
+    for i in by_score:
+        if len(selected_idx) >= 2:
+            break
+        placed_i = candidates[i][2]
+        if _is_diverse_enough(placed_i, selected_placed):
+            selected_idx.append(i)
+            selected_placed.append(placed_i)
+            selections.append("score" if not selections else "diverse")
+
+    if len(selected_idx) == 2:
+        eligible = [
+            i
+            for i in by_score
+            if i not in selected_idx and _is_diverse_enough(candidates[i][2], selected_placed)
+        ]
+        if eligible:
+            best_reliable = max(
+                eligible,
+                key=lambda i: _min_games_eff(conn, window, platform, candidates[i][2]),
+            )
+            selected_idx.append(best_reliable)
+            selected_placed.append(candidates[best_reliable][2])
+            selections.append("reliable")
+
+    results: list[dict] = []
+    seen_final: list[frozenset[int]] = []
+    rank = 0
+    for i, selection in zip(selected_idx, selections, strict=True):
+        _, seed_row, placed, total = candidates[i]
+        placed, total = refine_draft(
+            conn, window, platform, placed, total, MIN_TIER, weights, zstats
+        )
+        final_set = _champion_set(placed)
+        if final_set in seen_final:
+            continue  # raffinement convergé vers un rang déjà retenu
+        seen_final.append(final_set)
+        role_a, role_b = DUO_ROLE_KEYS[seed_row["roles"]]
+        final_seed = _duo_score(
+            conn, window, platform, seed_row["roles"], placed[role_a], placed[role_b]
+        )
+        results.append(
+            {
+                "archetype": archetype_key,
+                "label": label,
+                "suggestion_rank": rank,
+                "selection": selection,
+                "weights": weights,
+                "members": placed,
+                "total_synergy": total,
+                "seed_pairs": [
+                    {
+                        "role_a": role_a,
+                        "role_b": role_b,
+                        "champ_a": placed[role_a],
+                        "champ_b": placed[role_b],
+                        "synergy": final_seed["synergy"] if final_seed else None,
+                        "games": final_seed["games"] if final_seed else 0,
+                        "tier": final_seed["tier"] if final_seed else None,
+                    }
+                ],
+                "advice_stats": full_draft_stat_averages(
+                    conn, window, platform, placed, DISPLAY_STAT_COLUMNS
+                ),
+                "counters": draft_counters(conn, window, platform, placed),
+                "strengths": draft_strengths(conn, window, platform, placed),
+            }
+        )
+        rank += 1
+    return results
+
+
+def propose_drafts(
+    conn: psycopg.Connection,
+    window: str,
+    platform: str,
+    pool: list[dict],
+    zstats: dict[str, tuple[float, float]],
+) -> list[dict]:
+    """Une composition (jusqu'à 3 variantes, cf. `propose_for_weights`) par
+    archétype de `ARCHETYPES` — jamais un archétype sans composition
+    silencieusement omis : il n'apparaît juste pas. Retourne une liste
+    PLATE (pas groupée par archétype)."""
     results: list[dict] = []
     for key, archetype in ARCHETYPES.items():
-        weights = archetype["weights"]
-        seeds = archetype_seed_order(pool, weights, zstats)
-        candidates: list[tuple[float, dict, dict, float]] = []
-        for seed_row in seeds[:SEED_SHORTLIST]:
-            role_a, role_b = DUO_ROLE_KEYS[seed_row["roles"]]
-            seed_placed = {role_a: seed_row["champ_a"], role_b: seed_row["champ_b"]}
-            completed = greedy_complete_draft(
-                conn, window, platform, seed_placed, seed_row["synergy"], MIN_TIER, weights, zstats
+        results.extend(
+            propose_for_weights(
+                conn, window, platform, pool, zstats, key, archetype["label"], archetype["weights"]
             )
-            if completed is None:
-                continue
-            placed, total = completed
-            score = full_draft_score(conn, window, platform, placed, weights, zstats)
-            if score is None:
-                continue
-            candidates.append((score, seed_row, placed, total))
-        if not candidates:
-            continue
-
-        by_score = sorted(range(len(candidates)), key=lambda i: -candidates[i][0])
-        selected_idx: list[int] = []
-        selected_placed: list[dict[str, int]] = []
-        selections: list[str] = []
-
-        for i in by_score:
-            if len(selected_idx) >= 2:
-                break
-            placed_i = candidates[i][2]
-            if _is_diverse_enough(placed_i, selected_placed):
-                selected_idx.append(i)
-                selected_placed.append(placed_i)
-                selections.append("score" if not selections else "diverse")
-
-        if len(selected_idx) == 2:
-            eligible = [
-                i
-                for i in by_score
-                if i not in selected_idx and _is_diverse_enough(candidates[i][2], selected_placed)
-            ]
-            if eligible:
-                best_reliable = max(
-                    eligible,
-                    key=lambda i: _min_games_eff(conn, window, platform, candidates[i][2]),
-                )
-                selected_idx.append(best_reliable)
-                selected_placed.append(candidates[best_reliable][2])
-                selections.append("reliable")
-
-        seen_final: list[frozenset[int]] = []
-        rank = 0
-        for i, selection in zip(selected_idx, selections, strict=True):
-            _, seed_row, placed, total = candidates[i]
-            placed, total = refine_draft(
-                conn, window, platform, placed, total, MIN_TIER, weights, zstats
-            )
-            final_set = _champion_set(placed)
-            if final_set in seen_final:
-                continue  # raffinement convergé vers un rang déjà retenu
-            seen_final.append(final_set)
-            role_a, role_b = DUO_ROLE_KEYS[seed_row["roles"]]
-            final_seed = _duo_score(
-                conn, window, platform, seed_row["roles"], placed[role_a], placed[role_b]
-            )
-            results.append(
-                {
-                    "archetype": key,
-                    "label": archetype["label"],
-                    "suggestion_rank": rank,
-                    "selection": selection,
-                    "members": placed,
-                    "total_synergy": total,
-                    "seed_pairs": [
-                        {
-                            "role_a": role_a,
-                            "role_b": role_b,
-                            "champ_a": placed[role_a],
-                            "champ_b": placed[role_b],
-                            "synergy": final_seed["synergy"] if final_seed else None,
-                            "games": final_seed["games"] if final_seed else 0,
-                            "tier": final_seed["tier"] if final_seed else None,
-                        }
-                    ],
-                    "advice_stats": full_draft_stat_averages(
-                        conn, window, platform, placed, DISPLAY_STAT_COLUMNS
-                    ),
-                    "counters": draft_counters(conn, window, platform, placed),
-                    "strengths": draft_strengths(conn, window, platform, placed),
-                }
-            )
-            rank += 1
+        )
     return results
 
 
