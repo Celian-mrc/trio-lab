@@ -6,7 +6,7 @@
   <p class="draft-counters-title">{{ title }}</p>
   <div class="draft-counters-row">
     <span class="role-badge role-{{ block.primary.role }}">{{ block.primary.role | upper }}</span>
-    <span class="meta">{{ block.primary.against.name }} {{ verb }} :</span>
+    <span class="meta">{{ block.primary.against.name }} {{ verb }}</span>
     {% for p in block.primary.picks %}
     <span class="champ counter-chip">
       {% if p.champion.icon_url %}<img src="{{ p.champion.icon_url }}" alt="" width="20" height="20">{% endif %}
@@ -17,7 +17,7 @@
   {% for s in block.secondary %}
   <div class="draft-counters-row">
     <span class="role-badge role-{{ s.role }}">{{ s.role | upper }}</span>
-    <span class="meta">{{ s.against.name }} {{ verb }} :</span>
+    <span class="meta">{{ s.against.name }} {{ verb }}</span>
     <span class="champ counter-chip">
       {% if s.pick.champion.icon_url %}<img src="{{ s.pick.champion.icon_url }}" alt="" width="20" height="20">{% endif %}
       {{ s.pick.champion.name }} <span class="{{ color }}">{{ s.pick.delta | signed_pct }}</span>
@@ -43,19 +43,17 @@
     </span>
     {% endfor %}
   </div>
-  <p class="meta">Synergie totale :
+  <p class="meta">Synergie :
     <span class="{{ 'pos' if d.total_synergy > 0 else 'neg' if d.total_synergy < 0 }}">{{ d.total_synergy | signed_pct }}</span>
+    {% if d.wr %}
+    · Winrate : {{ d.wr.value | pct }} <span class="sub">[{{ d.wr.ci_low | pct }} – {{ d.wr.ci_high | pct }}]</span>
+    {% endif %}
   </p>
-  {% if d.wr %}
-  <p class="meta">Winrate estimé : {{ d.wr.value | pct }}
-    <span class="sub">[{{ d.wr.ci_low | pct }} – {{ d.wr.ci_high | pct }}]</span>
-  </p>
-  {% endif %}
   {% if d.seed_pairs %}
   <ul class="draft-seed-pairs">
     {% for p in d.seed_pairs %}
-    <li>{{ p.role_label_a }}/{{ p.role_label_b }} : {{ p.champion_a.name }} + {{ p.champion_b.name }} —
-      {% if p.tier %}{{ p.synergy | signed_pct }}, fiabilité {{ p.tier }} ({{ p.games }} games){% else %}aucune donnée ensemble{% endif %}
+    <li>{{ p.champion_a.name }} + {{ p.champion_b.name }} —
+      {% if p.tier %}{{ p.synergy | signed_pct }}, {{ p.tier }} ({{ p.games }}){% else %}aucune donnée{% endif %}
     </li>
     {% endfor %}
   </ul>
@@ -66,24 +64,17 @@
   </ul>
   {% endif %}
   {% if d.strengths %}
-  {{ matchup_block("Points forts de cette composition (rôle le plus dominant en premier) — elle domine ces champions adverses", d.strengths, "domine", "pos") }}
+  {{ matchup_block("Points forts", d.strengths, "domine :", "pos") }}
   {% endif %}
   {% if d.counters %}
-  {{ matchup_block("Points faibles de cette composition (rôle le plus exploitable en premier) — ces champions, joués par l'adversaire, la mettent en difficulté", d.counters, "peut être puni(e) par", "neg") }}
+  {{ matchup_block("Points faibles", d.counters, "puni(e) par :", "neg") }}
   {% endif %}
   {% if not d.strengths and not d.counters %}
-  <p class="meta sub">Aucun matchup 1v1 notable trouvé pour cette composition (ni point fort, ni point faible).</p>
+  <p class="meta">Aucun contre 1v1 notable.</p>
   {% endif %}
 </div>
 {% endmacro %}
 <h1>Compositions et contres</h1>
-<p class="meta">Propose des compositions complètes à 5 (indépendantes de l'adversaire) et repère leurs
-  <strong>points forts</strong> (les champions adverses qu'elle domine) et <strong>points
-  faibles</strong> (les champions qui, joués par l'adversaire, la mettent le plus en difficulté).
-  Toujours du <strong>1v1 par rôle</strong> (même champion contre même champion, ex. top contre top) :
-  contrer une composition entière n'a pas de sens mesurable, un rôle à la fois oui. Le rôle le plus
-  concerné affiche jusqu'à {{ draft_counter_primary_picks }} champions ; les
-  {{ draft_counter_secondary_roles }} rôles suivants, 1 chacun.</p>
 <datalist id="champion-names">
   {% for name in champion_names %}<option value="{{ name }}">{% endfor %}
 </datalist>
@@ -108,13 +99,6 @@
 
 <section class="draft-compose">
   <h2>Compose à partir de tes champions</h2>
-  <p class="meta">Choisis 1 à 5 champions (rôle libre) : le système complète les rôles restants avec le
-    même algorithme que les compositions suggérées ci-dessous — synergie ET stats de l'archétype
-    pesées à chaque champion ajouté, pas seulement les tiens. Archétype optionnel : laisse « choisir… »
-    pour obtenir une proposition par archétype (comme ci-dessous), ou fixe-en un pour n'en calculer
-    qu'un seul, plus rapide. La fiabilité de chaque paire que TU choisis est affichée telle quelle,
-    même si elle n'a jamais été jouée ensemble — ça ne bloque jamais la suite, contrairement aux rôles
-    que le système complète, qui restent filtrés sur les duos les plus fiables.</p>
   <form method="get" action="/draft" class="draft-compose-form">
     <input type="hidden" name="window" value="{{ window }}">
     <input type="hidden" name="platform" value="{{ platform }}">
@@ -127,14 +111,12 @@
       {% endfor %}
     </div>
     <div class="draft-compose-submit">
-      <label class="draft-compose-archetype">Archétype
-        <select name="archetype">
-          <option value="">choisir…</option>
-          {% for key, a in archetypes.items() %}
-          <option value="{{ key }}" {{ 'selected' if key == selected_archetype }}>{{ a.label }}</option>
-          {% endfor %}
-        </select>
-      </label>
+      <select name="archetype">
+        <option value="">tous les archétypes</option>
+        {% for key, a in archetypes.items() %}
+        <option value="{{ key }}" {{ 'selected' if key == selected_archetype }}>{{ a.label }}</option>
+        {% endfor %}
+      </select>
       <button type="submit" class="button-like">Compléter la draft</button>
       <span class="draft-compose-loadbar" aria-hidden="true"></span>
     </div>
@@ -155,17 +137,9 @@
     <a class="button-like" href="{{ suggest_url }}">Proposer des compositions</a>
     {% endif %}
   </div>
-  <p class="meta">Part d'un <strong>duo</strong> (2 champions précis, bien mieux renseigné qu'un trio à
-    3) parmi les 10 paires de rôles possibles, puis étend rôle par rôle en ajoutant à chaque étape le
-    champion qui maximise un score composé de synergie ET de stats d'archétype — 4 profils pondèrent
-    <strong>scaling</strong>, <strong>gold@15</strong>, <strong>CC</strong> et <strong>prise de
-    drakes</strong> différemment. Plusieurs duos de départ sont essayés ; la composition FINIE retenue
-    est celle au meilleur score, pas forcément celle du duo de départ le mieux classé isolément.
-    Précalculées automatiquement pour « toutes régions » ; pour une région précise, calcul à la demande
-    (bouton) — plus long (~30-47s).</p>
   {% if suggested_drafts is not none %}
   {% if not suggested_drafts %}
-  <p class="empty">Pas assez de duos fiables sur cette fenêtre pour proposer des compositions.</p>
+  <p class="empty">Pas assez de duos fiables sur cette fenêtre.</p>
   {% else %}
   <div class="draft-suggest-grid">
     {% for d in suggested_drafts %}{{ draft_card(d) }}{% endfor %}

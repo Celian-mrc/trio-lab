@@ -828,6 +828,27 @@ gagner") avec les données déjà en place.
       ~17s pour les 4 profils — dans le même ordre de grandeur qu'avant
       (~26-47s), pas de régression notable malgré le passage
       supplémentaire.
+- [x] **`/draft` épuré (2026-07-27, retour utilisateur : "beaucoup trop de
+      phrases et de mots" + sélecteur d'archétype trop collé aux champs de
+      rôle)** : suppression des 3 paragraphes d'intro (page, section
+      "Compose", section "Compositions suggérées"), titres de bloc
+      raccourcis ("Points forts de cette composition (rôle le plus
+      dominant...)" → "Points forts"), libellés de ligne compressés
+      ("Synergie totale"/"Winrate estimé" → une seule ligne "Synergie : X %
+      · Winrate : Y %"), duo de départ sans préfixe de rôle ni mot
+      "fiabilité"/"games" ("Jungle/Mid : Lee Sin + Ahri — +30.0 %, fiabilité
+      eleve (60 games)" → "Lee Sin + Ahri — +30.0 %, eleve (60)"). CSS :
+      `.draft-compose-form` n'avait pas son propre `display:flex` — la grille
+      de champs de rôle et le sélecteur d'archétype se retrouvaient sans
+      espace entre eux ; ajout de `gap`. Le wrapper `<label
+      class="draft-compose-archetype">` autour du `<select>` a été retiré du
+      template (sélecteur direct dans `.draft-compose-submit`) — les règles
+      CSS du thème sombre du dropdown (fix précédent contre le popup blanc
+      sur blanc) migrées vers `.draft-compose-submit select`/`select option`
+      pour ne pas régresser. Vérifié visuellement (serveur local + Chrome) :
+      espacement correct, dropdown toujours lisible en thème sombre. Tous les
+      textes exacts asserted dans `tests/web/test_app_pg.py` mis à jour en
+      conséquence (334 tests passent).
 
 Phase 8 close pour l'instant (draft, insights, résilience, flex) — prochaine idée à définir.
 

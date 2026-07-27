@@ -924,8 +924,8 @@ def test_draft_page_suggest_proposes_synergy_based_composition(pg_sync, client):
     # de _seed_suggest_scenario pour le détail des 10 paires couvertes).
     assert "+51.0 %" in resp.text
     # Duo de départ (jgl_mid, Lee Sin + Ahri) affiché avec sa fiabilité.
-    assert "Jungle/Mid : Lee Sin + Ahri" in resp.text
-    assert "+30.0 %, fiabilité eleve (60 games)" in resp.text
+    assert "Lee Sin + Ahri" in resp.text
+    assert "+30.0 %, eleve (60)" in resp.text
 
 
 def test_draft_page_suggest_shows_advice_from_seed_duo_stats(pg_sync, client):
@@ -975,7 +975,7 @@ def test_draft_page_suggest_shows_advice_from_seed_duo_stats(pg_sync, client):
     # 10 vraies paires, wr=0.55 partout -> 55.0 % ; ci_low=0.0 partout -> 0.0 % ;
     # ci_high = synergie de chaque paire (.30+.05+.04+.02+.02+.03+.01+.01+.01+.02)/10
     # = .051 -> 5.1 %.
-    assert "Winrate estimé : 55.0 %" in resp.text
+    assert "Winrate : 55.0 %" in resp.text
     assert "[0.0 % – 5.1 %]" in resp.text
 
 
@@ -1064,10 +1064,10 @@ def test_draft_page_suggest_archetypes_pick_different_seed_duos(pg_sync, client)
     # dominant) — les 2 lignes ne peuvent apparaître ensemble que si les 2
     # profils ont vraiment choisi 2 duos différents (le draft complet, lui,
     # peut être identique aux 2 : univers fermé à 5 champions dans ce test).
-    assert "Jungle/Mid : Lee Sin + Ahri" in resp.text
-    assert "+30.0 %, fiabilité eleve (60 games)" in resp.text
-    assert "Top/ADC : Vi + Orianna" in resp.text
-    assert "+5.0 %, fiabilité eleve (60 games)" in resp.text
+    assert "Lee Sin + Ahri" in resp.text
+    assert "+30.0 %, eleve (60)" in resp.text
+    assert "Vi + Orianna" in resp.text
+    assert "+5.0 %, eleve (60)" in resp.text
 
 
 def test_draft_page_suggest_shows_counters(pg_sync, client):
@@ -1090,7 +1090,7 @@ def test_draft_page_suggest_shows_counters(pg_sync, client):
     # juste "le rôle jungle" dans l'abstrait, et dit explicitement que c'est
     # un point FAIBLE (retour utilisateur 2026-07-26 : la 1ère formulation
     # "contre Lee Sin" ne disait pas si la draft était forte ou faible).
-    assert "Lee Sin peut être puni(e) par" in resp.text
+    assert "Lee Sin puni(e) par" in resp.text
     assert "Leona" in resp.text
     assert "+10.0 %" in resp.text
 
@@ -1110,7 +1110,7 @@ def test_draft_page_suggest_shows_strengths_and_weights(pg_sync, client):
     )
     resp = client.get("/draft", params={"suggest": "1"})
     assert resp.status_code == 200
-    assert "Points forts de cette composition" in resp.text
+    assert "Points forts" in resp.text
     assert "Lee Sin domine" in resp.text
     assert "Zed" in resp.text
     assert "+12.0 %" in resp.text
@@ -1123,10 +1123,7 @@ def test_draft_page_suggest_no_counters_shows_message(pg_sync, client):
     _seed_suggest_scenario(pg_sync)
     resp = client.get("/draft", params={"suggest": "1"})
     assert resp.status_code == 200
-    assert (
-        "Aucun matchup 1v1 notable trouvé pour cette composition"
-        " (ni point fort, ni point faible)." in resp.text
-    )
+    assert "Aucun contre 1v1 notable." in resp.text
 
 
 def test_draft_page_compose_from_champions_completes_and_shows_reliability(pg_sync, client):
@@ -1143,8 +1140,8 @@ def test_draft_page_compose_from_champions_completes_and_shows_reliability(pg_sy
     for name in ("Vi", "Lee Sin", "Ahri", "Orianna", "Thresh"):
         assert name in resp.text
     assert "+51.0 %" in resp.text
-    assert "Jungle/Mid : Lee Sin + Ahri" in resp.text
-    assert "+30.0 %, fiabilité eleve (60 games)" in resp.text
+    assert "Lee Sin + Ahri" in resp.text
+    assert "+30.0 %, eleve (60)" in resp.text
 
 
 def test_draft_page_compose_without_archetype_proposes_one_per_archetype(pg_sync, client):
@@ -1226,8 +1223,8 @@ def test_draft_page_compose_shows_no_data_for_unplayed_pair(pg_sync, client):
         "/draft", params={"seed_top": "Vi", "seed_sup": "Thresh", "archetype": "synergy"}
     )
     assert resp.status_code == 200
-    assert "Top/Support : Vi + Thresh" in resp.text
-    assert "aucune donnée ensemble" in resp.text
+    assert "Vi + Thresh" in resp.text
+    assert "aucune donnée" in resp.text
     for name in ("Vi", "Lee Sin", "Ahri", "Orianna", "Thresh"):
         assert name in resp.text
 

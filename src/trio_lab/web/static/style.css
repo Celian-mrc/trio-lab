@@ -298,6 +298,7 @@ th[data-tooltip]::after, label[data-tooltip]::after {
   padding: 1rem 1.2rem; margin: 1.25rem 0; display: flex; flex-direction: column; gap: 0.9rem;
 }
 .draft-compose h2 { margin: 0; }
+.draft-compose-form { display: flex; flex-direction: column; gap: 0.9rem; }
 .draft-compose-roles {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 0.6rem;
 }
@@ -314,14 +315,11 @@ th[data-tooltip]::after, label[data-tooltip]::after {
 .draft-compose-submit {
   display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap;
 }
-.draft-compose-archetype {
-  display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: var(--muted-fg);
-}
-.draft-compose-archetype select {
+.draft-compose-submit select {
   background: transparent; color: var(--foreground); border: 1px solid var(--input);
   border-radius: var(--radius); padding: 0.35rem 0.55rem; font-size: 0.85rem;
 }
-.draft-compose-archetype select option { background: var(--card); color: var(--foreground); }
+.draft-compose-submit select option { background: var(--card); color: var(--foreground); }
 .draft-compose-loadbar {
   width: 6rem; height: 3px; border-radius: 3px; overflow: hidden; background: var(--muted);
   position: relative; opacity: 0; transition: opacity 150ms ease-in;
