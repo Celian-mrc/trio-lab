@@ -87,7 +87,7 @@
     {% if g.variants | length > 1 %}
     <div class="draft-variant-tabs">
       {% for v in g.variants %}
-      <button type="button" class="draft-variant-tab{{ ' active' if loop.first }}" data-variant-index="{{ loop.index0 }}">{{ loop.index }}</button>
+      <button type="button" class="draft-variant-tab{{ ' active' if loop.first }}" data-variant-index="{{ loop.index0 }}" data-selection="{{ v.selection }}"{% if v.selection == 'reliable' %} title="La plus fiable"{% endif %}>{{ loop.index }}</button>
       {% endfor %}
     </div>
     {% endif %}

@@ -1061,7 +1061,9 @@ def test_draft_page_suggest_renders_both_archetypes_from_shared_champion_pool(pg
     assert "Scaling / fin de partie" in resp.text
 
 
-def _insert_pentad(conn, base_id: int, seed_synergy: float, platform: str = "euw1") -> None:
+def _insert_pentad(
+    conn, base_id: int, seed_synergy: float, platform: str = "euw1", games_eff: float = 60.0
+) -> None:
     """Version web de `synergy/test_draft_suggestions_pg._insert_pentad` :
     10 paires d'un pentade FERMÉ (jgl/mid/sup/top/bot = base_id..base_id+4),
     jamais de champion partagé avec un autre pentade — sert à tester le
@@ -1084,30 +1086,36 @@ def _insert_pentad(conn, base_id: int, seed_synergy: float, platform: str = "euw
         conn.execute(
             "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
             " games_eff, wr, synergy, ci_low, ci_high, tier)"
-            " VALUES ('16.13', %s, %s, %s, %s, 60, 60.0, 0.55, %s, 0.0, %s, 'eleve')",
-            (platform, roles, champ_a, champ_b, synergy, synergy),
+            " VALUES ('16.13', %s, %s, %s, %s, 60, %s, 0.55, %s, 0.0, %s, 'eleve')",
+            (platform, roles, champ_a, champ_b, games_eff, synergy, synergy),
         )
 
 
 def test_draft_page_suggest_shows_variant_tabs_for_multiple_propositions(pg_sync, client):
-    """Boutons 1/2/3 (retour utilisateur 2026-07-27) : 2 pentades disjoints
-    (aucun champion en commun) produisent 2 propositions DIVERSES pour
-    "Meilleure synergie" — la carte doit afficher 2 boutons d'onglet, et
-    seule la 1ère variante est visible par défaut (la 2e porte `hidden`)."""
+    """Boutons 1/2/3 (retour utilisateur 2026-07-27) : 3 pentades disjoints
+    (aucun champion en commun) produisent 3 propositions DIVERSES pour
+    "Meilleure synergie" — la carte doit afficher 3 boutons d'onglet, seule
+    la 1ère variante est visible par défaut (les autres portent `hidden`),
+    et le bouton de la 3e (la plus fiable, `games_eff` le plus haut) porte
+    un indicateur visuel SANS avoir à cliquer dessus (retour utilisateur
+    2026-07-28)."""
     pg_sync.execute(
         "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
         " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
         " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
         " 0.0, 0.0, 1.0, 'faible')"
     )
-    _insert_pentad(pg_sync, 1, seed_synergy=0.30)
-    _insert_pentad(pg_sync, 6, seed_synergy=0.20)
+    _insert_pentad(pg_sync, 1, seed_synergy=0.30, games_eff=100.0)
+    _insert_pentad(pg_sync, 6, seed_synergy=0.20, games_eff=100.0)
+    _insert_pentad(pg_sync, 11, seed_synergy=0.10, games_eff=5000.0)
     resp = client.get("/draft", params={"suggest": "1"})
     assert resp.status_code == 200
     assert resp.text.count('class="draft-variant-tab active"') == 1
-    assert resp.text.count("draft-variant-tab") >= 2
+    assert resp.text.count("draft-variant-tab") >= 3
     assert resp.text.count('data-variant-index="0"') >= 1
     assert resp.text.count('data-variant-index="1" hidden') >= 1
+    assert resp.text.count('data-variant-index="2" hidden') >= 1
+    assert 'data-selection="reliable" title="La plus fiable"' in resp.text
 
 
 def test_draft_page_suggest_shows_counters(pg_sync, client):

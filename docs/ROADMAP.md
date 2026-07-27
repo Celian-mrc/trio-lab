@@ -1002,6 +1002,16 @@ gagner") avec les données déjà en place.
       passe de ~18s à ~20s, `refresh()` de 9,2s à 15,4s — accepté (le
       collector tourne en tâche de fond, pas sur une requête utilisateur).
 
+- [x] **Indicateur "la plus fiable" visible SANS cliquer (2026-07-28, retour
+      utilisateur)** : la mention "· la plus fiable" n'apparaissait qu'après
+      avoir cliqué sur l'onglet correspondant, dans le corps de la carte.
+      `data-selection="{{ v.selection }}"` ajouté sur chaque bouton d'onglet
+      + petit point `var(--pos)` (déjà le vocabulaire "bon signal" du reste
+      du site) en CSS via `[data-selection="reliable"]::after`, visible
+      d'emblée sur le bouton concerné ; `title="La plus fiable"` en plus
+      pour le survol. Test web étendu à 3 pentades (au lieu de 2) pour
+      couvrir concrètement le rang "fiable".
+
 Phase 8 close pour l'instant (draft, insights, résilience, flex) — prochaine idée à définir.
 
 **Gap constaté en marge de cette révision (2026-07-19)** : `agg_matchup`/

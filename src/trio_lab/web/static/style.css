@@ -364,12 +364,21 @@ th[data-tooltip]::after, label[data-tooltip]::after {
 .draft-suggest-head-row .draft-suggest-label { grid-row: auto; }
 .draft-variant-tabs { display: flex; gap: 0.3rem; flex-shrink: 0; }
 .draft-variant-tab {
+  position: relative;
   width: 1.4rem; height: 1.4rem; border-radius: 50%; border: 1px solid var(--border);
   background: transparent; color: var(--muted-fg); font-size: 0.7rem; line-height: 1;
   padding: 0; cursor: pointer;
 }
 .draft-variant-tab:hover:not(.active) { border-color: var(--accent); color: var(--accent); }
 .draft-variant-tab.active { background: var(--accent); color: var(--primary-fg); border-color: var(--accent); }
+/* Point vert : signale la proposition "la plus fiable" SANS avoir à
+   cliquer dessus (retour utilisateur 2026-07-28) — `--pos`, déjà le
+   vocabulaire "bon signal" du reste du site (synergie/winrate positifs). */
+.draft-variant-tab[data-selection="reliable"]::after {
+  content: ""; position: absolute; top: -2px; right: -2px;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--pos); border: 1px solid var(--card);
+}
 /* `display: contents` : le wrapper disparaît de la boîte, ses enfants
    (weights/members/synergie/...) restent des enfants directs de la grille
    de `.draft-suggest-card` et gardent leur `grid-row` d'origine (subgrid) —
