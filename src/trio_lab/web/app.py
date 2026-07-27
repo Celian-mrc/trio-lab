@@ -916,14 +916,23 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             if value
         ]
 
-    def _build_draft_result(raw: dict) -> dict:
+    def _build_draft_result(raw: dict, *, include_seed_pairs: bool = True) -> dict:
         """Adapte un résultat BRUT (`synergy.draft_suggestions.propose_drafts`,
         un draft "compose à la main" tout juste calculé, ou une ligne lue
         depuis `draft_suggestion(_counter)`) en structure prête pour le
         template : résout les champion_id en Champion (nom/icône), génère
         les phrases de conseil depuis les stats moyennes. Un seul chemin de
         rendu pour les 2 sources (précalculé ou en direct) et les 2 sections
-        (compositions suggérées / composées à la main)."""
+        (compositions suggérées / composées à la main).
+
+        `include_seed_pairs` (retour utilisateur 2026-07-27, "est-ce que
+        cette donnée a un intérêt ?") : sur "Compositions suggérées", le duo
+        de départ est un détail interne de l'algorithme (peut changer via
+        `refine_draft`), sa synergie isolée à côté du total du draft
+        n'apporte rien et prête à confusion — masqué. Sur "Compose à partir
+        de tes champions", ce sont les champions CHOISIS par l'utilisateur :
+        savoir s'ils synergisent déjà entre eux (et sur combien de games)
+        répond à une vraie question — conservé."""
         members = [
             {"role": role, "role_label": ROLE_LABELS[role], "champion": champ(raw["members"][role])}
             for role in DRAFT_ROLES
@@ -950,7 +959,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             "members": members,
             "total_synergy": raw["total_synergy"],
             "wr": wr,
-            "seed_pairs": _resolve_seed_pairs(raw["seed_pairs"]),
+            "seed_pairs": _resolve_seed_pairs(raw["seed_pairs"]) if include_seed_pairs else [],
             "advice": advice,
             "counters": _resolve_counters(raw["counters"]),
             "strengths": _resolve_counters(raw["strengths"]),
@@ -1062,11 +1071,15 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             if platform == "all":
                 precomputed = queries.draft_suggestions(conn, window, platform)
                 if precomputed:
-                    suggested_drafts = [_build_draft_result(raw) for raw in precomputed]
+                    suggested_drafts = [
+                        _build_draft_result(raw, include_seed_pairs=False) for raw in precomputed
+                    ]
             if suggested_drafts is None and suggest:
                 pool, zstats = _get_pool_zstats()
                 raws = draft_suggestions.propose_drafts(conn, window, platform, pool, zstats)
-                suggested_drafts = [_build_draft_result(raw) for raw in raws]
+                suggested_drafts = [
+                    _build_draft_result(raw, include_seed_pairs=False) for raw in raws
+                ]
 
             # Formulaire soumis dès que 1 champion ou un archétype est fourni
             # — une page fraîche n'a ni l'un ni l'autre dans l'URL. Archétype

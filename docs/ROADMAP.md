@@ -865,6 +865,22 @@ gagner") avec les données déjà en place.
       côte à côte) : titres, listes de champions et sections de contres
       démarrent tous à la même hauteur d'une carte à l'autre.
 
+- [x] **Duo de départ masqué sur "Compositions suggérées" (2026-07-27, retour
+      utilisateur : "est-ce que cette donnée a un intérêt ? Locke + Draven —
+      +5.1 %, eleve (902)")** : ce duo n'est qu'un détail interne de
+      l'algorithme (le point de départ du glouton, éligible au remplacement
+      par `refine_draft`) — sa synergie isolée à côté du total du draft
+      prêtait à confusion sans rien apporter. Masqué uniquement sur
+      "Compositions suggérées" (`_build_draft_result(...,
+      include_seed_pairs=False)`) ; conservé sur "Compose à partir de tes
+      champions" où ce sont les champions CHOISIS par l'utilisateur — savoir
+      s'ils synergisent déjà et sur combien de games reste une vraie
+      question. La preuve que 2 archétypes choisissent bien 2 duos de départ
+      différents (motif de `refine_draft`) déplacée d'un test HTTP
+      (scraping du texte affiché) vers un test direct de `propose_drafts`
+      (`test_propose_drafts_uses_different_seed_duo_per_archetype`), plus
+      approprié maintenant que ce détail n'est plus rendu.
+
 Phase 8 close pour l'instant (draft, insights, résilience, flex) — prochaine idée à définir.
 
 **Gap constaté en marge de cette révision (2026-07-19)** : `agg_matchup`/

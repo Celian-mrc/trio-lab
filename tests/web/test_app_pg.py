@@ -923,9 +923,10 @@ def test_draft_page_suggest_proposes_synergy_based_composition(pg_sync, client):
     # Synergie totale exacte : .30 + .09 + .07 + .05 = .51 (cf. docstring
     # de _seed_suggest_scenario pour le détail des 10 paires couvertes).
     assert "+51.0 %" in resp.text
-    # Duo de départ (jgl_mid, Lee Sin + Ahri) affiché avec sa fiabilité.
-    assert "Lee Sin + Ahri" in resp.text
-    assert "+30.0 %, eleve (60)" in resp.text
+    # Duo de départ JAMAIS affiché sur "Compositions suggérées" (retour
+    # utilisateur 2026-07-27 : détail interne, cf. web/app.py
+    # `_build_draft_result(include_seed_pairs=False)`).
+    assert "eleve (60)" not in resp.text
 
 
 def test_draft_page_suggest_shows_advice_from_seed_duo_stats(pg_sync, client):
@@ -996,14 +997,14 @@ def test_draft_page_suggest_skips_archetypes_without_stat_data(pg_sync, client):
     assert '<h3 class="draft-suggest-label">Scaling / fin de partie</h3>' not in resp.text
 
 
-def test_draft_page_suggest_archetypes_pick_different_seed_duos(pg_sync, client):
-    """Le profil "Scaling" doit pouvoir choisir un duo de départ DIFFÉRENT
-    de "Meilleure synergie" quand les stats le justifient — même si la
-    synergie brute est plus faible (retour utilisateur 2026-07-25 : le poids
-    pilote désormais le choix du duo de départ ET chaque champion ajouté
-    ensuite ; les paires structurelles portent donc ici des stats neutres
-    partout, pour isoler l'effet des stats EXTRÊMES des 2 duos de départ
-    sans qu'une des 2 archétypes soit disqualifiée faute de données)."""
+def test_draft_page_suggest_renders_both_archetypes_from_shared_champion_pool(pg_sync, client):
+    """Même quand "Meilleure synergie" et "Scaling" retombent sur le même
+    univers fermé à 5 champions (leurs duos de départ internes diffèrent
+    pourtant bel et bien — vérifié au niveau de la fonction par
+    `test_propose_drafts_uses_different_seed_duo_per_archetype`, plus ce
+    détail interne n'est plus affiché ici depuis le retour utilisateur
+    2026-07-27), les 2 cartes se rendent sans erreur, chacune avec son
+    propre libellé."""
     pg_sync.execute(
         "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
         " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
@@ -1057,17 +1058,6 @@ def test_draft_page_suggest_archetypes_pick_different_seed_duos(pg_sync, client)
     assert resp.status_code == 200
     assert "Meilleure synergie" in resp.text
     assert "Scaling / fin de partie" in resp.text
-    # Preuve directe que les 2 profils ont choisi 2 duos de départ
-    # différents (A vs B) : le duo de départ affiché (`seed_pairs`) diffère —
-    # "Meilleure synergie" part du duo A (jgl_mid, Lee Sin + Ahri, synergie
-    # dominante), "Scaling" part du duo B (top_bot, Vi + Orianna, scaling
-    # dominant) — les 2 lignes ne peuvent apparaître ensemble que si les 2
-    # profils ont vraiment choisi 2 duos différents (le draft complet, lui,
-    # peut être identique aux 2 : univers fermé à 5 champions dans ce test).
-    assert "Lee Sin + Ahri" in resp.text
-    assert "+30.0 %, eleve (60)" in resp.text
-    assert "Vi + Orianna" in resp.text
-    assert "+5.0 %, eleve (60)" in resp.text
 
 
 def test_draft_page_suggest_shows_counters(pg_sync, client):
