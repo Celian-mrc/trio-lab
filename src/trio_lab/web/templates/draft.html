@@ -1,9 +1,39 @@
 {% extends "base.html" %}
 {% block title %}Compositions et contres — Trio Lab{% endblock %}
 {% block content %}
+{% macro matchup_block(title, block, verb, color) %}
+<div class="draft-counters">
+  <p class="draft-counters-title">{{ title }}</p>
+  <div class="draft-counters-row">
+    <span class="role-badge role-{{ block.primary.role }}">{{ block.primary.role | upper }}</span>
+    <span class="meta">{{ block.primary.against.name }} {{ verb }} :</span>
+    {% for p in block.primary.picks %}
+    <span class="champ counter-chip">
+      {% if p.champion.icon_url %}<img src="{{ p.champion.icon_url }}" alt="" width="20" height="20">{% endif %}
+      {{ p.champion.name }} <span class="{{ color }}">{{ p.delta | signed_pct }}</span>
+    </span>
+    {% endfor %}
+  </div>
+  {% for s in block.secondary %}
+  <div class="draft-counters-row">
+    <span class="role-badge role-{{ s.role }}">{{ s.role | upper }}</span>
+    <span class="meta">{{ s.against.name }} {{ verb }} :</span>
+    <span class="champ counter-chip">
+      {% if s.pick.champion.icon_url %}<img src="{{ s.pick.champion.icon_url }}" alt="" width="20" height="20">{% endif %}
+      {{ s.pick.champion.name }} <span class="{{ color }}">{{ s.pick.delta | signed_pct }}</span>
+    </span>
+  </div>
+  {% endfor %}
+</div>
+{% endmacro %}
 {% macro draft_card(d) %}
 <div class="draft-suggest-card">
   <h3 class="draft-suggest-label">{{ d.label }}</h3>
+  {% if d.weights %}
+  <p class="draft-suggest-weights meta">
+    {% for w in d.weights %}{{ w.label }} {{ w.value | pct(0) }}{% if not loop.last %} · {% endif %}{% endfor %}
+  </p>
+  {% endif %}
   <div class="draft-suggest-members">
     {% for m in d.members %}
     <span class="champ" title="{{ m.role_label }}">
@@ -30,42 +60,25 @@
     {% for tip in d.advice %}<li>{{ tip }}</li>{% endfor %}
   </ul>
   {% endif %}
+  {% if d.strengths %}
+  {{ matchup_block("Points forts de cette composition (rôle le plus dominant en premier) — elle domine ces champions adverses", d.strengths, "domine", "pos") }}
+  {% endif %}
   {% if d.counters %}
-  <div class="draft-counters">
-    <p class="draft-counters-title">Meilleurs contres 1v1 (rôle le plus exploitable en premier)</p>
-    <div class="draft-counters-row">
-      <span class="role-badge role-{{ d.counters.primary.role }}">{{ d.counters.primary.role | upper }}</span>
-      <span class="meta">contre {{ d.counters.primary.against.name }} :</span>
-      {% for p in d.counters.primary.picks %}
-      <span class="champ counter-chip">
-        {% if p.champion.icon_url %}<img src="{{ p.champion.icon_url }}" alt="" width="20" height="20">{% endif %}
-        {{ p.champion.name }} <span class="pos">{{ p.delta | signed_pct }}</span>
-      </span>
-      {% endfor %}
-    </div>
-    {% for s in d.counters.secondary %}
-    <div class="draft-counters-row">
-      <span class="role-badge role-{{ s.role }}">{{ s.role | upper }}</span>
-      <span class="meta">contre {{ s.against.name }} :</span>
-      <span class="champ counter-chip">
-        {% if s.pick.champion.icon_url %}<img src="{{ s.pick.champion.icon_url }}" alt="" width="20" height="20">{% endif %}
-        {{ s.pick.champion.name }} <span class="pos">{{ s.pick.delta | signed_pct }}</span>
-      </span>
-    </div>
-    {% endfor %}
-  </div>
-  {% else %}
-  <p class="meta sub">Aucun contre 1v1 notable trouvé pour cette composition.</p>
+  {{ matchup_block("Points faibles de cette composition (rôle le plus exploitable en premier) — ces champions, joués par l'adversaire, la mettent en difficulté", d.counters, "peut être puni(e) par", "neg") }}
+  {% endif %}
+  {% if not d.strengths and not d.counters %}
+  <p class="meta sub">Aucun matchup 1v1 notable trouvé pour cette composition (ni point fort, ni point faible).</p>
   {% endif %}
 </div>
 {% endmacro %}
 <h1>Compositions et contres</h1>
-<p class="meta">Propose des compositions complètes à 5 (indépendantes de l'adversaire) et leurs
-  meilleurs contres — un contre reste toujours du <strong>1v1 par rôle</strong> (même champion contre
-  même champion, ex. top contre top) : contrer une composition entière n'a pas de sens mesurable, un
-  rôle à la fois oui. Le rôle le plus exploitable de la composition affiche jusqu'à
-  {{ draft_counter_primary_picks }} contres ; les {{ draft_counter_secondary_roles }} rôles suivants,
-  un contre chacun.</p>
+<p class="meta">Propose des compositions complètes à 5 (indépendantes de l'adversaire) et repère leurs
+  <strong>points forts</strong> (les champions adverses qu'elle domine) et <strong>points
+  faibles</strong> (les champions qui, joués par l'adversaire, la mettent le plus en difficulté).
+  Toujours du <strong>1v1 par rôle</strong> (même champion contre même champion, ex. top contre top) :
+  contrer une composition entière n'a pas de sens mesurable, un rôle à la fois oui. Le rôle le plus
+  concerné affiche jusqu'à {{ draft_counter_primary_picks }} champions ; les
+  {{ draft_counter_secondary_roles }} rôles suivants, 1 chacun.</p>
 <datalist id="champion-names">
   {% for name in champion_names %}<option value="{{ name }}">{% endfor %}
 </datalist>
@@ -90,12 +103,13 @@
 
 <section class="draft-compose">
   <h2>Compose à partir de tes champions</h2>
-  <p class="meta">Choisis 1 à 5 champions (rôle libre) et un archétype : le système complète les rôles
-    restants avec le même algorithme que les compositions suggérées ci-dessous — synergie ET stats de
-    l'archétype pesées à chaque champion ajouté, pas seulement les tiens. La fiabilité de chaque paire
-    que TU choisis est affichée telle quelle, même si elle n'a jamais été jouée ensemble — ça ne bloque
-    jamais la suite, contrairement aux rôles que le système complète, qui restent filtrés sur les
-    duos les plus fiables.</p>
+  <p class="meta">Choisis 1 à 5 champions (rôle libre) : le système complète les rôles restants avec le
+    même algorithme que les compositions suggérées ci-dessous — synergie ET stats de l'archétype
+    pesées à chaque champion ajouté, pas seulement les tiens. Archétype optionnel : laisse « choisir… »
+    pour obtenir une proposition par archétype (comme ci-dessous), ou fixe-en un pour n'en calculer
+    qu'un seul, plus rapide. La fiabilité de chaque paire que TU choisis est affichée telle quelle,
+    même si elle n'a jamais été jouée ensemble — ça ne bloque jamais la suite, contrairement aux rôles
+    que le système complète, qui restent filtrés sur les duos les plus fiables.</p>
   <form method="get" action="/draft" class="draft-compose-form">
     <input type="hidden" name="window" value="{{ window }}">
     <input type="hidden" name="platform" value="{{ platform }}">
@@ -122,9 +136,9 @@
   </form>
   {% if manual_error %}
   <p class="empty">{{ manual_error }}</p>
-  {% elif manual_result %}
+  {% elif manual_results %}
   <div class="draft-suggest-grid">
-    {{ draft_card(manual_result) }}
+    {% for d in manual_results %}{{ draft_card(d) }}{% endfor %}
   </div>
   {% endif %}
 </section>

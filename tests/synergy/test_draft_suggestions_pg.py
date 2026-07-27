@@ -36,7 +36,9 @@ def _seed_scenario(conn) -> None:
     """Duo de départ jgl_mid (champ 1/2, synergie +30 %) étendu vers un
     draft complet à 5 (index : 1=jgl, 2=mid, 3=sup, 4=top, 5=bot) — même
     scénario déterministe que `_seed_suggest_scenario` côté web, plus un
-    contre 1v1 notable (champion 6 contre le jungler, champion 1)."""
+    contre 1v1 notable (champion 6 contre le jungler, champion 1 — point
+    FAIBLE) et un matchup notable dans l'autre sens (le jungler, champion 1,
+    bat le champion 7 — point FORT, retour utilisateur 2026-07-26)."""
     conn.execute(
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
         " games_eff, wr, synergy, ci_low, ci_high, tier)"
@@ -64,6 +66,8 @@ def _seed_scenario(conn) -> None:
         "INSERT INTO score_matchup (window_label, platform, role, champ_a, champ_b, games,"
         " games_eff, wr, delta_raw, delta, ci_low, ci_high, tier)"
         " VALUES ('16.13', 'all', 'JUNGLE', 6, 1, 100, 100.0, 0.60, 0.10, 0.10, 0.05, 0.15,"
+        " 'eleve'),"
+        "        ('16.13', 'all', 'JUNGLE', 1, 7, 100, 100.0, 0.65, 0.12, 0.12, 0.07, 0.17,"
         " 'eleve')"
     )
 
@@ -98,11 +102,15 @@ def test_refresh_materializes_composition_and_counter(pg_sync):
         assert seed_tier == "eleve"
 
         cur.execute(
-            "SELECT kind, rank, role, against_champion, champion_id, delta"
+            "SELECT direction, kind, rank, role, against_champion, champion_id, delta"
             " FROM draft_suggestion_counter WHERE window_label = '16.13' AND platform = 'all'"
+            " ORDER BY direction"
         )
         counters = cur.fetchall()
-        assert counters == [("primary", 0, "jgl", 1, 6, pytest.approx(0.10, abs=1e-6))]
+        assert counters == [
+            ("strength", "primary", 0, "jgl", 1, 7, pytest.approx(0.12, abs=1e-6)),
+            ("weakness", "primary", 0, "jgl", 1, 6, pytest.approx(0.10, abs=1e-6)),
+        ]
 
 
 def test_refresh_overwrites_stale_rows(pg_sync):

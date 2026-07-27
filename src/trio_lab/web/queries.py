@@ -906,10 +906,11 @@ def draft_suggestions(conn: psycopg.Connection, window: str, platform: str) -> l
 
     Retourne la MÊME forme brute que
     `synergy.draft_suggestions.propose_drafts` (une entrée par archétype :
-    `members` dict de rôle→champion_id, `seed_pairs` à 1 entrée, `advice_stats`
-    et `counters` bruts) — web/app.py rend les 2 sources de façon identique.
-    `seed_roles` (ex. 'jgl_mid') se scinde directement en `role_a`/`role_b` :
-    format garanti "{role_court}_{role_court}" par construction (`refresh`).
+    `members` dict de rôle→champion_id, `seed_pairs` à 1 entrée, `advice_stats`,
+    `counters` (points faibles) et `strengths` (points forts) bruts) —
+    web/app.py rend les 2 sources de façon identique. `seed_roles` (ex.
+    'jgl_mid') se scinde directement en `role_a`/`role_b` : format garanti
+    "{role_court}_{role_court}" par construction (`refresh`).
     """
     with conn.cursor(row_factory=dict_row) as cur:
         rows = cur.execute(
@@ -928,17 +929,20 @@ def draft_suggestions(conn: psycopg.Connection, window: str, platform: str) -> l
             return []
         counter_rows = cur.execute(
             """
-            SELECT archetype, kind, rank, role, against_champion, champion_id, delta
+            SELECT archetype, direction, kind, rank, role, against_champion, champion_id, delta
             FROM draft_suggestion_counter
             WHERE window_label = %s AND platform = %s
-            ORDER BY archetype, kind, rank
+            ORDER BY archetype, direction, kind, rank
             """,
             (window, platform),
         ).fetchall()
 
-    counters_by_archetype: dict[str, dict] = {}
+    # (archetype, direction) -> {"primary": ..., "secondary": [...]}
+    picks_by_key: dict[tuple[str, str], dict] = {}
     for r in counter_rows:
-        entry = counters_by_archetype.setdefault(r["archetype"], {"primary": None, "secondary": []})
+        entry = picks_by_key.setdefault(
+            (r["archetype"], r["direction"]), {"primary": None, "secondary": []}
+        )
         pick = {"champion_id": r["champion_id"], "delta": r["delta"]}
         if r["kind"] == "primary":
             if entry["primary"] is None:
@@ -989,7 +993,8 @@ def draft_suggestions(conn: psycopg.Connection, window: str, platform: str) -> l
                     }
                 ],
                 "advice_stats": advice_stats,
-                "counters": counters_by_archetype.get(row["archetype"]),
+                "counters": picks_by_key.get((row["archetype"], "weakness")),
+                "strengths": picks_by_key.get((row["archetype"], "strength")),
             }
         )
     return results

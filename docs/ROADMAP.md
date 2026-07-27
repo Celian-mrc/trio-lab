@@ -724,6 +724,55 @@ gagner") avec les données déjà en place.
       affiche les compositions précalculées SANS clic, bouton absent
       (`tests/web/test_app_pg.py`) ; repli sur le bouton vérifié si rien
       n'est encore matérialisé.
+- [x] **3 retours utilisateur sur les contres/compose (2026-07-26)** :
+      1. **Contres ambigus** : "BOT contre Draven : Mel +6.1 %..." ne disait
+         pas si la composition était FORTE ou FAIBLE face à ces champions.
+         Reformulé sans ambiguïté — "{champion de la composition} peut être
+         puni(e) par : {contres}" — et la couleur passe de vert (`pos`) à
+         rouge (`neg`) : ce sont des points FAIBLES (des picks adverses qui
+         punissent la composition), pas des atouts. Titre de section et
+         paragraphe d'intro alignés ("points faibles" explicite).
+      2. **"Compose à partir de tes champions" sans archétype imposé** :
+         l'archétype devient optionnel — laissé vide, une proposition par
+         archétype est calculée à partir des MÊMES champions choisis à la
+         main (même logique indépendante-par-archétype que "Compositions
+         suggérées" : un archétype qui échoue n'apparaît juste pas). Whether
+         "au moins 1 champion ou 1 archétype" détecte qu'un formulaire a été
+         soumis (page fraîche : ni l'un ni l'autre dans l'URL).
+      3. **`<select>` archétype illisible** (fond blanc, texte blanc) : bug
+         de style pur — il manquait la règle `select option { background:
+         var(--card); ... }` déjà utilisée ailleurs sur le site
+         (`.filters select option`, jamais reproduite sur ce nouveau
+         formulaire). Corrigé en copiant le même pattern.
+      Vérifié en navigateur (serveur `uvicorn` local sur les vraies données
+      prod) : contres affichés en rouge avec la formulation "peut être
+      puni(e) par" ; compose sans archétype produit bien 4 cartes (une par
+      archétype) à partir des 2 mêmes champions de départ.
+- [x] **Points forts + poids des archétypes affichés (2026-07-26, retour
+      utilisateur : "en plus du contre, contre qui la composition est
+      forte ?" + "afficher le poids des métriques par archétype")** :
+      - **`draft_strengths`** : symétrique de `draft_counters`, matchup 1v1
+        inversé (`_matchup_beats`, `champ_a` = notre champion au lieu de
+        `champ_b`) — mêmes seuils de fiabilité/notabilité, même format
+        primaire/secondaire. Les 2 fonctions partagent désormais leur
+        logique de classement (`_rank_matchup_picks`), extraite pour ne pas
+        dupliquer le code. Migration 034 : `draft_suggestion_counter` gagne
+        une colonne `direction` ('weakness'/'strength', même schéma pour
+        les 2, PK élargie) — table entièrement recalculée à chaque
+        `refresh`, pas d'historique à migrer.
+      - **Poids d'archétype affichés** : chaque carte montre désormais ses
+        poids ("Synergie 30 % · Scaling 38 % · CC 14 % · Gold@15 7 % ·
+        Drakes 11 %") — lus directement depuis `ARCHETYPES[archetype]
+        ["weights"]` (déjà en mémoire, aucun nouveau calcul), axes à poids
+        nul omis.
+      - Carte : "points forts" (vert, "{champion} domine : ...") affiché
+        avant "points faibles" (rouge) — message combiné si aucun des deux
+        n'a de signal notable, jamais une section vide sans explication.
+      Vérifié : `synergy/draft_suggestions.refresh` écrit bien les 2
+      directions dans `draft_suggestion_counter` sur un scénario
+      déterministe (`tests/synergy/test_draft_suggestions_pg.py`) ; carte
+      web affiche "Points forts"/"domine" + les poids
+      (`tests/web/test_app_pg.py`).
 
 Phase 8 close pour l'instant (draft, insights, résilience, flex) — prochaine idée à définir.
 

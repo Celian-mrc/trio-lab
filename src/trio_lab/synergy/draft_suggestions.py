@@ -38,7 +38,7 @@ import argparse
 import itertools
 import logging
 import math
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 
 import psycopg
 from psycopg.rows import dict_row
@@ -258,6 +258,37 @@ def _matchup_candidates(
                 "platform": platform,
                 "role": role,
                 "enemy": enemy_champion_id,
+                "limit": limit,
+            },
+        ).fetchall()
+
+
+def _matchup_beats(
+    conn: psycopg.Connection,
+    window: str,
+    platform: str,
+    role: str,
+    our_champion_id: int,
+    limit: int,
+) -> list[dict]:
+    """Symétrique de `_matchup_candidates` : `champ_a` (notre champion) fixé,
+    liste les `champ_b` qu'il bat le mieux (delta DESC) — sert aux points
+    FORTS d'une composition (`draft_strengths`), pas ses points faibles."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            """
+            SELECT champ_b AS candidate_champion, games, games_eff, wr, delta, tier
+            FROM score_matchup
+            WHERE window_label = %(window)s AND platform = %(platform)s AND role = %(role)s
+              AND champ_a = %(champ)s
+            ORDER BY delta DESC
+            LIMIT %(limit)s
+            """,
+            {
+                "window": window,
+                "platform": platform,
+                "role": role,
+                "champ": our_champion_id,
                 "limit": limit,
             },
         ).fetchall()
@@ -565,21 +596,19 @@ def draft_advice(
     return tips
 
 
-def draft_counters(
-    conn: psycopg.Connection, window: str, platform: str, placed: dict[str, int]
+def _rank_matchup_picks(
+    placed: dict[str, int], fetch: Callable[[str, int], list[dict]]
 ) -> dict | None:
-    """Contres 1v1 (`score_matchup`) d'une composition COMPLÈTE à 5 — jamais
-    de counter trio/5v5 en bloc (combinatoirement intraitable, abandonné en
-    Phase 4, cf. CLAUDE.md) : uniquement des deltas 1v1 par rôle, agrégés
-    par exploitabilité. Le rôle au MEILLEUR contre disponible devient le
-    rôle PRIMAIRE (jusqu'à `COUNTER_PRIMARY_PICKS` champions) ; les
-    `COUNTER_SECONDARY_ROLES` rôles suivants (si un contre notable existe) :
-    1 champion chacun. `None` si aucun contre notable nulle part."""
+    """Commun à `draft_counters` (points faibles) et `draft_strengths`
+    (points forts) : classe les 5 rôles par delta décroissant à partir de
+    `fetch(role, champion_id) -> lignes score_matchup` (l'appelant choisit
+    le sens du 1v1 — `_matchup_candidates` ou `_matchup_beats`). Le rôle au
+    MEILLEUR delta devient PRIMAIRE (jusqu'à `COUNTER_PRIMARY_PICKS`
+    champions) ; les `COUNTER_SECONDARY_ROLES` rôles suivants (si notable) :
+    1 champion chacun. `None` si rien de notable nulle part."""
     by_role: dict[str, list[dict]] = {}
     for role in DRAFT_ROLES:
-        candidates = _matchup_candidates(
-            conn, window, platform, DRAFT_ROLE_TO_TEAM_POSITION[role], placed[role], 50
-        )
+        candidates = fetch(role, placed[role])
         notable = [
             c
             for c in candidates
@@ -614,6 +643,38 @@ def draft_counters(
     }
 
 
+def draft_counters(
+    conn: psycopg.Connection, window: str, platform: str, placed: dict[str, int]
+) -> dict | None:
+    """Points FAIBLES 1v1 (`score_matchup`) d'une composition COMPLÈTE à 5 —
+    jamais de counter trio/5v5 en bloc (combinatoirement intraitable,
+    abandonné en Phase 4, cf. CLAUDE.md) : uniquement des deltas 1v1 par
+    rôle. `None` si rien de notable nulle part (composition solide de
+    partout)."""
+    return _rank_matchup_picks(
+        placed,
+        lambda role, champ: _matchup_candidates(
+            conn, window, platform, DRAFT_ROLE_TO_TEAM_POSITION[role], champ, 50
+        ),
+    )
+
+
+def draft_strengths(
+    conn: psycopg.Connection, window: str, platform: str, placed: dict[str, int]
+) -> dict | None:
+    """Points FORTS 1v1 (`score_matchup`) d'une composition COMPLÈTE à 5 —
+    symétrique de `draft_counters` (retour utilisateur 2026-07-26 : "en plus
+    du contre, contre qui cette composition est forte ?") : les champions
+    adverses que CETTE composition bat le mieux, même critère de
+    fiabilité/notabilité. `None` si rien de notable nulle part."""
+    return _rank_matchup_picks(
+        placed,
+        lambda role, champ: _matchup_beats(
+            conn, window, platform, DRAFT_ROLE_TO_TEAM_POSITION[role], champ, 50
+        ),
+    )
+
+
 def propose_drafts(
     conn: psycopg.Connection,
     window: str,
@@ -630,10 +691,10 @@ def propose_drafts(
     Retourne, par archétype réussi : `{archetype, label, members (dict
     rôle→champion_id), total_synergy, seed_pairs (1 entrée, le duo de
     départ), advice_stats (moyennes scaling/cc/gold sur les 10 vraies
-    paires, ou None), counters}` — brut (`champion_id`, pas de nom/icône),
-    même forme que lue depuis `draft_suggestion(_counter)` matérialisées par
-    `refresh`, pour que le rendu (`web/app.py`) traite les 2 sources de
-    façon identique."""
+    paires, ou None), counters (points faibles), strengths (points forts)}`
+    — brut (`champion_id`, pas de nom/icône), même forme que lue depuis
+    `draft_suggestion(_counter)` matérialisées par `refresh`, pour que le
+    rendu (`web/app.py`) traite les 2 sources de façon identique."""
     results: list[dict] = []
     for key, archetype in ARCHETYPES.items():
         weights = archetype["weights"]
@@ -677,6 +738,7 @@ def propose_drafts(
                     conn, window, platform, placed, ("scaling", "cc_blended_pct", "gold_diff_15")
                 ),
                 "counters": draft_counters(conn, window, platform, placed),
+                "strengths": draft_strengths(conn, window, platform, placed),
             }
         )
     return results
@@ -698,12 +760,56 @@ _INSERT_SUGGESTION_SQL = """
 """
 _INSERT_COUNTER_SQL = """
     INSERT INTO draft_suggestion_counter
-        (window_label, platform, archetype, kind, rank, role, against_champion,
-         champion_id, delta)
+        (window_label, platform, archetype, direction, kind, rank, role,
+         against_champion, champion_id, delta)
     VALUES
-        (%(window_label)s, %(platform)s, %(archetype)s, %(kind)s, %(rank)s, %(role)s,
-         %(against_champion)s, %(champion_id)s, %(delta)s)
+        (%(window_label)s, %(platform)s, %(archetype)s, %(direction)s, %(kind)s, %(rank)s,
+         %(role)s, %(against_champion)s, %(champion_id)s, %(delta)s)
 """
+
+
+def _write_matchup_picks(
+    cur, window: PatchWindow, platform: str, archetype: str, direction: str, picks: dict | None
+) -> None:
+    """Écrit un bloc primaire/secondaire (`draft_counters`/`draft_strengths`)
+    dans `draft_suggestion_counter` — `direction` distingue points
+    faibles/forts, même schéma pour les 2 (migration 034). No-op si `picks`
+    est `None` (rien de notable, cf. `_rank_matchup_picks`)."""
+    if picks is None:
+        return
+    primary = picks["primary"]
+    for rank, pick in enumerate(primary["picks"]):
+        cur.execute(
+            _INSERT_COUNTER_SQL,
+            {
+                "window_label": window.label,
+                "platform": platform,
+                "archetype": archetype,
+                "direction": direction,
+                "kind": "primary",
+                "rank": rank,
+                "role": primary["role"],
+                "against_champion": primary["against_champion"],
+                "champion_id": pick["champion_id"],
+                "delta": pick["delta"],
+            },
+        )
+    for rank, sec in enumerate(picks["secondary"]):
+        cur.execute(
+            _INSERT_COUNTER_SQL,
+            {
+                "window_label": window.label,
+                "platform": platform,
+                "archetype": archetype,
+                "direction": direction,
+                "kind": "secondary",
+                "rank": rank,
+                "role": sec["role"],
+                "against_champion": sec["against_champion"],
+                "champion_id": sec["champion_id"],
+                "delta": sec["delta"],
+            },
+        )
 
 
 def refresh(window: PatchWindow, platform: str, *, dsn: str | None = None) -> int:
@@ -746,40 +852,12 @@ def refresh(window: PatchWindow, platform: str, *, dsn: str | None = None) -> in
                         "advice_gold15": stats.get("gold_diff_15"),
                     },
                 )
-                counters = d["counters"]
-                if counters is None:
-                    continue
-                primary = counters["primary"]
-                for rank, pick in enumerate(primary["picks"]):
-                    cur.execute(
-                        _INSERT_COUNTER_SQL,
-                        {
-                            "window_label": window.label,
-                            "platform": platform,
-                            "archetype": d["archetype"],
-                            "kind": "primary",
-                            "rank": rank,
-                            "role": primary["role"],
-                            "against_champion": primary["against_champion"],
-                            "champion_id": pick["champion_id"],
-                            "delta": pick["delta"],
-                        },
-                    )
-                for rank, sec in enumerate(counters["secondary"]):
-                    cur.execute(
-                        _INSERT_COUNTER_SQL,
-                        {
-                            "window_label": window.label,
-                            "platform": platform,
-                            "archetype": d["archetype"],
-                            "kind": "secondary",
-                            "rank": rank,
-                            "role": sec["role"],
-                            "against_champion": sec["against_champion"],
-                            "champion_id": sec["champion_id"],
-                            "delta": sec["delta"],
-                        },
-                    )
+                _write_matchup_picks(
+                    cur, window, platform, d["archetype"], "weakness", d["counters"]
+                )
+                _write_matchup_picks(
+                    cur, window, platform, d["archetype"], "strength", d["strengths"]
+                )
     logger.info(
         "draft_suggestions %s/%s rafraîchies : %d archétype(s)", window.label, platform, len(drafts)
     )

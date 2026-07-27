@@ -28,6 +28,7 @@ _INDEX = {
     4: Champion(4, "Vi", ""),
     5: Champion(5, "Orianna", ""),
     6: Champion(6, "Leona", ""),
+    7: Champion(7, "Zed", ""),
 }
 
 
@@ -1079,12 +1080,35 @@ def test_draft_page_suggest_shows_counters(pg_sync, client):
     )
     resp = client.get("/draft", params={"suggest": "1"})
     assert resp.status_code == 200
-    # Contre le champion PRÉCIS de la composition (Lee Sin en jungle), pas
-    # juste "le rôle jungle" dans l'abstrait (retour utilisateur 2026-07-25 :
-    # la 1ère formulation ne disait pas contre QUI).
-    assert "contre Lee Sin" in resp.text
+    # Nomme le champion PRÉCIS de la composition (Lee Sin en jungle), pas
+    # juste "le rôle jungle" dans l'abstrait, et dit explicitement que c'est
+    # un point FAIBLE (retour utilisateur 2026-07-26 : la 1ère formulation
+    # "contre Lee Sin" ne disait pas si la draft était forte ou faible).
+    assert "Lee Sin peut être puni(e) par" in resp.text
     assert "Leona" in resp.text
     assert "+10.0 %" in resp.text
+
+
+def test_draft_page_suggest_shows_strengths_and_weights(pg_sync, client):
+    """Points FORTS (retour utilisateur 2026-07-26, "contre qui cette
+    composition est forte ?") : symétrique des points faibles, matchup
+    inverse (`champ_a` = notre champion). Poids de l'archétype affichés sur
+    la carte (même retour) — "Meilleure synergie" pèse 100 % sur la
+    synergie."""
+    _seed_suggest_scenario(pg_sync)  # jgl=Lee Sin(1) mid=Ahri(2) ...
+    pg_sync.execute(
+        "INSERT INTO score_matchup (window_label, platform, role, champ_a, champ_b, games,"
+        " games_eff, wr, delta_raw, delta, ci_low, ci_high, tier)"
+        " VALUES ('16.13', 'euw1', 'JUNGLE', 1, 7, 100, 100.0, 0.65, 0.12, 0.12, 0.07, 0.17,"
+        " 'eleve')"
+    )
+    resp = client.get("/draft", params={"suggest": "1"})
+    assert resp.status_code == 200
+    assert "Points forts de cette composition" in resp.text
+    assert "Lee Sin domine" in resp.text
+    assert "Zed" in resp.text
+    assert "+12.0 %" in resp.text
+    assert "Synergie 100 %" in resp.text
 
 
 def test_draft_page_suggest_no_counters_shows_message(pg_sync, client):
@@ -1093,7 +1117,10 @@ def test_draft_page_suggest_no_counters_shows_message(pg_sync, client):
     _seed_suggest_scenario(pg_sync)
     resp = client.get("/draft", params={"suggest": "1"})
     assert resp.status_code == 200
-    assert "Aucun contre 1v1 notable trouvé pour cette composition." in resp.text
+    assert (
+        "Aucun matchup 1v1 notable trouvé pour cette composition"
+        " (ni point fort, ni point faible)." in resp.text
+    )
 
 
 def test_draft_page_compose_from_champions_completes_and_shows_reliability(pg_sync, client):
@@ -1112,6 +1139,50 @@ def test_draft_page_compose_from_champions_completes_and_shows_reliability(pg_sy
     assert "+51.0 %" in resp.text
     assert "Jungle/Mid : Lee Sin + Ahri" in resp.text
     assert "+30.0 %, fiabilité eleve (60 games)" in resp.text
+
+
+def test_draft_page_compose_without_archetype_proposes_one_per_archetype(pg_sync, client):
+    """Archétype non précisé (retour utilisateur 2026-07-26, "il faudrait
+    aussi pouvoir ne pas préciser l'archétype et que ça donne une
+    proposition par archétype") : une composition par archétype réussi,
+    comme "Compositions suggérées" — pas obligé de choisir à l'avance."""
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    # Toutes les paires (index : 1=jgl, 2=mid, 3=sup, 4=top, 5=bot) portent
+    # les mêmes scaling/cc/gold/drakes : les 4 archétypes doivent pouvoir
+    # compléter (seule la synergie discrimine encore leur classement interne).
+    rows = (
+        ("jgl_mid", 1, 2, 0.30),
+        ("jgl_sup", 1, 3, 0.05),
+        ("mid_sup", 2, 3, 0.04),
+        ("top_jgl", 4, 1, 0.02),
+        ("top_mid", 4, 2, 0.02),
+        ("top_sup", 4, 3, 0.03),
+        ("jgl_bot", 1, 5, 0.01),
+        ("mid_bot", 2, 5, 0.01),
+        ("bot_sup", 5, 3, 0.01),
+        ("top_bot", 4, 5, 0.02),
+    )
+    for roles, champ_a, champ_b, synergy in rows:
+        pg_sync.execute(
+            "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
+            " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct,"
+            " gold_diff_15, drakes)"
+            " VALUES ('16.13', 'euw1', %s, %s, %s, 60, 60.0, 0.55, %s, 0.0, %s, 'eleve',"
+            " 0.05, 20.0, 100.0, 0.02)",
+            (roles, champ_a, champ_b, synergy, synergy),
+        )
+    resp = client.get("/draft", params={"seed_jgl": "Lee Sin", "seed_mid": "Ahri"})
+    assert resp.status_code == 200
+    assert "Meilleure synergie" in resp.text
+    assert "Scaling / fin de partie" in resp.text
+    assert "Avantage early / lane" in resp.text
+    assert "Contrôle des objectifs" in resp.text
+    assert resp.text.count("draft-suggest-card") == 4
 
 
 def test_draft_page_compose_shows_no_data_for_unplayed_pair(pg_sync, client):

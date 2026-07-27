@@ -321,6 +321,7 @@ th[data-tooltip]::after, label[data-tooltip]::after {
   background: transparent; color: var(--foreground); border: 1px solid var(--input);
   border-radius: var(--radius); padding: 0.35rem 0.55rem; font-size: 0.85rem;
 }
+.draft-compose-archetype select option { background: var(--card); color: var(--foreground); }
 .draft-compose-loadbar {
   width: 6rem; height: 3px; border-radius: 3px; overflow: hidden; background: var(--muted);
   position: relative; opacity: 0; transition: opacity 150ms ease-in;
@@ -359,6 +360,7 @@ th[data-tooltip]::after, label[data-tooltip]::after {
   margin: 0; font-size: 0.85rem; font-weight: 600; color: var(--accent);
   text-transform: uppercase; letter-spacing: 0.03em;
 }
+.draft-suggest-weights { margin: 0; font-size: 0.72rem; }
 .draft-suggest-members { display: flex; flex-direction: column; gap: 0.4rem; }
 .draft-suggest-members .champ { gap: 0.5rem; }
 .draft-suggest-advice {

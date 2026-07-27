@@ -41,6 +41,17 @@ logger = logging.getLogger(__name__)
 _HERE = Path(__file__).resolve().parent
 
 ROLE_LABELS = {"jgl": "Jungle", "mid": "Mid", "sup": "Support", "top": "Top", "bot": "ADC"}
+# Libellés lisibles des axes d'archétype (synergy.draft_suggestions.
+# ARCHETYPE_STAT_COLUMNS) — retour utilisateur 2026-07-26 : afficher le
+# poids de chaque métrique sur les cartes de composition, pas seulement le
+# nom de l'archétype.
+DRAFT_ARCHETYPE_AXIS_LABELS = {
+    "synergy": "Synergie",
+    "scaling": "Scaling",
+    "cc": "CC",
+    "gold": "Gold@15",
+    "drakes": "Drakes",
+}
 # Volontairement limité au trio jgl/mid/sup : gate la route /champion/{role}
 # (page individuelle par champion, jamais généralisée à top/bot — Phase 7 ne
 # généralise que le duo, cf. docs/ROADMAP.md). Exposé en global Jinja pour que
@@ -894,6 +905,17 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             ],
         }
 
+    def _archetype_weights_display(archetype_key: str) -> list[dict]:
+        """Poids de chaque axe pour cet archétype, prêts à afficher (retour
+        utilisateur 2026-07-26) — axes à poids nul omis (ex. scaling=0 pour
+        "Avantage early / lane")."""
+        weights = draft_suggestions.ARCHETYPES[archetype_key]["weights"]
+        return [
+            {"label": DRAFT_ARCHETYPE_AXIS_LABELS[axis], "value": value}
+            for axis, value in weights.items()
+            if value
+        ]
+
     def _build_draft_result(raw: dict) -> dict:
         """Adapte un résultat BRUT (`synergy.draft_suggestions.propose_drafts`,
         un draft "compose à la main" tout juste calculé, ou une ligne lue
@@ -916,11 +938,13 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         )
         return {
             "label": raw["label"],
+            "weights": _archetype_weights_display(raw["archetype"]),
             "members": members,
             "total_synergy": raw["total_synergy"],
             "seed_pairs": _resolve_seed_pairs(raw["seed_pairs"]),
             "advice": advice,
             "counters": _resolve_counters(raw["counters"]),
+            "strengths": _resolve_counters(raw["strengths"]),
         }
 
     def _manual_propose(
@@ -956,6 +980,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 conn, window, platform, full_placed, ("scaling", "cc_blended_pct", "gold_diff_15")
             ),
             "counters": draft_suggestions.draft_counters(conn, window, platform, full_placed),
+            "strengths": draft_suggestions.draft_strengths(conn, window, platform, full_placed),
         }
 
     @app.get("/draft", response_class=HTMLResponse)
@@ -1018,23 +1043,31 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 raws = draft_suggestions.propose_drafts(conn, window, platform, pool, zstats)
                 suggested_drafts = [_build_draft_result(raw) for raw in raws]
 
-            manual_result = None
+            # Formulaire soumis dès que 1 champion ou un archétype est fourni
+            # — une page fraîche n'a ni l'un ni l'autre dans l'URL. Archétype
+            # non précisé (retour utilisateur 2026-07-26) : une proposition
+            # par archétype (comme "Compositions suggérées"), pas obligé de
+            # choisir à l'avance — chaque archétype réussi ou non
+            # indépendamment, comme partout ailleurs sur cette page.
+            manual_results: list[dict] = []
             manual_error = None
-            if archetype is not None:
-                if archetype not in draft_suggestions.ARCHETYPES:
+            if seed_picks or archetype:
+                if archetype and archetype not in draft_suggestions.ARCHETYPES:
                     raise HTTPException(404, f"archétype inconnu : {archetype!r}")
                 if not seed_picks:
                     manual_error = "Choisis au moins 1 champion avant de compléter la draft."
                 else:
                     _, zstats = _get_pool_zstats()
-                    raw = _manual_propose(conn, window, platform, seed_picks, archetype, zstats)
-                    if raw is None:
+                    keys = [archetype] if archetype else list(draft_suggestions.ARCHETYPES)
+                    for key in keys:
+                        raw = _manual_propose(conn, window, platform, seed_picks, key, zstats)
+                        if raw is not None:
+                            manual_results.append(_build_draft_result(raw))
+                    if not manual_results:
                         manual_error = (
                             "Pas assez de données fiables pour compléter cette composition —"
                             " essaie d'autres champions ou un autre archétype."
                         )
-                    else:
-                        manual_result = _build_draft_result(raw)
 
         def _draft_url(**overrides: str) -> str:
             params = {
@@ -1061,7 +1094,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 },
                 "archetypes": draft_suggestions.ARCHETYPES,
                 "selected_archetype": archetype or "",
-                "manual_result": manual_result,
+                "manual_results": manual_results,
                 "manual_error": manual_error,
             },
         )
