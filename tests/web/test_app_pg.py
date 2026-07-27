@@ -1180,6 +1180,46 @@ def test_draft_page_no_custom_weights_shows_neither_card_nor_error(pg_sync, clie
     assert "La somme des poids doit faire 100" not in resp.text
 
 
+def test_draft_page_compose_with_custom_weights(pg_sync, client):
+    """ "Compose à partir de tes champions" avec archétype "custom" (retour
+    utilisateur 2026-07-28, "on puisse aussi personnaliser les poids") :
+    les poids soumis via les mêmes champs `w_<axe>` que "Personnalise tes
+    poids" s'appliquent aussi à la complétion des champions choisis à la
+    main — carte "Personnalisé" dans `manual_results`, pas d'erreur."""
+    _seed_suggest_scenario(pg_sync)
+    resp = client.get(
+        "/draft",
+        params={
+            "seed_jgl": "Lee Sin",
+            "seed_mid": "Ahri",
+            "archetype": "custom",
+            "w_synergy": "100",
+            "w_scaling": "0",
+            "w_cc": "0",
+            "w_gold": "0",
+            "w_drakes": "0",
+            "w_soul": "0",
+        },
+    )
+    assert resp.status_code == 200
+    assert '<h3 class="draft-suggest-label">Personnalisé</h3>' in resp.text
+    for name in ("Vi", "Lee Sin", "Ahri", "Orianna", "Thresh"):
+        assert name in resp.text
+
+
+def test_draft_page_compose_custom_archetype_without_weights_shows_error(pg_sync, client):
+    """ "Personnalisé" choisi sans avoir rempli les poids : message explicite
+    plutôt qu'un plantage ou une complétion silencieuse avec des poids
+    vides (retour utilisateur 2026-07-28)."""
+    _seed_suggest_scenario(pg_sync)
+    resp = client.get(
+        "/draft", params={"seed_jgl": "Lee Sin", "seed_mid": "Ahri", "archetype": "custom"}
+    )
+    assert resp.status_code == 200
+    # Apostrophe échappée en HTML (d&#39;abord) : on évite le caractère.
+    assert "abord tes poids personnalisés" in resp.text
+
+
 def test_draft_page_suggest_shows_counters(pg_sync, client):
     """Contres 1v1 (retour utilisateur 2026-07-25) : le rôle le plus
     exploitable de la composition affiche ses contres — toujours du 1v1 par

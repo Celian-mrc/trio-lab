@@ -115,6 +115,9 @@
   <input type="hidden" name="seed_{{ role }}" value="{{ seed_names[role] }}">
   {% endfor %}
   <input type="hidden" name="archetype" value="{{ selected_archetype }}">
+  {% for axis in custom_weight_axes %}
+  <input type="hidden" name="w_{{ axis }}" value="{{ custom_weight_values[axis] }}">
+  {% endfor %}
   <button type="submit">Appliquer</button>
 </form>
 
@@ -123,6 +126,9 @@
   <form method="get" action="/draft" class="draft-compose-form">
     <input type="hidden" name="window" value="{{ window }}">
     <input type="hidden" name="platform" value="{{ platform }}">
+    {% for axis in custom_weight_axes %}
+    <input type="hidden" name="w_{{ axis }}" value="{{ custom_weight_values[axis] }}">
+    {% endfor %}
     <div class="draft-compose-roles">
       {% for role in draft_roles %}
       <label class="draft-compose-role">
@@ -137,6 +143,7 @@
         {% for key, a in archetypes.items() %}
         <option value="{{ key }}" {{ 'selected' if key == selected_archetype }}>{{ a.label }}</option>
         {% endfor %}
+        <option value="custom" {{ 'selected' if selected_archetype == 'custom' }}>Personnalisé (poids ci-dessous)</option>
       </select>
       <button type="submit" class="button-like">Compléter la draft</button>
       <span class="draft-compose-loadbar" aria-hidden="true"></span>
@@ -186,7 +193,10 @@
       </label>
       {% endfor %}
     </div>
-    <button type="submit" class="button-like">Générer ma composition</button>
+    <div class="draft-custom-submit">
+      <button type="submit" class="button-like">Générer ma composition</button>
+      <span class="draft-custom-loadbar" aria-hidden="true"></span>
+    </div>
   </form>
   {% if custom_error %}
   <p class="empty">{{ custom_error }}</p>

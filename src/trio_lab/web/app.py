@@ -996,19 +996,24 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         platform: str,
         seed_picks: dict[str, int],
         archetype_key: str,
+        label: str,
+        weights: dict[str, float],
         zstats: dict[str, tuple[float, float]],
     ) -> dict | None:
         """Construit le résultat BRUT (même forme que `propose_drafts`) pour
         "Compose à partir de tes champions" — 1 seul résultat, pas de
         recherche parmi plusieurs seeds (l'utilisateur a déjà fixé son point
         de départ, `seed_picks`, 1 à 5 rôles). `None` si la complétion des
-        rôles restants échoue (pas assez de données fiables).
+        rôles restants échoue (pas assez de données fiables). Prend `label`/
+        `weights` directement (retour utilisateur 2026-07-28, poids
+        personnalisés) plutôt que de chercher `archetype_key` dans
+        `ARCHETYPES` — fonctionne aussi bien pour les 4 archétypes fixes que
+        pour l'option "Personnalisé" du formulaire.
 
         Un passage de remplacement (`refine_draft`, retour utilisateur
         2026-07-27) s'applique ensuite — mais AVEC `seed_picks` verrouillés :
         l'utilisateur a choisi ces champions exprès, le raffinement ne peut
         toucher que les rôles que LE SYSTÈME a complétés lui-même."""
-        weights = draft_suggestions.ARCHETYPES[archetype_key]["weights"]
         placed, total, seed_pairs = draft_suggestions.seed_from_champions(
             conn, window, platform, seed_picks
         )
@@ -1034,7 +1039,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             "suggestion_rank": 0,
             "selection": "score",
             "weights": weights,
-            "label": draft_suggestions.ARCHETYPES[archetype_key]["label"],
+            "label": label,
             "members": full_placed,
             "total_synergy": full_total,
             "seed_pairs": seed_pairs,
@@ -1189,15 +1194,34 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             manual_results: list[dict] = []
             manual_error = None
             if seed_picks or archetype:
-                if archetype and archetype not in draft_suggestions.ARCHETYPES:
+                if (
+                    archetype
+                    and archetype != "custom"
+                    and archetype not in draft_suggestions.ARCHETYPES
+                ):
                     raise HTTPException(404, f"archétype inconnu : {archetype!r}")
                 if not seed_picks:
                     manual_error = "Choisis au moins 1 champion avant de compléter la draft."
+                elif archetype == "custom" and custom_weights is None:
+                    # "Personnalisé" choisi mais poids absents/invalides — même
+                    # message que "Personnalise tes poids" si soumis (retour
+                    # utilisateur 2026-07-28), jamais un plantage silencieux.
+                    manual_error = custom_error or (
+                        "Renseigne d'abord tes poids personnalisés ci-dessous"
+                        ' (section "Personnalise tes poids").'
+                    )
                 else:
                     _, zstats = _get_pool_zstats()
                     keys = [archetype] if archetype else list(draft_suggestions.ARCHETYPES)
                     for key in keys:
-                        raw = _manual_propose(conn, window, platform, seed_picks, key, zstats)
+                        if key == "custom":
+                            label, weights = "Personnalisé", custom_weights
+                        else:
+                            label = draft_suggestions.ARCHETYPES[key]["label"]
+                            weights = draft_suggestions.ARCHETYPES[key]["weights"]
+                        raw = _manual_propose(
+                            conn, window, platform, seed_picks, key, label, weights, zstats
+                        )
                         if raw is not None:
                             manual_results.append(_build_draft_result(raw))
                     if not manual_results:
@@ -1238,7 +1262,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 "custom_error": custom_error,
                 "custom_weight_axes": CUSTOM_WEIGHT_AXES,
                 "custom_weight_axis_labels": DRAFT_ARCHETYPE_AXIS_LABELS,
-                "custom_weight_values": raw_weights,
+                "custom_weight_values": {axis: v or "" for axis, v in raw_weights.items()},
             },
         )
 

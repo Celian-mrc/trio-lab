@@ -1043,6 +1043,29 @@ gagner") avec les données déjà en place.
         pour les lignes précalculées, qui ne stockent que des archétypes
         fixes de toute façon).
 
+- [x] **Barre de chargement + poids personnalisés dans "Compose à partir de
+      tes champions" (2026-07-28, retour utilisateur)** :
+      - `.draft-custom-loadbar`, même mécanisme que `.draft-compose-loadbar`
+        (htmx `hx-boost` déjà body-wide, la classe `.htmx-request` s'ajoute
+        automatiquement au formulaire pendant la requête — aucun JS
+        supplémentaire nécessaire).
+      - Option "Personnalisé (poids ci-dessous)" ajoutée au `<select>`
+        archétype de "Compose à partir de tes champions" — les 2 formulaires
+        (celui-là et "Personnalise tes poids") partagent les mêmes champs
+        `w_<axe>` via des inputs cachés à valeur "sticky" (même principe
+        déjà établi que `seed_*` porté par le formulaire de filtres tout en
+        haut). `_manual_propose` prend désormais `label`/`weights`
+        directement (comme `propose_for_weights`) plutôt que de chercher
+        `archetype_key` dans `ARCHETYPES` — "Personnalisé" choisi sans poids
+        renseignés → message explicite plutôt qu'un plantage.
+      - **Bug corrigé en écrivant les tests** : les champs `w_<axe>` non
+        soumis rendaient `value="None"` (le `None` Python brut interpolé
+        tel quel dans le HTML) plutôt que vide — invisible à l'œil nu car
+        un `<input type="number">` invalide s'affiche vide dans un
+        navigateur (masque le bug), mais détecté par une assertion de test
+        sur le HTML brut. Corrigé en filtrant `v or ""` avant de passer les
+        valeurs au template.
+
 Phase 8 close pour l'instant (draft, insights, résilience, flex) — prochaine idée à définir.
 
 **Gap constaté en marge de cette révision (2026-07-19)** : `agg_matchup`/
