@@ -155,11 +155,18 @@ ARCHETYPES: dict[str, dict] = {
             # de portée théorique dominant, `scaling` à 0 (le poke n'est pas
             # une identité "fin de partie" — le chip damage à distance
             # s'exerce tôt/milieu de partie, le mélanger avec le scaling
-            # diluerait l'identité, même raisonnement que "early").
-            "range": 0.40,
-            "cc": 0.10,  # peel pour protéger les champions à distance
-            "gold": 0.10,  # une guerre de poke gagnée se traduit en gold
-            "drakes": 0.10,  # contrôle de zone autour des objectifs
+            # diluerait l'identité, même raisonnement que "early"). Abaissé
+            # de 0.40 à 0.34 (retour utilisateur 2026-07-28 : "40% ça me
+            # paraît un peu trop élevé") — contrairement aux autres axes
+            # (gold/drakes/cc, mesurés en jeu), `range_theoretical_pct` est
+            # 100% théorique, jamais recalé par le comportement réel des
+            # joueurs (cf. rangeref/score.py) ; un poids dominant mais moins
+            # écrasant que "early" (gold à 0.455) reflète cette confiance
+            # moindre. Delta (0.06) reporté également sur cc/gold/drakes.
+            "range": 0.34,
+            "cc": 0.12,  # peel pour protéger les champions à distance
+            "gold": 0.12,  # une guerre de poke gagnée se traduit en gold
+            "drakes": 0.12,  # contrôle de zone autour des objectifs
             "scaling": 0.0,
         },
     },

@@ -1188,6 +1188,14 @@ gagner") avec les données déjà en place.
         une fenêtre déjà matérialisée sans nouvelles games — vérifier
         `count(colonne) FROM score_duo/score_trio` après un refresh de
         backfill, pas seulement le log de `refresh()`.
+      - **Poids de l'archétype abaissé le jour même** (retour utilisateur :
+        "40% ça me paraît un peu trop élevé") : `range` 0.40 → 0.34,
+        delta reporté sur `cc`/`gold`/`drakes` (0.10 → 0.12 chacun) —
+        `range_theoretical_pct` reste l'axe dominant mais un peu moins
+        écrasant que "early" (gold à 0.455), cohérent avec le fait que
+        c'est le seul axe 100% théorique du système (jamais recalé par le
+        comportement réel des joueurs, contrairement aux autres). Draft
+        suggestions re-matérialisées.
 
 Phase 8 close pour l'instant (draft, insights, résilience, flex, poke)
 — prochaine idée à définir.
