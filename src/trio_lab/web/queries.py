@@ -35,13 +35,14 @@ TRIO_SORTS = {
     "cc": "cc_time_s",
     "cc_blend": "cc_blended_pct",
     "scaling": "scaling",
+    "range": "range_theoretical_pct",
 }
 DUO_SORTS = dict(TRIO_SORTS)  # score_duo porte les mêmes colonnes depuis 008/009/010
 SORT_DIRECTIONS = {"asc": "ASC", "desc": "DESC"}
 _STAT_COLUMNS_SQL = (
     "gold_diff_5, gold_diff_10, gold_diff_15, team_gold_diff_15, vision_score, drakes,"
     " soul_rate, herald_rate, first_tower_rate, cc_time_s,"
-    " cc_theoretical_pct, cc_empirical_pct, cc_blended_pct, scaling"
+    " cc_theoretical_pct, cc_empirical_pct, cc_blended_pct, scaling, range_theoretical_pct"
 )
 # Phase 7 (duo généralisé) : les 3 premières restent sourcées sur
 # match_trio_stats (`duo_match_rows`), les 7 suivantes sur match_role_stats

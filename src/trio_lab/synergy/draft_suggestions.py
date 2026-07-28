@@ -78,14 +78,16 @@ _TIER_AT_LEAST = {
     "moyen": ("moyen", "eleve"),
     "eleve": ("eleve",),
 }
-_STAT_COLUMNS_SQL = "scaling, cc_blended_pct, gold_diff_15, drakes, soul_rate"
+_STAT_COLUMNS_SQL = (
+    "scaling, cc_blended_pct, gold_diff_15, drakes, soul_rate, range_theoretical_pct"
+)
 
-# 4 profils de poids ("archétypes", poids arbitraires mais justifiés, pas de
+# 5 profils de poids ("archétypes", poids arbitraires mais justifiés, pas de
 # test statistique dessus). "synergy" pesé comme les autres axes (100 % pour
-# "Meilleure synergie", 30 % pour les 3 profils pondérés — le reste sur
-# scaling/CC/gold/drakes/âme, poids d'origine × 0,7, pour ne pas sacrifier la
-# synergie pure au profit du profil). Validé sur données réelles avant de
-# figer (cf. docs/ROADMAP.md).
+# "Meilleure synergie", 30 % pour les 4 profils pondérés — le reste sur
+# scaling/CC/gold/drakes/âme/portée, poids d'origine × 0,7, pour ne pas
+# sacrifier la synergie pure au profit du profil). Validé sur données
+# réelles avant de figer (cf. docs/ROADMAP.md).
 ARCHETYPE_STAT_COLUMNS = {
     "synergy": "synergy",
     "scaling": "scaling",
@@ -93,6 +95,10 @@ ARCHETYPE_STAT_COLUMNS = {
     "gold": "gold_diff_15",
     "drakes": "drakes",
     "soul": "soul_rate",
+    # Retour utilisateur 2026-07-28 : "compos poke avec de la range" — score
+    # de portée théorique (`rangeref/`), 100% théorique (aucune stat Riot ne
+    # mesure la distance de poke réelle en jeu, contrairement au CC).
+    "range": "range_theoretical_pct",
 }
 ARCHETYPES: dict[str, dict] = {
     "synergy": {"label": "Meilleure synergie", "weights": {"synergy": 1.0}},
@@ -139,6 +145,22 @@ ARCHETYPES: dict[str, dict] = {
             "cc": 0.245,
             "gold": 0.07,
             "drakes": 0.315,
+        },
+    },
+    "range": {
+        "label": "Poke / zone",
+        "weights": {
+            "synergy": 0.30,
+            # Identité de l'archétype (retour utilisateur 2026-07-28) : score
+            # de portée théorique dominant, `scaling` à 0 (le poke n'est pas
+            # une identité "fin de partie" — le chip damage à distance
+            # s'exerce tôt/milieu de partie, le mélanger avec le scaling
+            # diluerait l'identité, même raisonnement que "early").
+            "range": 0.40,
+            "cc": 0.10,  # peel pour protéger les champions à distance
+            "gold": 0.10,  # une guerre de poke gagnée se traduit en gold
+            "drakes": 0.10,  # contrôle de zone autour des objectifs
+            "scaling": 0.0,
         },
     },
 }
@@ -880,8 +902,8 @@ def propose_for_weights(
     2026-07-27 : "des boutons 1/2/3... 3 propositions par archétype" —
     jamais forcé à 3 si la diversité manque). Factorisée hors de
     `propose_drafts` (retour utilisateur 2026-07-28, poids personnalisés)
-    pour être réutilisable aussi bien par les 4 archétypes fixes que par un
-    5e jeu de poids choisi par l'utilisateur. Essaie TOUS les duos de départ
+    pour être réutilisable aussi bien par les 5 archétypes fixes que par un
+    jeu de poids choisi par l'utilisateur. Essaie TOUS les duos de départ
     du short-list (pas seulement le premier qui complète), calcule le score
     de chaque composition FINIE sur ses 10 vraies paires
     (`full_draft_score`), puis sélectionne :
@@ -1118,7 +1140,7 @@ def _write_matchup_picks(
 def refresh(window: PatchWindow, platform: str, *, dsn: str | None = None) -> int:
     """Matérialise les compositions suggérées de `platform` dans
     `draft_suggestion(_counter)`. Retourne le nombre de compositions écrites
-    (0 à 12 : jusqu'à 3 par archétype, cf. `propose_drafts`). DELETE +
+    (0 à 15 : jusqu'à 3 par archétype, cf. `propose_drafts`). DELETE +
     INSERT (même raisonnement que `resilience`/`win_factors`/`gold_factors`)."""
     with psycopg.connect(db.require_dsn(dsn)) as conn:
         pool, zstats = pool_and_zstats(conn, window.label, platform)

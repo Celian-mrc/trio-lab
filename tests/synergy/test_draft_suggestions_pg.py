@@ -227,6 +227,65 @@ def test_propose_drafts_uses_different_seed_duo_per_archetype(pg_sync):
     assert {scaling_seed["champ_a"], scaling_seed["champ_b"]} == {4, 5}
 
 
+def test_propose_drafts_range_archetype_prefers_long_range_duo(pg_sync):
+    """ "Poke / zone" (retour utilisateur 2026-07-28, "il manque un
+    archétype... compos poke avec de la range") : un duo à faible portée
+    théorique mais forte synergie doit gagner "Meilleure synergie" et
+    PERDRE "Poke / zone", et inversement pour un duo à forte portée mais
+    synergie plus faible — preuve que `range_theoretical_pct` discrimine
+    vraiment le classement de cet archétype (pas seulement présent dans
+    ARCHETYPE_STAT_COLUMNS sans effet)."""
+    # Duo A (jgl_mid, champ 1/2) : synergie dominante, portée théorique
+    # FAIBLE — gagne "Meilleure synergie", perd "Poke / zone".
+    pg_sync.execute(
+        "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
+        " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15,"
+        " drakes, range_theoretical_pct)"
+        " VALUES ('16.13', 'all', 'jgl_mid', 1, 2, 60, 60.0, 0.55, 0.30, 0.0, 0.30, 'eleve',"
+        " 0.0, 20.0, 100.0, 0.02, 10.0)"
+    )
+    # Duo B (top_bot, champ 4/5) : synergie plus faible, portée théorique
+    # ÉLEVÉE — perd "Meilleure synergie", gagne "Poke / zone".
+    pg_sync.execute(
+        "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
+        " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15,"
+        " drakes, range_theoretical_pct)"
+        " VALUES ('16.13', 'all', 'top_bot', 4, 5, 60, 60.0, 0.55, 0.05, 0.0, 0.05, 'eleve',"
+        " 0.0, 20.0, 100.0, 0.02, 90.0)"
+    )
+    # Paires structurelles restantes : stats archétype neutres partout, pour
+    # ne pas disqualifier un candidat faute de donnée.
+    rows = (
+        ("jgl_sup", 1, 3, 0.05),
+        ("mid_sup", 2, 3, 0.04),
+        ("top_jgl", 4, 1, 0.02),
+        ("top_mid", 4, 2, 0.02),
+        ("top_sup", 4, 3, 0.03),
+        ("jgl_bot", 1, 5, 0.01),
+        ("mid_bot", 2, 5, 0.01),
+        ("bot_sup", 5, 3, 0.01),
+    )
+    for roles, champ_a, champ_b, synergy in rows:
+        pg_sync.execute(
+            "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
+            " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct,"
+            " gold_diff_15, drakes, range_theoretical_pct)"
+            " VALUES ('16.13', 'all', %s, %s, %s, 60, 60.0, 0.55, %s, 0.0, %s, 'eleve',"
+            " 0.0, 20.0, 100.0, 0.02, 50.0)",
+            (roles, champ_a, champ_b, synergy, synergy),
+        )
+    pool, zstats = draft_suggestions.pool_and_zstats(pg_sync, "16.13", "all")
+    results = draft_suggestions.propose_drafts(pg_sync, "16.13", "all", pool, zstats)
+    by_archetype = {r["archetype"]: r for r in results}
+    assert "synergy" in by_archetype
+    assert "range" in by_archetype
+    assert by_archetype["range"]["label"] == "Poke / zone"
+    synergy_seed = by_archetype["synergy"]["seed_pairs"][0]
+    range_seed = by_archetype["range"]["seed_pairs"][0]
+    assert {synergy_seed["champ_a"], synergy_seed["champ_b"]} == {1, 2}
+    assert {range_seed["champ_a"], range_seed["champ_b"]} == {4, 5}
+
+
 def _insert_pentad(
     conn,
     base_id: int,

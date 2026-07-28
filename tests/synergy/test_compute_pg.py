@@ -208,6 +208,41 @@ async def test_cc_pct_columns_materialized_for_duo_and_trio(pg_conn):
     assert emp_duo == pytest.approx(12.5)
 
 
+async def test_range_pct_column_materialized_for_duo_and_trio(pg_conn):
+    """`champion_range_theoretical` peuplée → score_duo/score_trio portent
+    `range_theoretical_pct`, sinon NULL (vérifié implicitement par les
+    autres tests, qui ne la peuplent pas). Contrairement au CC : UNE seule
+    colonne, jamais de mélange empirique (aucune stat Riot ne mesure la
+    distance de poke réelle en jeu, cf. `rangeref/score.py`) — réutilise
+    directement `ccref.score.theoretical_pct` pour la normalisation."""
+    await _seed(pg_conn)
+    for champ_id, range_score in (
+        (1, 600.0),
+        (2, 100.0),
+        (3, 300.0),
+        (9, 1000.0),
+    ):  # 9 = max global
+        await pg_conn.execute(
+            "INSERT INTO champion_range_theoretical (champion_id, score) VALUES (%s, %s)",
+            (champ_id, range_score),
+        )
+    compute.refresh(windows.make_window(["16.13"]), dsn=TEST_DSN)
+
+    cur = await pg_conn.execute(
+        "SELECT range_theoretical_pct FROM score_trio WHERE platform = 'euw1'"
+    )
+    (pct,) = await cur.fetchone()
+    # trio (600+100+300) / (3×1000) × 100 = 33.33 %.
+    assert pct == pytest.approx(1000 / 3000 * 100, rel=1e-4)
+
+    cur = await pg_conn.execute(
+        "SELECT range_theoretical_pct FROM score_duo WHERE roles = 'jgl_mid' AND platform = 'euw1'"
+    )
+    (pct_duo,) = await cur.fetchone()
+    # duo jgl+mid (600+100) / (2×1000) × 100 = 35 %.
+    assert pct_duo == pytest.approx(700 / 2000 * 100, rel=1e-4)
+
+
 async def test_cc_per_member_materialized_for_duo_and_trio(pg_conn):
     """Ventilation CC par membre (migration 020) : jgl/mid/sup pour un trio,
     champ_a/champ_b (selon `roles`) pour un duo — indépendante du total `cc_sum`."""

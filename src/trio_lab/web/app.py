@@ -52,10 +52,11 @@ DRAFT_ARCHETYPE_AXIS_LABELS = {
     "gold": "Gold@15",
     "drakes": "Drakes",
     "soul": "Âme",
+    "range": "Portée",
 }
 # Ordre d'affichage des champs du formulaire "Personnalise tes poids"
 # (retour utilisateur 2026-07-28) — mêmes clés que ARCHETYPE_STAT_COLUMNS.
-CUSTOM_WEIGHT_AXES = ("synergy", "scaling", "cc", "gold", "drakes", "soul")
+CUSTOM_WEIGHT_AXES = ("synergy", "scaling", "cc", "gold", "drakes", "soul", "range")
 # Volontairement limité au trio jgl/mid/sup : gate la route /champion/{role}
 # (page individuelle par champion, jamais généralisée à top/bot — Phase 7 ne
 # généralise que le duo, cf. docs/ROADMAP.md). Exposé en global Jinja pour que
@@ -913,7 +914,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         """Poids de chaque axe, prêts à afficher (retour utilisateur
         2026-07-26) — axes à poids nul omis (ex. scaling=0 pour "Avantage
         early / lane"). Prend directement le dict de poids (pas une clé
-        d'archétype) : fonctionne aussi bien pour les 4 archétypes fixes que
+        d'archétype) : fonctionne aussi bien pour les archétypes fixes que
         pour des poids personnalisés (retour utilisateur 2026-07-28)."""
         return [
             {"label": DRAFT_ARCHETYPE_AXIS_LABELS[axis], "value": value}
@@ -1007,7 +1008,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         rôles restants échoue (pas assez de données fiables). Prend `label`/
         `weights` directement (retour utilisateur 2026-07-28, poids
         personnalisés) plutôt que de chercher `archetype_key` dans
-        `ARCHETYPES` — fonctionne aussi bien pour les 4 archétypes fixes que
+        `ARCHETYPES` — fonctionne aussi bien pour les archétypes fixes que
         pour l'option "Personnalisé" du formulaire.
 
         Un passage de remplacement (`refine_draft`, retour utilisateur
@@ -1053,9 +1054,10 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
     def _parse_custom_weights(
         raw_weights: dict[str, str | None],
     ) -> tuple[dict[str, float] | None, str | None]:
-        """Lit les 6 champs `w_<axe>` du formulaire "Personnalise tes poids"
-        (retour utilisateur 2026-07-28 : "que l'utilisateur décide lui-même
-        des poids") — `(None, None)` si le formulaire n'a jamais été soumis
+        """Lit les champs `w_<axe>` (un par `CUSTOM_WEIGHT_AXES`) du formulaire
+        "Personnalise tes poids" (retour utilisateur 2026-07-28 : "que
+        l'utilisateur décide lui-même des poids") — `(None, None)` si le
+        formulaire n'a jamais été soumis
         (tous les champs vides, cas de la page fraîche), `(None, message)`
         si soumis mais invalide (jamais une correction silencieuse — poids
         négatif ou somme ≠ 100, tolérance ±0.5 pour l'arrondi d'un champ
@@ -1095,12 +1097,14 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         w_gold: str | None = None,
         w_drakes: str | None = None,
         w_soul: str | None = None,
+        w_range: str | None = None,
         cw_synergy: str | None = None,
         cw_scaling: str | None = None,
         cw_cc: str | None = None,
         cw_gold: str | None = None,
         cw_drakes: str | None = None,
         cw_soul: str | None = None,
+        cw_range: str | None = None,
     ):
         raw_seeds = {
             "top": seed_top,
@@ -1126,6 +1130,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             "gold": w_gold,
             "drakes": w_drakes,
             "soul": w_soul,
+            "range": w_range,
         }
         current_weight_params = {f"w_{axis}": v or "" for axis, v in raw_weights.items()}
         custom_weights, custom_error = _parse_custom_weights(raw_weights)
@@ -1144,6 +1149,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             "gold": cw_gold,
             "drakes": cw_drakes,
             "soul": cw_soul,
+            "range": cw_range,
         }
         current_manual_weight_params = {
             f"cw_{axis}": v or "" for axis, v in raw_manual_weights.items()
@@ -1192,9 +1198,10 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                     [_build_draft_result(raw, include_seed_pairs=False) for raw in raws]
                 )
 
-            # 5e archétype "Personnalise tes poids" : sa propre section, à
-            # part des 4 fixes (retour utilisateur 2026-07-28 — éviter de
-            # forcer une 5e carte dans la grille des 4 archétypes fixes).
+            # Archétype "Personnalisé" de la section "Personnalise tes
+            # poids" : sa PROPRE place, à part des archétypes fixes (retour
+            # utilisateur 2026-07-28 — éviter de forcer une carte de plus
+            # dans la grille des archétypes fixes).
             custom_draft = None
             if custom_weights is not None:
                 pool, zstats = _get_pool_zstats()

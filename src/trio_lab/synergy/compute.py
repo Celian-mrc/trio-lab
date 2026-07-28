@@ -88,6 +88,11 @@ _AGG_STAT_COLUMNS = ("games", "wins", *(col for pair in STAT_PAIRS.values() for 
 # CC normalisé 0-100 (théorique/empirique/mélangé) : pas une simple moyenne
 # pondérée d'agrégats comme STAT_PAIRS, calculé à part par `_cc_pct_fields`.
 _CC_PCT_COLUMNS = ("cc_theoretical_pct", "cc_empirical_pct", "cc_blended_pct")
+# Portée théorique normalisée 0-100 (retour utilisateur 2026-07-28, compos
+# poke) — calculée à part par `_range_pct_fields`, comme le CC, mais UNE
+# seule colonne : jamais de mélange empirique (aucune stat Riot ne mesure
+# la distance de poke réelle), toujours 100% théorique.
+_RANGE_PCT_COLUMNS = ("range_theoretical_pct",)
 
 # CC empirique par membre (migration 020), en plus du total (`cc_time_s` dans
 # STAT_PAIRS) : colonnes différentes trio (rôles fixes) vs duo (champ_a/b
@@ -103,7 +108,7 @@ _DUO_POSITION_CC_PAIRS: dict[str, tuple[str, str]] = {
     "champ_b_cc_time_s": ("champ_b_cc_sum", "champ_b_cc_n"),
 }
 
-_SCORE_COLUMNS = (*STAT_PAIRS, *_CC_PCT_COLUMNS)
+_SCORE_COLUMNS = (*STAT_PAIRS, *_CC_PCT_COLUMNS, *_RANGE_PCT_COLUMNS)
 _SCORE_STAT_SQL = ", ".join(_SCORE_COLUMNS)
 _SCORE_STAT_PLACEHOLDERS = ", ".join(f"%({name})s" for name in _SCORE_COLUMNS)
 
@@ -215,6 +220,28 @@ def _cc_pct_fields(
     }
 
 
+def _range_pct_fields(
+    member_champions: tuple[int, ...], range_theo_scores: dict[int, float]
+) -> dict[str, float | None]:
+    """Score de portée théorique normalisé 0-100 (retour utilisateur
+    2026-07-28, "compos poke avec de la range") d'une combinaison — réutilise
+    `ccref.score.theoretical_pct` (formule générique de normalisation par
+    plafond, pas spécifique au CC malgré son nom de module). JAMAIS de
+    mélange empirique (contrairement au CC) : aucune stat Riot ne mesure la
+    distance de poke réelle en jeu — voir `rangeref/score.py`.
+
+    `range_theo_scores` vide (table `champion_range_theoretical` pas encore
+    synchronisée, `python -m trio_lab.rangeref.sync`) : le champ reste
+    `None` plutôt que de faire échouer tout le refresh."""
+    if not range_theo_scores:
+        return {"range_theoretical_pct": None}
+    raw = sum(range_theo_scores.get(c, 0.0) for c in member_champions)
+    pct = ccref_score.theoretical_pct(
+        raw, member_count=len(member_champions), scores=range_theo_scores
+    )
+    return {"range_theoretical_pct": pct}
+
+
 def _add_combined_stat_rows(mapping: dict[tuple, list[dict]], columns: tuple[str, ...]) -> None:
     """Équivalent de `scores.add_combined_platform` pour les lignes dict d'agg_*."""
     combined: dict[tuple, dict[str, dict]] = {}
@@ -272,7 +299,10 @@ def _load(conn: psycopg.Connection, window: PatchWindow):
     cc_theo_scores = dict(
         conn.execute("SELECT champion_id, score FROM champion_cc_theoretical").fetchall()
     )
-    return indiv, duos, trios, cc_theo_scores
+    range_theo_scores = dict(
+        conn.execute("SELECT champion_id, score FROM champion_range_theoretical").fetchall()
+    )
+    return indiv, duos, trios, cc_theo_scores, range_theo_scores
 
 
 def _load_duration_buckets(
@@ -362,7 +392,7 @@ def refresh(
 ) -> dict[str, int]:
     """Recalcule les scores d'une fenêtre. Retourne le nombre de lignes par table."""
     with psycopg.connect(db.require_dsn(dsn)) as conn:
-        indiv, duos, trios, cc_theo_scores = _load(conn, window)
+        indiv, duos, trios, cc_theo_scores, range_theo_scores = _load(conn, window)
         patches = list(window.patches)
         duo_durations = _load_duration_buckets(
             conn, patches, table="agg_duo_duration", key_columns=("roles", "champ_a", "champ_b")
@@ -424,6 +454,7 @@ def refresh(
                     **_cc_pct_fields(
                         (a, b), cc_theo_scores, stats["cc_time_s"], combo.games_eff, k
                     ),
+                    **_range_pct_fields((a, b), range_theo_scores),
                 }
             )
 
@@ -481,6 +512,7 @@ def refresh(
                     **_cc_pct_fields(
                         (jgl, mid, sup), cc_theo_scores, stats["cc_time_s"], combo.games_eff, k
                     ),
+                    **_range_pct_fields((jgl, mid, sup), range_theo_scores),
                 }
             )
 

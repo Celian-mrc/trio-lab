@@ -981,11 +981,11 @@ def test_draft_page_suggest_shows_advice_from_seed_duo_stats(pg_sync, client):
 
 
 def test_draft_page_suggest_skips_archetypes_without_stat_data(pg_sync, client):
-    """Sans scaling/CC/gold/drakes renseignés sur aucun duo, les 3
-    archétypes pondérés (Scaling/Early/Objectifs) n'ont aucun candidat
+    """Sans scaling/CC/gold/drakes/portée renseignés sur aucun duo, les 4
+    archétypes pondérés (Scaling/Early/Objectifs/Poke) n'ont aucun candidat
     classable — seule "Meilleure synergie" (qui ne dépend pas de ces
     colonnes) produit une composition, pas de ligne vide/plantée pour les
-    3 autres."""
+    4 autres."""
     _seed_suggest_scenario(pg_sync)
     resp = client.get("/draft", params={"suggest": "1"})
     assert resp.status_code == 200
@@ -1315,8 +1315,9 @@ def test_draft_page_compose_without_archetype_proposes_one_per_archetype(pg_sync
         " 0.0, 0.0, 1.0, 'faible')"
     )
     # Toutes les paires (index : 1=jgl, 2=mid, 3=sup, 4=top, 5=bot) portent
-    # les mêmes scaling/cc/gold/drakes/âme : les 4 archétypes doivent pouvoir
-    # compléter (seule la synergie discrimine encore leur classement interne).
+    # les mêmes scaling/cc/gold/drakes/âme/portée : les 5 archétypes doivent
+    # pouvoir compléter (seule la synergie discrimine encore leur classement
+    # interne).
     rows = (
         ("jgl_mid", 1, 2, 0.30),
         ("jgl_sup", 1, 3, 0.05),
@@ -1333,9 +1334,9 @@ def test_draft_page_compose_without_archetype_proposes_one_per_archetype(pg_sync
         pg_sync.execute(
             "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
             " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct,"
-            " gold_diff_15, drakes, soul_rate)"
+            " gold_diff_15, drakes, soul_rate, range_theoretical_pct)"
             " VALUES ('16.13', 'euw1', %s, %s, %s, 60, 60.0, 0.55, %s, 0.0, %s, 'eleve',"
-            " 0.05, 20.0, 100.0, 0.02, 0.10)",
+            " 0.05, 20.0, 100.0, 0.02, 0.10, 40.0)",
             (roles, champ_a, champ_b, synergy, synergy),
         )
     resp = client.get("/draft", params={"seed_jgl": "Lee Sin", "seed_mid": "Ahri"})
@@ -1344,7 +1345,8 @@ def test_draft_page_compose_without_archetype_proposes_one_per_archetype(pg_sync
     assert "Scaling / fin de partie" in resp.text
     assert "Avantage early / lane" in resp.text
     assert "Contrôle des objectifs" in resp.text
-    assert resp.text.count("draft-suggest-card") == 4
+    assert "Poke / zone" in resp.text
+    assert resp.text.count("draft-suggest-card") == 5
 
 
 def test_draft_page_compose_shows_no_data_for_unplayed_pair(pg_sync, client):

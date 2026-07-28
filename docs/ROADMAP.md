@@ -1106,7 +1106,91 @@ gagner") avec les données déjà en place.
         Corrigé en soumettant strictement `cw_*` et en vérifiant l'absence
         de `draft-custom-result` dans la réponse.
 
-Phase 8 close pour l'instant (draft, insights, résilience, flex) — prochaine idée à définir.
+- [x] **Archétype "Poke / zone" — score de portée théorique par champion
+      (2026-07-28, retour utilisateur : "il manque un archétype poke avec de
+      la range")** : nouveau module `rangeref/` (mirroir de `ccref/` en plus
+      simple), table `champion_range_theoretical` (migration 037,
+      1 colonne, jamais de mélange empirique — la Timeline API n'expose
+      aucune position de sort lancé, vérifié). Peuplée depuis Data Dragon
+      (`python -m trio_lab.rangeref.sync`, aucun scraping wiki récurrent) et
+      matérialisée dans `score_duo`/`score_trio.range_theoretical_pct`
+      (`synergy/compute.py`, même pipeline que le CC théorique). 5e colonne
+      `ARCHETYPE_STAT_COLUMNS`/nouvel archétype `ARCHETYPES["range"]` dans
+      `draft_suggestions.py`.
+      - La formule a traversé **6 relectures successives** le même jour, le
+        détail complet (raisonnement, valeurs de wiki vérifiées, cas
+        limites) vit dans le docstring de `rangeref/score.py` plutôt que
+        dupliqué ici — résumé des grandes étapes :
+        1. Portée brute Q/W/E (attack_range + max) — Data Dragon expose
+           `spells[].range` en JSON structuré, pas de prose à parser.
+        2. **Sentinelles Data Dragon découvertes** : valeurs "illimité/self"
+           (25000, 10000, 4294967295 = 2³²-1 sur Janna W) sur des sorts
+           self-cast/vision/mobilité — `RANGE_SPELL_OVERRIDES`
+           (champion, spell_id) → `None` (exclu) ou une vraie valeur
+           wiki-vérifiée, méthode identique au scan de charge Xerath/Varus
+           de la recherche préparatoire.
+        3. **Ultimates réintégrés** (retour utilisateur : "ça compte comme
+           de la portée et du poke") après avoir été exclus par défaut au
+           départ — `GLOBAL_RANGE` (8000, initialement 15000, réduit sur
+           retour "écarts énormes") pour les ultimates au vrai "Global"
+           officiel (Karthus, Draven R, Ashe R...).
+        4. **Cooldown intégré** (retour utilisateur : "la capacité à
+           infliger des dégâts de loin ET régulièrement") — `cooldown` est
+           un champ Data Dragon propre, contrairement aux dégâts (tableaux
+           `effect`/`vars` sans libellé sémantique fiable — chantier de
+           l'ampleur de la table CC, explicitement pas fait). Bug trouvé en
+           vérifiant : plusieurs sorts réels ont un cooldown Data Dragon
+           quasi nul (passifs modélisés comme un sort, effets on-hit) —
+           `MIN_COOLDOWN` (4.0s, plancher générique) + correction d'un
+           second bug où un cooldown ENTIÈREMENT à 0 tombait sur le mauvais
+           repli (traité comme gratuit plutôt que plafonné).
+        5. **Somme du kit entier plutôt que meilleur sort seul** (retour
+           utilisateur, cas Samira : un seul vrai outil de poke dans un kit
+           d'all-in scorait comme Vel'Koz/Ziggs/Zoe sous `max`) — chaque
+           sort éligible s'additionne désormais.
+        6. **Autoattaque pondérée par la vitesse d'attaque** (retour
+           utilisateur : "ses auto attaques font 50 de dégâts" — Annie
+           pesait 65 % de son score sur une distance jamais vraiment
+           exploitée) — `attack_range × attackspeed` plutôt qu'une distance
+           brute ajoutée telle quelle. `AD × AS` (DPS d'autoattaque réel)
+           envisagé et rejeté : aux stats de base, un mage et un tireur ne
+           se distinguent presque pas (l'écart vient de l'objet, hors
+           périmètre du score).
+      - **Limite assumée, pas corrigée** : les vrais dégâts par sort restent
+        hors score (cooldown/portée seuls) — chantier ultérieur si besoin,
+        même ampleur que la table CC.
+      - Classement final vérifié sur le roster réel (top/bottom 50) :
+        dominé par les mages/tireurs de poke reconnus (Jinx, Kog'Maw, Swain,
+        Caitlyn, Xerath, Ziggs, Vel'Koz, Zoe...), les 25 derniers sont
+        exclusivement des bruisers/tanks/assassins de mêlée (Sett, Master
+        Yi, Riven, Garen, Darius...).
+      - Déployé en prod le 2026-07-28 : migration 037 appliquée, sync
+        initial (173 champions), refresh manuel de la fenêtre 16.14+16.13
+        pour matérialisation immédiate (sinon le prochain cycle du
+        collector s'en charge automatiquement, `refresh_scores` appelle
+        déjà `draft_suggestions.refresh`).
+      - Colonne "Portée" ajoutée à `/tierlist` et `/duos`
+        (`web/queries.py`/templates), tooltip explicite sur le caractère
+        100% théorique (jamais mesuré en jeu).
+      - **Piège trouvé pendant le déploiement** : `compute.refresh()` fait un
+        UPSERT gardé (`ON CONFLICT DO UPDATE ... WHERE score_duo.games IS
+        DISTINCT FROM EXCLUDED.games`, optimisation pour éviter des écritures
+        inutiles à chaque cycle du collector quand rien n'a changé). Un
+        premier `python -m trio_lab.synergy --patches 16.14,16.13` a tourné
+        sans erreur (1 028 283 lignes "rafraîchies" côté log) mais
+        `range_theoretical_pct` restait NULL partout : la fenêtre était déjà
+        matérialisée avec les mêmes `games`, donc la clause `WHERE` a
+        silencieusement sauté TOUTES les mises à jour — le compte de lignes
+        loggé est celui calculé en Python, pas celui réellement écrit en
+        base. Corrigé par un backfill SQL direct (`UPDATE ... FROM
+        champion_range_theoretical`, une seule passe, bypass l'UPSERT
+        gardé). Ce piège se reproduira pour tout futur ajout de colonne sur
+        une fenêtre déjà matérialisée sans nouvelles games — vérifier
+        `count(colonne) FROM score_duo/score_trio` après un refresh de
+        backfill, pas seulement le log de `refresh()`.
+
+Phase 8 close pour l'instant (draft, insights, résilience, flex, poke)
+— prochaine idée à définir.
 
 **Gap constaté en marge de cette révision (2026-07-19)** : `agg_matchup`/
 `score_matchup` étaient vides en prod alors que le code (`stats/aggregate.py`
