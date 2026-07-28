@@ -888,7 +888,7 @@ def _seed_suggest_scenario(conn) -> None:
     conn.execute(
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
         " games_eff, wr, synergy, ci_low, ci_high, tier)"
-        " VALUES ('16.13', 'euw1', 'jgl_mid', 1, 2, 60, 60.0, 0.55, 0.30, 0.0, 0.30, 'eleve')"
+        " VALUES ('16.13', 'euw1', 'jgl_mid', 1, 2, 500, 500.0, 0.55, 0.30, 0.0, 0.30, 'eleve')"
     )
     rows = (
         ("jgl_sup", 1, 3, 0.05),
@@ -905,7 +905,7 @@ def _seed_suggest_scenario(conn) -> None:
         conn.execute(
             "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
             " games_eff, wr, synergy, ci_low, ci_high, tier)"
-            " VALUES ('16.13', 'euw1', %s, %s, %s, 60, 60.0, 0.55, %s, 0.0, %s, 'eleve')",
+            " VALUES ('16.13', 'euw1', %s, %s, %s, 500, 500.0, 0.55, %s, 0.0, %s, 'eleve')",
             (roles, champ_a, champ_b, synergy, synergy),
         )
 
@@ -926,7 +926,7 @@ def test_draft_page_suggest_proposes_synergy_based_composition(pg_sync, client):
     # Duo de départ JAMAIS affiché sur "Compositions suggérées" (retour
     # utilisateur 2026-07-27 : détail interne, cf. web/app.py
     # `_build_draft_result(include_seed_pairs=False)`).
-    assert "eleve (60)" not in resp.text
+    assert "eleve (500)" not in resp.text
 
 
 def test_draft_page_suggest_shows_advice_from_seed_duo_stats(pg_sync, client):
@@ -945,7 +945,7 @@ def test_draft_page_suggest_shows_advice_from_seed_duo_stats(pg_sync, client):
     pg_sync.execute(
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
         " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15)"
-        " VALUES ('16.13', 'euw1', 'jgl_mid', 1, 2, 60, 60.0, 0.55, 0.30, 0.0, 0.30, 'eleve',"
+        " VALUES ('16.13', 'euw1', 'jgl_mid', 1, 2, 500, 500.0, 0.55, 0.30, 0.0, 0.30, 'eleve',"
         " 0.08, 70.0, 800.0)"
     )
     rows = (
@@ -963,7 +963,7 @@ def test_draft_page_suggest_shows_advice_from_seed_duo_stats(pg_sync, client):
         pg_sync.execute(
             "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
             " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15)"
-            " VALUES ('16.13', 'euw1', %s, %s, %s, 60, 60.0, 0.55, %s, 0.0, %s, 'eleve',"
+            " VALUES ('16.13', 'euw1', %s, %s, %s, 500, 500.0, 0.55, %s, 0.0, %s, 'eleve',"
             " 0.08, 70.0, 800.0)",
             (roles, champ_a, champ_b, synergy, synergy),
         )
@@ -1017,7 +1017,7 @@ def test_draft_page_suggest_renders_both_archetypes_from_shared_champion_pool(pg
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
         " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15,"
         " drakes, soul_rate)"
-        " VALUES ('16.13', 'euw1', 'jgl_mid', 1, 2, 60, 60.0, 0.55, 0.30, 0.0, 0.30, 'eleve',"
+        " VALUES ('16.13', 'euw1', 'jgl_mid', 1, 2, 500, 500.0, 0.55, 0.30, 0.0, 0.30, 'eleve',"
         " -0.10, 20.0, 100.0, 0.02, 0.10)"
     )
     # Duo B (top_bot, champ 4/5) : synergie bien plus faible (+5 %) mais
@@ -1027,7 +1027,7 @@ def test_draft_page_suggest_renders_both_archetypes_from_shared_champion_pool(pg
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
         " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15,"
         " drakes, soul_rate)"
-        " VALUES ('16.13', 'euw1', 'top_bot', 4, 5, 60, 60.0, 0.55, 0.05, 0.0, 0.05, 'eleve',"
+        " VALUES ('16.13', 'euw1', 'top_bot', 4, 5, 500, 500.0, 0.55, 0.05, 0.0, 0.05, 'eleve',"
         " 0.10, 20.0, 100.0, 0.02, 0.10)"
     )
     # Paires structurelles restantes : stats archétype neutres et
@@ -1051,7 +1051,7 @@ def test_draft_page_suggest_renders_both_archetypes_from_shared_champion_pool(pg
             "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
             " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct,"
             " gold_diff_15, drakes, soul_rate)"
-            " VALUES ('16.13', 'euw1', %s, %s, %s, 60, 60.0, 0.55, %s, 0.0, %s, 'eleve',"
+            " VALUES ('16.13', 'euw1', %s, %s, %s, 500, 500.0, 0.55, %s, 0.0, %s, 'eleve',"
             " 0.0, 20.0, 100.0, 0.02, 0.10)",
             (roles, champ_a, champ_b, synergy, synergy),
         )
@@ -1086,7 +1086,7 @@ def _insert_pentad(
         conn.execute(
             "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
             " games_eff, wr, synergy, ci_low, ci_high, tier)"
-            " VALUES ('16.13', %s, %s, %s, %s, 60, %s, 0.55, %s, 0.0, %s, 'eleve')",
+            " VALUES ('16.13', %s, %s, %s, %s, 500, %s, 0.55, %s, 0.0, %s, 'eleve')",
             (platform, roles, champ_a, champ_b, games_eff, synergy, synergy),
         )
 
@@ -1300,7 +1300,7 @@ def test_draft_page_compose_from_champions_completes_and_shows_reliability(pg_sy
         assert name in resp.text
     assert "+51.0 %" in resp.text
     assert "Lee Sin + Ahri" in resp.text
-    assert "+30.0 %, eleve (60)" in resp.text
+    assert "+30.0 %, eleve (500)" in resp.text
 
 
 def test_draft_page_compose_without_archetype_proposes_one_per_archetype(pg_sync, client):
@@ -1335,7 +1335,7 @@ def test_draft_page_compose_without_archetype_proposes_one_per_archetype(pg_sync
             "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
             " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct,"
             " gold_diff_15, drakes, soul_rate, range_theoretical_pct)"
-            " VALUES ('16.13', 'euw1', %s, %s, %s, 60, 60.0, 0.55, %s, 0.0, %s, 'eleve',"
+            " VALUES ('16.13', 'euw1', %s, %s, %s, 500, 500.0, 0.55, %s, 0.0, %s, 'eleve',"
             " 0.05, 20.0, 100.0, 0.02, 0.10, 40.0)",
             (roles, champ_a, champ_b, synergy, synergy),
         )
@@ -1377,7 +1377,7 @@ def test_draft_page_compose_shows_no_data_for_unplayed_pair(pg_sync, client):
         pg_sync.execute(
             "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
             " games_eff, wr, synergy, ci_low, ci_high, tier)"
-            " VALUES ('16.13', 'euw1', %s, %s, %s, 60, 60.0, 0.55, %s, 0.0, %s, 'eleve')",
+            " VALUES ('16.13', 'euw1', %s, %s, %s, 500, 500.0, 0.55, %s, 0.0, %s, 'eleve')",
             (roles, champ_a, champ_b, synergy, synergy),
         )
     resp = client.get(

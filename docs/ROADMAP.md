@@ -1197,6 +1197,36 @@ gagner") avec les données déjà en place.
         comportement réel des joueurs, contrairement aux autres). Draft
         suggestions re-matérialisées.
 
+- [x] **Seuil de fiabilité choisi par l'utilisateur — "Compose à partir de
+      tes champions" et "Personnalise tes poids" (2026-07-28, retour
+      utilisateur : "choisir le niveau de fiabilité... en choisissant un
+      nombre de games")** : ces 2 formulaires utilisaient un seuil FIXE
+      (`MIN_TIER = "eleve"`, catégorie tier basée sur `games_eff`) — remplacé
+      par `min_games`, un nombre de games RÉELLES choisi par l'utilisateur
+      (même unité que le filtre `min_games` déjà présent sur `/tierlist` et
+      `/duos`, plus lisible qu'un tier faible/moyen/élevé). "Compositions
+      suggérées" (jamais configurable, précalculée par le collector) garde
+      `MIN_GAMES_DEFAULT` (400, ex-seuil "eleve") sans changement de
+      comportement.
+      - Filtrage `tier = ANY(...)` → `games >= %(min_games)s` dans
+        `_duo_pool`/`_best_partners` (`draft_suggestions.py`) — `min_tier:
+        str` renommé `min_games: int` dans toute la chaîne
+        (`_sum_synergy`, `_all_pairs_reliable`, `greedy_complete_draft`,
+        `refine_draft`, `propose_for_weights`). `_TIER_AT_LEAST` (local à ce
+        module — sans lien avec son homonyme de `web/queries.py`, le filtre
+        de `/tierlist`, non touché) supprimé, devenu mort.
+      - Champs `cw_min_games`/`w_min_games` (même préfixation que
+        `cw_<axe>`/`w_<axe>`, 2 états indépendants comme le reste de ces 2
+        formulaires) — `_get_pool_zstats` (web/app.py) mis en cache par
+        VALEUR de seuil (dict, plus une liste 1 case) : "Compositions
+        suggérées" (calcul en direct, seuil fixe) et les 2 formulaires
+        peuvent chacun demander leur propre pool sans se marcher dessus.
+      - Vérifié en direct sur la prod : `_best_partners` pour un jungler
+        peu joué (Morgana jgl, une vraie paire à 50 games) renvoie 0
+        candidat à 400 games mais 27 à 40 — et `/draft` bascule bien de
+        "Pas assez de données fiables" à une composition complète en
+        abaissant `cw_min_games`.
+
 Phase 8 close pour l'instant (draft, insights, résilience, flex, poke)
 — prochaine idée à définir.
 

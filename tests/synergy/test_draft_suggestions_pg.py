@@ -44,7 +44,7 @@ def _seed_scenario(conn) -> None:
     conn.execute(
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
         " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15)"
-        " VALUES ('16.13', 'all', 'jgl_mid', 1, 2, 60, 60.0, 0.55, 0.30, 0.0, 0.30, 'eleve',"
+        " VALUES ('16.13', 'all', 'jgl_mid', 1, 2, 500, 500.0, 0.55, 0.30, 0.0, 0.30, 'eleve',"
         " 0.08, 70.0, 800.0)"
     )
     rows = (
@@ -62,7 +62,7 @@ def _seed_scenario(conn) -> None:
         conn.execute(
             "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
             " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15)"
-            " VALUES ('16.13', 'all', %s, %s, %s, 60, 60.0, 0.55, %s, 0.0, %s, 'eleve',"
+            " VALUES ('16.13', 'all', %s, %s, %s, 500, 500.0, 0.55, %s, 0.0, %s, 'eleve',"
             " 0.08, 70.0, 800.0)",
             (roles, champ_a, champ_b, synergy, synergy),
         )
@@ -180,7 +180,7 @@ def test_propose_drafts_uses_different_seed_duo_per_archetype(pg_sync):
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
         " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15,"
         " drakes, soul_rate)"
-        " VALUES ('16.13', 'all', 'jgl_mid', 1, 2, 60, 60.0, 0.55, 0.30, 0.0, 0.30, 'eleve',"
+        " VALUES ('16.13', 'all', 'jgl_mid', 1, 2, 500, 500.0, 0.55, 0.30, 0.0, 0.30, 'eleve',"
         " -0.10, 20.0, 100.0, 0.02, 0.10)"
     )
     # Duo B (top_bot, champ 4/5) : synergie bien plus faible (+5 %) mais
@@ -192,7 +192,7 @@ def test_propose_drafts_uses_different_seed_duo_per_archetype(pg_sync):
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
         " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15,"
         " drakes, soul_rate)"
-        " VALUES ('16.13', 'all', 'top_bot', 4, 5, 60, 60.0, 0.55, 0.05, 0.0, 0.05, 'eleve',"
+        " VALUES ('16.13', 'all', 'top_bot', 4, 5, 500, 500.0, 0.55, 0.05, 0.0, 0.05, 'eleve',"
         " 0.10, 20.0, 100.0, 0.02, 0.10)"
     )
     # Paires structurelles restantes : stats archétype neutres partout, pour
@@ -212,7 +212,7 @@ def test_propose_drafts_uses_different_seed_duo_per_archetype(pg_sync):
             "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
             " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct,"
             " gold_diff_15, drakes, soul_rate)"
-            " VALUES ('16.13', 'all', %s, %s, %s, 60, 60.0, 0.55, %s, 0.0, %s, 'eleve',"
+            " VALUES ('16.13', 'all', %s, %s, %s, 500, 500.0, 0.55, %s, 0.0, %s, 'eleve',"
             " 0.0, 20.0, 100.0, 0.02, 0.10)",
             (roles, champ_a, champ_b, synergy, synergy),
         )
@@ -241,7 +241,7 @@ def test_propose_drafts_range_archetype_prefers_long_range_duo(pg_sync):
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
         " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15,"
         " drakes, range_theoretical_pct)"
-        " VALUES ('16.13', 'all', 'jgl_mid', 1, 2, 60, 60.0, 0.55, 0.30, 0.0, 0.30, 'eleve',"
+        " VALUES ('16.13', 'all', 'jgl_mid', 1, 2, 500, 500.0, 0.55, 0.30, 0.0, 0.30, 'eleve',"
         " 0.0, 20.0, 100.0, 0.02, 10.0)"
     )
     # Duo B (top_bot, champ 4/5) : synergie plus faible, portée théorique
@@ -250,7 +250,7 @@ def test_propose_drafts_range_archetype_prefers_long_range_duo(pg_sync):
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
         " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15,"
         " drakes, range_theoretical_pct)"
-        " VALUES ('16.13', 'all', 'top_bot', 4, 5, 60, 60.0, 0.55, 0.05, 0.0, 0.05, 'eleve',"
+        " VALUES ('16.13', 'all', 'top_bot', 4, 5, 500, 500.0, 0.55, 0.05, 0.0, 0.05, 'eleve',"
         " 0.0, 20.0, 100.0, 0.02, 90.0)"
     )
     # Paires structurelles restantes : stats archétype neutres partout, pour
@@ -270,7 +270,7 @@ def test_propose_drafts_range_archetype_prefers_long_range_duo(pg_sync):
             "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
             " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct,"
             " gold_diff_15, drakes, range_theoretical_pct)"
-            " VALUES ('16.13', 'all', %s, %s, %s, 60, 60.0, 0.55, %s, 0.0, %s, 'eleve',"
+            " VALUES ('16.13', 'all', %s, %s, %s, 500, 500.0, 0.55, %s, 0.0, %s, 'eleve',"
             " 0.0, 20.0, 100.0, 0.02, 50.0)",
             (roles, champ_a, champ_b, synergy, synergy),
         )
@@ -316,7 +316,7 @@ def _insert_pentad(
         conn.execute(
             "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
             " games_eff, wr, synergy, ci_low, ci_high, tier)"
-            " VALUES ('16.13', 'all', %s, %s, %s, 60, %s, 0.55, %s, 0.0, %s, 'eleve')",
+            " VALUES ('16.13', 'all', %s, %s, %s, 500, %s, 0.55, %s, 0.0, %s, 'eleve')",
             (roles, champ_a, champ_b, games_eff, synergy, synergy),
         )
 
@@ -354,7 +354,7 @@ def test_propose_drafts_third_variant_uses_reliability_of_the_whole_composition(
         pg_sync.execute(
             "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
             " games_eff, wr, synergy, ci_low, ci_high, tier)"
-            " VALUES ('16.13', 'all', %s, %s, %s, 60, %s, 0.55, %s, 0.0, %s, 'eleve')",
+            " VALUES ('16.13', 'all', %s, %s, %s, 500, %s, 0.55, %s, 0.0, %s, 'eleve')",
             (roles, champ_a, champ_b, games_eff, synergy, synergy),
         )
     # D (16-20) : duo de départ modeste, mais TOUTES les autres paires solides.
@@ -400,10 +400,10 @@ def test_refine_draft_replaces_a_role_with_a_better_candidate(pg_sync):
     pg_sync.execute(
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
         " games_eff, wr, synergy, ci_low, ci_high, tier)"
-        " VALUES ('16.13', 'all', 'jgl_bot', 1, 6, 60, 60.0, 0.55, 0.05, 0.0, 0.05, 'eleve'),"
-        "        ('16.13', 'all', 'mid_bot', 2, 6, 60, 60.0, 0.55, 0.05, 0.0, 0.05, 'eleve'),"
-        "        ('16.13', 'all', 'bot_sup', 6, 3, 60, 60.0, 0.55, 0.05, 0.0, 0.05, 'eleve'),"
-        "        ('16.13', 'all', 'top_bot', 4, 6, 60, 60.0, 0.55, 0.05, 0.0, 0.05, 'eleve')"
+        " VALUES ('16.13', 'all', 'jgl_bot', 1, 6, 500, 500.0, 0.55, 0.05, 0.0, 0.05, 'eleve'),"
+        "        ('16.13', 'all', 'mid_bot', 2, 6, 500, 500.0, 0.55, 0.05, 0.0, 0.05, 'eleve'),"
+        "        ('16.13', 'all', 'bot_sup', 6, 3, 500, 500.0, 0.55, 0.05, 0.0, 0.05, 'eleve'),"
+        "        ('16.13', 'all', 'top_bot', 4, 6, 500, 500.0, 0.55, 0.05, 0.0, 0.05, 'eleve')"
     )
     weights = draft_suggestions.ARCHETYPES["synergy"]["weights"]  # {"synergy": 1.0}
     pool, zstats = draft_suggestions.pool_and_zstats(pg_sync, "16.13", "all")
@@ -412,7 +412,7 @@ def test_refine_draft_replaces_a_role_with_a_better_candidate(pg_sync):
     # même valeur que dans test_refresh_materializes_composition_and_counter.
     total = 0.30 + 0.05 + 0.04 + 0.02 + 0.02 + 0.03 + 0.01 + 0.01 + 0.01 + 0.02
     refined_placed, refined_total = draft_suggestions.refine_draft(
-        pg_sync, "16.13", "all", placed, total, "eleve", weights, zstats
+        pg_sync, "16.13", "all", placed, total, draft_suggestions.MIN_GAMES_DEFAULT, weights, zstats
     )
     assert refined_placed["bot"] == 6
     # top/jgl/mid/sup inchangés : aucun meilleur candidat pour eux ici.
@@ -434,10 +434,10 @@ def test_refine_draft_never_replaces_locked_roles(pg_sync):
     pg_sync.execute(
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
         " games_eff, wr, synergy, ci_low, ci_high, tier)"
-        " VALUES ('16.13', 'all', 'jgl_bot', 1, 6, 60, 60.0, 0.55, 0.05, 0.0, 0.05, 'eleve'),"
-        "        ('16.13', 'all', 'mid_bot', 2, 6, 60, 60.0, 0.55, 0.05, 0.0, 0.05, 'eleve'),"
-        "        ('16.13', 'all', 'bot_sup', 6, 3, 60, 60.0, 0.55, 0.05, 0.0, 0.05, 'eleve'),"
-        "        ('16.13', 'all', 'top_bot', 4, 6, 60, 60.0, 0.55, 0.05, 0.0, 0.05, 'eleve')"
+        " VALUES ('16.13', 'all', 'jgl_bot', 1, 6, 500, 500.0, 0.55, 0.05, 0.0, 0.05, 'eleve'),"
+        "        ('16.13', 'all', 'mid_bot', 2, 6, 500, 500.0, 0.55, 0.05, 0.0, 0.05, 'eleve'),"
+        "        ('16.13', 'all', 'bot_sup', 6, 3, 500, 500.0, 0.55, 0.05, 0.0, 0.05, 'eleve'),"
+        "        ('16.13', 'all', 'top_bot', 4, 6, 500, 500.0, 0.55, 0.05, 0.0, 0.05, 'eleve')"
     )
     weights = draft_suggestions.ARCHETYPES["synergy"]["weights"]
     pool, zstats = draft_suggestions.pool_and_zstats(pg_sync, "16.13", "all")
@@ -449,7 +449,7 @@ def test_refine_draft_never_replaces_locked_roles(pg_sync):
         "all",
         placed,
         total,
-        "eleve",
+        draft_suggestions.MIN_GAMES_DEFAULT,
         weights,
         zstats,
         locked_roles=frozenset({"bot"}),

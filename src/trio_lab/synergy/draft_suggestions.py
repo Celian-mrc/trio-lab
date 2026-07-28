@@ -73,11 +73,6 @@ DRAFT_ROLE_TO_TEAM_POSITION = {
     "bot": "BOTTOM",
     "sup": "UTILITY",
 }
-_TIER_AT_LEAST = {
-    "faible": ("faible", "moyen", "eleve"),
-    "moyen": ("moyen", "eleve"),
-    "eleve": ("eleve",),
-}
 _STAT_COLUMNS_SQL = (
     "scaling, cc_blended_pct, gold_diff_15, drakes, soul_rate, range_theoretical_pct"
 )
@@ -190,9 +185,15 @@ DIVERSITY_MAX_SHARED_CHAMPIONS = 3
 # préexistant côté web, découvert et corrigé le 2026-07-25). 10 000 :
 # confortablement au-dessus des ~5867 duos "eleve" actuels.
 POOL_SIZE = 10_000
-# "eleve" (games_eff ≥ 400), pas "moyen" : un duo a bien plus de volume qu'un
-# trio (2 champions précis, pas 3), on peut se permettre d'être exigeant.
-MIN_TIER = "eleve"
+# Seuil de fiabilité par défaut pour "Compositions suggérées" (jamais choisi
+# par l'utilisateur, précalculé) — anciennement le tier "eleve" (games_eff ≥
+# 400). Retour utilisateur 2026-07-28 : "Compose à partir de tes champions"
+# et "Personnalise tes poids" laissent désormais l'utilisateur choisir un
+# NOMBRE de games réel (`min_games`, même unité que le filtre `/tierlist` et
+# `/duos` — plus lisible qu'un tier faible/moyen/élevé) plutôt qu'un tier
+# fixe. Un duo a bien plus de volume qu'un trio (2 champions précis, pas 3),
+# on peut se permettre d'être exigeant par défaut.
+MIN_GAMES_DEFAULT = 400
 
 # Seuils des conseils de jeu — repères arbitraires, pas de test statistique
 # dessus, calibrés au niveau DUO (2 champions) sur la vraie distribution
@@ -227,7 +228,7 @@ COUNTER_SECONDARY_ROLES = 2
 # équivalents web, taillés pour l'affichage d'une tier list).
 
 
-def _duo_pool(conn: psycopg.Connection, window: str, platform: str, min_tier: str) -> list[dict]:
+def _duo_pool(conn: psycopg.Connection, window: str, platform: str, min_games: int) -> list[dict]:
     with conn.cursor(row_factory=dict_row) as cur:
         return cur.execute(
             f"""
@@ -235,14 +236,14 @@ def _duo_pool(conn: psycopg.Connection, window: str, platform: str, min_tier: st
                    {_STAT_COLUMNS_SQL}
             FROM score_duo
             WHERE window_label = %(window)s AND platform = %(platform)s
-              AND tier = ANY(%(tiers)s)
+              AND games >= %(min_games)s
             ORDER BY synergy DESC
             LIMIT %(limit)s
             """,
             {
                 "window": window,
                 "platform": platform,
-                "tiers": list(_TIER_AT_LEAST[min_tier]),
+                "min_games": min_games,
                 "limit": POOL_SIZE,
             },
         ).fetchall()
@@ -256,7 +257,7 @@ def _best_partners(
     fixed_role: str,
     champion_id: int,
     limit: int,
-    min_tier: str,
+    min_games: int,
 ) -> list[dict]:
     role_a, _role_b = roles.split("_")
     fixed_col, partner_col = (
@@ -269,7 +270,7 @@ def _best_partners(
                    {_STAT_COLUMNS_SQL}
             FROM score_duo
             WHERE window_label = %(window)s AND platform = %(platform)s AND roles = %(roles)s
-              AND {fixed_col} = %(champ)s AND tier = ANY(%(tiers)s)
+              AND {fixed_col} = %(champ)s AND games >= %(min_games)s
             ORDER BY synergy DESC, games DESC
             LIMIT %(limit)s
             """,
@@ -279,7 +280,7 @@ def _best_partners(
                 "roles": roles,
                 "champ": champion_id,
                 "limit": limit,
-                "tiers": list(_TIER_AT_LEAST[min_tier]),
+                "min_games": min_games,
             },
         ).fetchall()
 
@@ -380,9 +381,9 @@ def zscore_stats(rows: list[dict], columns: Iterable[str]) -> dict[str, tuple[fl
 
 
 def pool_and_zstats(
-    conn: psycopg.Connection, window: str, platform: str
+    conn: psycopg.Connection, window: str, platform: str, min_games: int = MIN_GAMES_DEFAULT
 ) -> tuple[list[dict], dict[str, tuple[float, float]]]:
-    pool = _duo_pool(conn, window, platform, MIN_TIER)
+    pool = _duo_pool(conn, window, platform, min_games)
     zstats = zscore_stats(pool, ARCHETYPE_STAT_COLUMNS.values())
     return pool, zstats
 
@@ -420,12 +421,12 @@ def _sum_synergy(
     window: str,
     platform: str,
     anchors: list[tuple[str, str, int]],
-    min_tier: str,
+    min_games: int,
     stat_columns: Iterable[str] = (),
 ) -> dict[int, dict]:
     """Σ synergie d'un candidat contre chaque ancrage (rôle, champion déjà
     posé) de `anchors` — ne garde que les candidats couverts par TOUS les
-    ancrages (fiabilité ≥ `min_tier` pour chacun). `stat_columns` : en plus
+    ancrages (fiabilité ≥ `min_games` pour chacun). `stat_columns` : en plus
     de la Σ synergie, moyenne de chaque colonne sur les paires nouvellement
     formées où elle est renseignée. Retourne, par candidat couvert :
     `{"synergy_sum": ..., "stats": {col: moyenne}}`."""
@@ -435,7 +436,7 @@ def _sum_synergy(
     stat_counts: dict[int, dict[str, int]] = {}
     for roles, fixed_role, champion_id in anchors:
         partners = _best_partners(
-            conn, window, platform, roles, fixed_role, champion_id, 500, min_tier
+            conn, window, platform, roles, fixed_role, champion_id, 500, min_games
         )
         for row in partners:
             cid = row["partner_champion"]
@@ -498,7 +499,7 @@ def greedy_complete_draft(
     platform: str,
     placed: dict[str, int],
     total: float,
-    min_tier: str,
+    min_games: int,
     weights: dict[str, float],
     zstats: dict[str, tuple[float, float]],
 ) -> tuple[dict[str, int], float] | None:
@@ -523,7 +524,7 @@ def greedy_complete_draft(
                 (_ROLES_BY_PAIR[frozenset({role, placed_role})], placed_role, placed_champ)
                 for placed_role, placed_champ in placed.items()
             ]
-            scores = _sum_synergy(conn, window, platform, anchors, min_tier, stat_columns)
+            scores = _sum_synergy(conn, window, platform, anchors, min_games, stat_columns)
             if not scores:
                 continue
             n_anchors = len(anchors)
@@ -583,21 +584,20 @@ def _min_games_eff(
 
 
 def _all_pairs_reliable(
-    conn: psycopg.Connection, window: str, platform: str, placed: dict[str, int], min_tier: str
+    conn: psycopg.Connection, window: str, platform: str, placed: dict[str, int], min_games: int
 ) -> bool:
-    """Vérifie que les 10 VRAIES paires d'un draft complet `placed` sont
-    toutes au moins `min_tier` — garde-fou après `refine_draft` : un
+    """Vérifie que les 10 VRAIES paires d'un draft complet `placed` ont
+    toutes au moins `min_games` games — garde-fou après `refine_draft` : un
     remplacement en cascade (rôle B choisi en fonction du rôle A déjà
     remplacé) valide toujours la paire (A_new, B_new) au moment du choix de
     B, mais ne revalide jamais rétroactivement un rôle NON remplacé face à
     un remplacement survenu APRÈS lui dans le passage — cette fonction
     referme ce trou avant de livrer le résultat."""
-    tiers_ok = _TIER_AT_LEAST[min_tier]
     for role_x, role_y in itertools.combinations(DRAFT_ROLES, 2):
         roles_str = _ROLES_BY_PAIR[frozenset({role_x, role_y})]
         role_a, role_b = DUO_ROLE_KEYS[roles_str]
         row = _duo_score(conn, window, platform, roles_str, placed[role_a], placed[role_b])
-        if row is None or row["tier"] not in tiers_ok:
+        if row is None or row["games"] < min_games:
             return False
     return True
 
@@ -608,7 +608,7 @@ def refine_draft(
     platform: str,
     placed: dict[str, int],
     total: float,
-    min_tier: str,
+    min_games: int,
     weights: dict[str, float],
     zstats: dict[str, tuple[float, float]],
     *,
@@ -650,7 +650,7 @@ def refine_draft(
             for other_role, other_champ in placed.items()
             if other_role != role
         ]
-        scores = _sum_synergy(conn, window, platform, anchors, min_tier, stat_columns)
+        scores = _sum_synergy(conn, window, platform, anchors, min_games, stat_columns)
         if not scores:
             continue
         n_anchors = len(anchors)
@@ -686,7 +686,7 @@ def refine_draft(
         changed = True
     if not changed:
         return original_placed, original_total
-    if not _all_pairs_reliable(conn, window, platform, placed, min_tier):
+    if not _all_pairs_reliable(conn, window, platform, placed, min_games):
         return original_placed, original_total
     return placed, total
 
@@ -753,7 +753,7 @@ def seed_from_champions(
     (`score_duo`) et le détail de fiabilité de chacune — JAMAIS bloquant :
     une paire jamais jouée ensemble contribue 0 à la synergie et affiche une
     fiabilité `tier=None`, elle n'empêche pas de continuer (contrairement
-    aux rôles que le système complète ensuite, filtrés par `MIN_TIER`).
+    aux rôles que le système complète ensuite, filtrés par `min_games`).
     Retourne `(placed, total_synergy, seed_pairs)` — `seed_pairs` : une
     entrée par paire déjà posée, `{role_a, role_b, champ_a, champ_b,
     synergy, games, tier}` (synergy/tier `None`, games 0 si jamais jouée
@@ -904,6 +904,8 @@ def propose_for_weights(
     archetype_key: str,
     label: str,
     weights: dict[str, float],
+    *,
+    min_games: int = MIN_GAMES_DEFAULT,
 ) -> list[dict]:
     """Jusqu'à 3 compositions pour UN jeu de poids donné (retour utilisateur
     2026-07-27 : "des boutons 1/2/3... 3 propositions par archétype" —
@@ -928,9 +930,17 @@ def propose_for_weights(
       l'utilisateur ; la fiabilité de la composition ENTIÈRE compte, bornée
       par sa paire la MOINS soutenue). "Une des trois avec une fiabilité
       très élevée, plus de games que les autres" (retour utilisateur
-      2026-07-27). Les 3 candidats passent déjà tous le seuil `MIN_TIER`
+      2026-07-27). Les 3 candidats passent déjà tous le seuil `min_games`
       par construction ; cette 3e place privilégie le VOLUME de données
       plutôt que le score.
+
+    `min_games` (retour utilisateur 2026-07-28 : "choisir le niveau de
+    fiabilité... en choisissant un nombre de games") : seuil de games RÉELS
+    minimum pour qu'un duo compte comme candidat fiable (seed, complétion,
+    remplacement) — `MIN_GAMES_DEFAULT` pour les 5 archétypes fixes de
+    "Compositions suggérées" (jamais choisi par l'utilisateur), une valeur
+    choisie par l'utilisateur pour "Compose à partir de tes champions" et
+    "Personnalise tes poids" (`web/app.py`).
 
     Chaque rang retenu reçoit ensuite SON PROPRE passage de remplacement
     (`refine_draft`, retour utilisateur 2026-07-27 : "est-ce que le système
@@ -957,7 +967,7 @@ def propose_for_weights(
         role_a, role_b = DUO_ROLE_KEYS[seed_row["roles"]]
         seed_placed = {role_a: seed_row["champ_a"], role_b: seed_row["champ_b"]}
         completed = greedy_complete_draft(
-            conn, window, platform, seed_placed, seed_row["synergy"], MIN_TIER, weights, zstats
+            conn, window, platform, seed_placed, seed_row["synergy"], min_games, weights, zstats
         )
         if completed is None:
             continue
@@ -1004,7 +1014,7 @@ def propose_for_weights(
     for i, selection in zip(selected_idx, selections, strict=True):
         _, seed_row, placed, total = candidates[i]
         placed, total = refine_draft(
-            conn, window, platform, placed, total, MIN_TIER, weights, zstats
+            conn, window, platform, placed, total, min_games, weights, zstats
         )
         final_set = _champion_set(placed)
         if final_set in seen_final:

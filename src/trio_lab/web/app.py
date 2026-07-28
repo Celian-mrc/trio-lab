@@ -1000,6 +1000,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         label: str,
         weights: dict[str, float],
         zstats: dict[str, tuple[float, float]],
+        min_games: int,
     ) -> dict | None:
         """Construit le résultat BRUT (même forme que `propose_drafts`) pour
         "Compose à partir de tes champions" — 1 seul résultat, pas de
@@ -1009,7 +1010,10 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         `weights` directement (retour utilisateur 2026-07-28, poids
         personnalisés) plutôt que de chercher `archetype_key` dans
         `ARCHETYPES` — fonctionne aussi bien pour les archétypes fixes que
-        pour l'option "Personnalisé" du formulaire.
+        pour l'option "Personnalisé" du formulaire. `min_games` (retour
+        utilisateur 2026-07-28, "choisir le niveau de fiabilité... en
+        choisissant un nombre de games") : seuil choisi par l'utilisateur via
+        le champ `cw_min_games`, plus `MIN_GAMES_DEFAULT` fixe.
 
         Un passage de remplacement (`refine_draft`, retour utilisateur
         2026-07-27) s'applique ensuite — mais AVEC `seed_picks` verrouillés :
@@ -1019,7 +1023,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             conn, window, platform, seed_picks
         )
         completed = draft_suggestions.greedy_complete_draft(
-            conn, window, platform, placed, total, draft_suggestions.MIN_TIER, weights, zstats
+            conn, window, platform, placed, total, min_games, weights, zstats
         )
         if completed is None:
             return None
@@ -1030,7 +1034,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             platform,
             full_placed,
             full_total,
-            draft_suggestions.MIN_TIER,
+            min_games,
             weights,
             zstats,
             locked_roles=frozenset(seed_picks),
@@ -1105,6 +1109,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         cw_drakes: str | None = None,
         cw_soul: str | None = None,
         cw_range: str | None = None,
+        w_min_games: int = Query(draft_suggestions.MIN_GAMES_DEFAULT, ge=0),
+        cw_min_games: int = Query(draft_suggestions.MIN_GAMES_DEFAULT, ge=0),
     ):
         raw_seeds = {
             "top": seed_top,
@@ -1133,6 +1139,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             "range": w_range,
         }
         current_weight_params = {f"w_{axis}": v or "" for axis, v in raw_weights.items()}
+        current_weight_params["w_min_games"] = str(w_min_games)
         custom_weights, custom_error = _parse_custom_weights(raw_weights)
 
         # Poids personnalisés pour "Compose à partir de tes champions" —
@@ -1154,6 +1161,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         current_manual_weight_params = {
             f"cw_{axis}": v or "" for axis, v in raw_manual_weights.items()
         }
+        current_manual_weight_params["cw_min_games"] = str(cw_min_games)
         manual_custom_weights, manual_custom_error = _parse_custom_weights(raw_manual_weights)
 
         with request.app.state.pool.connection() as conn:
@@ -1162,17 +1170,23 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
 
             # `pool`/`zstats` (le tri par archétype des duos fiables) coûte
             # une requête large (~10 000 lignes) : calculé au plus une fois
-            # par requête, partagé entre "Compositions suggérées" (calcul en
-            # direct, pas la région par défaut) et "Compose à partir de tes
-            # champions" si les 2 sont demandés ensemble.
-            _pool_zstats_cache: list[tuple[list[dict], dict]] = []
+            # PAR SEUIL `min_games` utilisé dans la requête (retour
+            # utilisateur 2026-07-28, "Compose à partir de tes champions" et
+            # "Personnalise tes poids" ont chacun leur propre seuil) —
+            # partagé entre "Compositions suggérées" (calcul en direct, pas
+            # la région par défaut, `MIN_GAMES_DEFAULT`) et les 2 autres
+            # formulaires SI ILS UTILISENT LE MÊME SEUIL (cas courant, aucun
+            # n'y a touché).
+            _pool_zstats_cache: dict[int, tuple[list[dict], dict]] = {}
 
-            def _get_pool_zstats() -> tuple[list[dict], dict]:
-                if not _pool_zstats_cache:
-                    _pool_zstats_cache.append(
-                        draft_suggestions.pool_and_zstats(conn, window, platform)
+            def _get_pool_zstats(
+                min_games: int = draft_suggestions.MIN_GAMES_DEFAULT,
+            ) -> tuple[list[dict], dict]:
+                if min_games not in _pool_zstats_cache:
+                    _pool_zstats_cache[min_games] = draft_suggestions.pool_and_zstats(
+                        conn, window, platform, min_games
                     )
-                return _pool_zstats_cache[0]
+                return _pool_zstats_cache[min_games]
 
             # Compositions suggérées : précalculées pour la région par défaut
             # (`platform == "all"`, matérialisées par le service collector,
@@ -1204,9 +1218,17 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             # dans la grille des archétypes fixes).
             custom_draft = None
             if custom_weights is not None:
-                pool, zstats = _get_pool_zstats()
+                pool, zstats = _get_pool_zstats(w_min_games)
                 custom_raws = draft_suggestions.propose_for_weights(
-                    conn, window, platform, pool, zstats, "custom", "Personnalisé", custom_weights
+                    conn,
+                    window,
+                    platform,
+                    pool,
+                    zstats,
+                    "custom",
+                    "Personnalisé",
+                    custom_weights,
+                    min_games=w_min_games,
                 )
                 if custom_raws:
                     custom_draft = _group_draft_variants(
@@ -1243,7 +1265,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                         "Renseigne des poids qui totalisent 100 % ci-dessus."
                     )
                 else:
-                    _, zstats = _get_pool_zstats()
+                    _, zstats = _get_pool_zstats(cw_min_games)
                     keys = [archetype] if archetype else list(draft_suggestions.ARCHETYPES)
                     for key in keys:
                         if key == "custom":
@@ -1252,7 +1274,15 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                             label = draft_suggestions.ARCHETYPES[key]["label"]
                             weights = draft_suggestions.ARCHETYPES[key]["weights"]
                         raw = _manual_propose(
-                            conn, window, platform, seed_picks, key, label, weights, zstats
+                            conn,
+                            window,
+                            platform,
+                            seed_picks,
+                            key,
+                            label,
+                            weights,
+                            zstats,
+                            cw_min_games,
                         )
                         if raw is not None:
                             manual_results.append(_build_draft_result(raw))
@@ -1299,6 +1329,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 "manual_custom_weight_values": {
                     axis: v or "" for axis, v in raw_manual_weights.items()
                 },
+                "w_min_games": w_min_games,
+                "cw_min_games": cw_min_games,
             },
         )
 

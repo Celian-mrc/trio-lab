@@ -119,6 +119,8 @@
   <input type="hidden" name="w_{{ axis }}" value="{{ custom_weight_values[axis] }}">
   <input type="hidden" name="cw_{{ axis }}" value="{{ manual_custom_weight_values[axis] }}">
   {% endfor %}
+  <input type="hidden" name="w_min_games" value="{{ w_min_games }}">
+  <input type="hidden" name="cw_min_games" value="{{ cw_min_games }}">
   <button type="submit">Appliquer</button>
 </form>
 
@@ -143,6 +145,10 @@
         {% endfor %}
         <option value="custom" {{ 'selected' if selected_archetype == 'custom' }}>Personnalisé</option>
       </select>
+      <label class="draft-custom-field" data-tooltip="Nombre de games réelles minimum pour qu'un duo compte comme candidat fiable — abaisser ce seuil élargit le choix de champions mais avec moins de données par candidat." aria-label="Fiabilité minimum, en nombre de games réelles">
+        Fiabilité min. (games)
+        <input type="number" name="cw_min_games" value="{{ cw_min_games }}" min="0" step="10">
+      </label>
       <button type="submit" class="button-like">Compléter la draft</button>
       <span class="draft-compose-loadbar" aria-hidden="true"></span>
     </div>
@@ -200,6 +206,10 @@
       {% endfor %}
     </div>
     <div class="draft-custom-submit">
+      <label class="draft-custom-field" data-tooltip="Nombre de games réelles minimum pour qu'un duo compte comme candidat fiable — abaisser ce seuil élargit le choix de champions mais avec moins de données par candidat." aria-label="Fiabilité minimum, en nombre de games réelles">
+        Fiabilité min. (games)
+        <input type="number" name="w_min_games" value="{{ w_min_games }}" min="0" step="10">
+      </label>
       <button type="submit" class="button-like">Générer ma composition</button>
       <span class="draft-custom-loadbar" aria-hidden="true"></span>
     </div>
