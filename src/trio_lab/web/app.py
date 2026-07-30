@@ -53,6 +53,7 @@ DRAFT_ARCHETYPE_AXIS_LABELS = {
     "drakes": "Drakes",
     "soul": "Âme",
     "range": "Portée",
+    "wr": "Winrate",
 }
 # Ordre d'affichage des champs du formulaire "Personnalise tes poids"
 # (retour utilisateur 2026-07-28) — mêmes clés que ARCHETYPE_STAT_COLUMNS.

@@ -983,14 +983,16 @@ def test_draft_page_suggest_shows_advice_from_seed_duo_stats(pg_sync, client):
 def test_draft_page_suggest_skips_archetypes_without_stat_data(pg_sync, client):
     """Sans scaling/CC/gold/drakes/portée renseignés sur aucun duo, les 4
     archétypes pondérés (Scaling/Early/Objectifs/Poke) n'ont aucun candidat
-    classable — seule "Meilleure synergie" (qui ne dépend pas de ces
-    colonnes) produit une composition, pas de ligne vide/plantée pour les
+    classable — seuls "Meilleure synergie" et "Meilleur winrate" (qui ne
+    dépendent pas de ces colonnes, `_seed_suggest_scenario` renseigne bien
+    `wr`) produisent une composition, pas de ligne vide/plantée pour les
     4 autres."""
     _seed_suggest_scenario(pg_sync)
     resp = client.get("/draft", params={"suggest": "1"})
     assert resp.status_code == 200
-    assert resp.text.count("draft-suggest-card") == 1
+    assert resp.text.count("draft-suggest-card") == 2
     assert "Meilleure synergie" in resp.text
+    assert "Meilleur winrate" in resp.text
     # "Scaling / fin de partie" reste dans le <select> du formulaire "Compose
     # à partir de tes champions" (toujours proposé) : on cible précisément
     # le titre de carte, pas le texte libre de la page.
@@ -1098,7 +1100,10 @@ def test_draft_page_suggest_shows_variant_tabs_for_multiple_propositions(pg_sync
     la 1ère variante est visible par défaut (les autres portent `hidden`),
     et le bouton de la 3e (la plus fiable, `games_eff` le plus haut) porte
     un indicateur visuel SANS avoir à cliquer dessus (retour utilisateur
-    2026-07-28)."""
+    2026-07-28). wr=0.55 uniforme sur ce fixture (`_insert_pentad`) : sans
+    signal discriminant, "Meilleur winrate" retombe sur le même classement
+    que "Meilleure synergie" (même raisonnement que côté synergy_pg) — 2
+    cartes affichent donc ce comportement, pas 1."""
     pg_sync.execute(
         "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
         " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
@@ -1110,7 +1115,7 @@ def test_draft_page_suggest_shows_variant_tabs_for_multiple_propositions(pg_sync
     _insert_pentad(pg_sync, 11, seed_synergy=0.10, games_eff=5000.0)
     resp = client.get("/draft", params={"suggest": "1"})
     assert resp.status_code == 200
-    assert resp.text.count('class="draft-variant-tab active"') == 1
+    assert resp.text.count('class="draft-variant-tab active"') == 2
     assert resp.text.count("draft-variant-tab") >= 3
     assert resp.text.count('data-variant-index="0"') >= 1
     assert resp.text.count('data-variant-index="1" hidden') >= 1
@@ -1315,9 +1320,9 @@ def test_draft_page_compose_without_archetype_proposes_one_per_archetype(pg_sync
         " 0.0, 0.0, 1.0, 'faible')"
     )
     # Toutes les paires (index : 1=jgl, 2=mid, 3=sup, 4=top, 5=bot) portent
-    # les mêmes scaling/cc/gold/drakes/âme/portée : les 5 archétypes doivent
-    # pouvoir compléter (seule la synergie discrimine encore leur classement
-    # interne).
+    # les mêmes scaling/cc/gold/drakes/âme/portée/winrate : les 6 archétypes
+    # doivent pouvoir compléter (seule la synergie discrimine encore leur
+    # classement interne).
     rows = (
         ("jgl_mid", 1, 2, 0.30),
         ("jgl_sup", 1, 3, 0.05),
@@ -1342,11 +1347,12 @@ def test_draft_page_compose_without_archetype_proposes_one_per_archetype(pg_sync
     resp = client.get("/draft", params={"seed_jgl": "Lee Sin", "seed_mid": "Ahri"})
     assert resp.status_code == 200
     assert "Meilleure synergie" in resp.text
+    assert "Meilleur winrate" in resp.text
     assert "Scaling / fin de partie" in resp.text
     assert "Avantage early / lane" in resp.text
     assert "Contrôle des objectifs" in resp.text
     assert "Poke / zone" in resp.text
-    assert resp.text.count("draft-suggest-card") == 5
+    assert resp.text.count("draft-suggest-card") == 6
 
 
 def test_draft_page_compose_shows_no_data_for_unplayed_pair(pg_sync, client):

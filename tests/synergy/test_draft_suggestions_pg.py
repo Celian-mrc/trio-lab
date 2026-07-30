@@ -77,9 +77,12 @@ def _seed_scenario(conn) -> None:
 
 
 def test_refresh_materializes_composition_and_counter(pg_sync):
-    """`refresh` écrit la composition gagnante (ici "Meilleure synergie",
-    seule archétype possible : `drakes` n'est pas renseigné, les 3 profils
-    pondérés ne peuvent pas compléter) et son contre 1v1 dans les 2 tables —
+    """`refresh` écrit la composition gagnante (ici "Meilleure synergie" ET
+    "Meilleur winrate" — `drakes` n'est pas renseigné, les 3 profils
+    pondérés ne peuvent pas compléter ; wr=0.55 est uniforme sur toutes les
+    paires du scénario, donc "Meilleur winrate" n'a aucun signal discriminant
+    et retombe sur le même ordre que "Meilleure synergie", même composition
+    FINALE pour les 2 archétypes) et son contre 1v1 dans les 2 tables —
     mêmes champions/synergie que le calcul en direct (`propose_drafts`), cf.
     tests web équivalents. Vérifie aussi le winrate + IC moyennés (retour
     utilisateur 2026-07-27) : wr=0.55 partout -> 0.55 ; ci_low=0.0 partout
@@ -87,7 +90,7 @@ def test_refresh_materializes_composition_and_counter(pg_sync):
     _seed_scenario(pg_sync)
     window = make_window(["16.13"])
     n = draft_suggestions.refresh(window, "all", dsn=TEST_DSN)
-    assert n == 1
+    assert n == 2
 
     with pg_sync.cursor() as cur:
         cur.execute(
@@ -95,6 +98,7 @@ def test_refresh_materializes_composition_and_counter(pg_sync):
             " sup_champion, total_synergy, seed_roles, seed_champ_a, seed_champ_b, seed_tier,"
             " wr, wr_ci_low, wr_ci_high"
             " FROM draft_suggestion WHERE window_label = '16.13' AND platform = 'all'"
+            " AND archetype = 'synergy'"
         )
         rows = cur.fetchall()
         assert len(rows) == 1
@@ -129,7 +133,7 @@ def test_refresh_materializes_composition_and_counter(pg_sync):
         cur.execute(
             "SELECT direction, kind, rank, role, against_champion, champion_id, delta"
             " FROM draft_suggestion_counter WHERE window_label = '16.13' AND platform = 'all'"
-            " ORDER BY direction"
+            " AND archetype = 'synergy' ORDER BY direction"
         )
         counters = cur.fetchall()
         assert counters == [
@@ -150,7 +154,11 @@ def test_refresh_overwrites_stale_rows(pg_sync):
             "SELECT count(*) FROM draft_suggestion"
             " WHERE window_label = '16.13' AND platform = 'all'"
         )
-        assert cur.fetchone()[0] == 1
+        # 2 archétypes complètent avec ce scénario (synergy + winrate, cf.
+        # test_refresh_materializes_composition_and_counter) — pas 1 × 2
+        # (dédoublé par le 2e refresh), preuve que le DELETE + INSERT ne
+        # duplique rien.
+        assert cur.fetchone()[0] == 2
 
 
 def test_refresh_writes_nothing_when_no_archetype_completes(pg_sync):

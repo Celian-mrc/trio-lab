@@ -1227,6 +1227,37 @@ gagner") avec les données déjà en place.
         "Pas assez de données fiables" à une composition complète en
         abaissant `cw_min_games`.
 
+- [x] **6e archétype "Meilleur winrate" (2026-07-28, retour utilisateur :
+      "le chemin inverse... la meilleure compo avec le meilleur winrate ou
+      synergie et le score qui va avec")** : même construction que
+      "Meilleure synergie" (`weights={"wr": 1.0}`, un seul axe à 100 % — le
+      z-score d'un axe unique est une transformation affine, l'ordre est
+      inchangé, donc un simple tri par winrate MOYEN brut sur les 10 vraies
+      paires). Aucun changement SQL : `wr` était déjà sélectionné dans
+      `_duo_pool`/`_best_partners` (colonne toujours présente, hors
+      `_STAT_COLUMNS_SQL`), juste jamais exposé comme axe de pondération —
+      2 lignes suffisent (`ARCHETYPE_STAT_COLUMNS["wr"] = "wr"` +
+      nouvelle entrée `ARCHETYPES["winrate"]`) pour que tout le pipeline
+      existant (seed, complétion gloutonne, raffinement, boutons 1/2/3,
+      matérialisation collector) le prenne en charge. Le "score qui va
+      avec" (winrate + IC) était déjà affiché sur chaque carte de
+      composition — rien à ajouter côté rendu.
+      - Volontairement PAS ajouté aux axes personnalisables de "Personnalise
+        tes poids" (winrate est en grande partie ce que la synergie essaie
+        déjà de prédire — un poids composite mélangeant les deux serait
+        redondant sans usage concret identifié).
+      - Passage de 5 à 6 archétypes fixes : plusieurs fixtures de test avec
+        `wr` uniforme sur toutes les paires (ex. `_seed_suggest_scenario`,
+        `_seed_scenario`, `_insert_pentad`) voient désormais "Meilleur
+        winrate" compléter EN PLUS de "Meilleure synergie" et converger vers
+        la même composition finale (aucun signal discriminant quand wr est
+        identique partout) — comptes de cartes/lignes matérialisées ajustés
+        en conséquence dans les tests concernés.
+      - Vérifié en direct sur la prod (18 lignes matérialisées, 6 × 3) :
+        carte "Meilleur winrate" affiche une vraie composition différente
+        (Mordekaiser/Bel'Veth/Twisted Fate/Ziggs/Poppy) avec son winrate
+        (55.6 % [52.1–59.1 %]) et sa synergie (+37.9 %) inline.
+
 Phase 8 close pour l'instant (draft, insights, résilience, flex, poke)
 — prochaine idée à définir.
 
