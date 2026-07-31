@@ -38,9 +38,21 @@ async def upsert_players(conn: psycopg.AsyncConnection, rows: list[PlayerRow]) -
     En cas de conflit on met à jour le tier/division (snapshot le plus récent)
     mais on préserve `matches_fetched_at` : le curseur de collecte survit aux
     redécouvertes périodiques.
+
+    Trié par `puuid` avant l'upsert (retour utilisateur 2026-07-31, deadlock
+    Postgres vu en prod : "Process A waits for ShareLock ... blocked by
+    process B" pendant l'insertion dans `players`) : plusieurs plateformes
+    tournent en tâches asyncio concurrentes (`collect.run`, `asyncio.gather`),
+    chacune sur sa propre connexion — 2 upserts concurrents dont les lots de
+    lignes se recoupent mais sont parcourus dans un ordre différent peuvent
+    se verrouiller mutuellement (piège Postgres classique sur `ON CONFLICT`
+    en lot). Trier garantit que toute transaction concurrente acquiert les
+    verrous de lignes dans le MÊME ordre — un verrou circulaire devient
+    impossible, peu importe quelles deux tâches se chevauchent.
     """
     if not rows:
         return 0
+    ordered = sorted(rows, key=lambda r: r.puuid)
     async with conn.cursor() as cur:
         await cur.executemany(
             """
@@ -49,7 +61,7 @@ async def upsert_players(conn: psycopg.AsyncConnection, rows: list[PlayerRow]) -
             ON CONFLICT (puuid) DO UPDATE
               SET tier = EXCLUDED.tier, division = EXCLUDED.division
             """,
-            [(r.puuid, r.platform, r.routing, r.tier, r.division) for r in rows],
+            [(r.puuid, r.platform, r.routing, r.tier, r.division) for r in ordered],
         )
     return len(rows)
 
