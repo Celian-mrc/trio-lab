@@ -74,6 +74,7 @@ async def run(
     data_dir: Path | None = None,
     dsn: str | None = None,
     strict_patch_bounds: bool = True,
+    discovery_state: dict[str, dict[str, float]] | None = None,
 ) -> dict[str, int]:
     """Collecte sur plusieurs plateformes en concurrence. Retourne les compteurs agrégés.
 
@@ -81,11 +82,23 @@ async def run(
     `None` = boucle sans fin. `strict_patch_bounds=False` (mode service) :
     un patch absent de PATCH_DATES reçoit des bornes de repli au lieu
     d'échouer — le filtre `gameVersion` reste l'autorité.
+
+    `discovery_state` : horodatages de dernière découverte apex/entries PAR
+    PLATEFORME, à faire persister par l'appelant ENTRE PLUSIEURS appels à
+    `run` (retour utilisateur 2026-08-01 — sans ça, un `_collect_platform`
+    qui réinitialiserait ces horodatages à chaque appel referait la
+    découverte Emerald/Diamond, coûteuse (max_pages × 8 divisions/plateforme),
+    à CHAQUE cycle du service au lieu d'une fois par `ENTRIES_DISCOVERY_TTL_S`
+    — un OOM vu en prod une fois `DEFAULT_BATCH_TARGET` abaissé, les cycles
+    devenant assez courts pour que ce rescan permanent domine la mémoire).
+    `None` (usage CLI one-shot) : état neuf à chaque appel, comportement
+    d'origine inchangé.
     """
     # Échec immédiat si le patch n'est pas renseigné (sauf mode service).
     bounds = patches.bounds_for(patch) if strict_patch_bounds else patches.service_bounds_for(patch)
     epoch_bounds = tuple(patches.to_epoch_seconds(b) for b in bounds)
     resolved_dir = data_dir if data_dir is not None else config.DATA_DIR
+    state = discovery_state if discovery_state is not None else {}
     results = await asyncio.gather(
         *(
             _collect_platform(
@@ -97,6 +110,7 @@ async def run(
                 data_dir=resolved_dir,
                 dsn=dsn,
                 epoch_bounds=epoch_bounds,
+                discovery_state=state.setdefault(p, {}),
             )
             for p in platforms
         )
@@ -118,29 +132,34 @@ async def _collect_platform(
     data_dir: Path,
     dsn: str | None,
     epoch_bounds: tuple[int, int],
+    discovery_state: dict[str, float],
 ) -> Counter[str]:
-    """Boucle de collecte d'une plateforme. Une connexion Postgres dédiée par boucle."""
+    """Boucle de collecte d'une plateforme. Une connexion Postgres dédiée par boucle.
+
+    `discovery_state` (clés "apex"/"entries") : mutée en place, portée par
+    l'appelant (`run`) — voir son docstring pour la raison (persister le TTL
+    de découverte ENTRE plusieurs appels, pas seulement dans cette boucle)."""
     counts: Counter[str] = Counter()
     start_s, end_s = epoch_bounds
-    last_apex_discovery = float("-inf")
-    last_entries_discovery = float("-inf")
     conn = await db.connect(dsn)
     try:
         async with RiotClient() as client:
             while target is None or counts["downloaded"] < target:
                 try:
+                    last_apex_discovery = discovery_state.get("apex", float("-inf"))
                     if time.monotonic() - last_apex_discovery > APEX_DISCOVERY_TTL_S:
                         rows = await ladder.discover_apex(client, platform=platform)
                         await storage.upsert_players(conn, rows)
-                        last_apex_discovery = time.monotonic()
+                        discovery_state["apex"] = time.monotonic()
                         logger.info("%s : découverte apex → %d joueurs", platform, len(rows))
 
+                    last_entries_discovery = discovery_state.get("entries", float("-inf"))
                     if time.monotonic() - last_entries_discovery > ENTRIES_DISCOVERY_TTL_S:
                         rows = await ladder.discover_entries(
                             client, platform=platform, max_pages=max_pages
                         )
                         await storage.upsert_players(conn, rows)
-                        last_entries_discovery = time.monotonic()
+                        discovery_state["entries"] = time.monotonic()
                         logger.info(
                             "%s : découverte Emerald/Diamond → %d joueurs", platform, len(rows)
                         )

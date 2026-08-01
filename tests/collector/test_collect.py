@@ -239,6 +239,46 @@ async def test_second_run_downloads_nothing(store, tmp_path):
     assert len(store.matches) == 2
 
 
+async def test_discovery_state_shared_across_calls_skips_repeat_discovery(
+    store, tmp_path, monkeypatch
+):
+    """Retour utilisateur 2026-08-01 (OOM vu en prod) : sans état de découverte
+    PARTAGÉ entre appels, chaque `collect.run` referait la découverte apex/
+    entries depuis zéro quel que soit `APEX_DISCOVERY_TTL_S`/
+    `ENTRIES_DISCOVERY_TTL_S` — coûteux (Emerald/Diamond : jusqu'à 150k+
+    joueurs/plateforme) et cause directe de l'OOM une fois les cycles du
+    service raccourcis (`DEFAULT_BATCH_TARGET` abaissé). Passer le MÊME
+    `discovery_state` dict à 2 appels successifs ne doit découvrir qu'UNE
+    fois ; ne PAS le partager (`None`, usage CLI one-shot) doit redécouvrir
+    à chaque appel — comportement d'origine inchangé dans ce cas."""
+    apex_calls = []
+
+    class _CountingClient(_FakeClient):
+        async def get_apex_league(self, tier, *, platform):
+            if tier == "challenger":
+                apex_calls.append(1)
+            return await super().get_apex_league(tier, platform=platform)
+
+    monkeypatch.setattr(collect, "RiotClient", _CountingClient)
+
+    shared_state: dict[str, dict[str, float]] = {}
+    await collect.run(
+        platforms=["euw1"], patch=PATCH, target=100, data_dir=tmp_path, discovery_state=shared_state
+    )
+    store.requeue_players()
+    await collect.run(
+        platforms=["euw1"], patch=PATCH, target=100, data_dir=tmp_path, discovery_state=shared_state
+    )
+    assert len(apex_calls) == 1
+
+    apex_calls.clear()
+    store.requeue_players()
+    await collect.run(platforms=["euw1"], patch=PATCH, target=100, data_dir=tmp_path)
+    store.requeue_players()
+    await collect.run(platforms=["euw1"], patch=PATCH, target=100, data_dir=tmp_path)
+    assert len(apex_calls) == 2
+
+
 async def test_target_stops_collection(store, tmp_path):
     counts = await collect.run(platforms=["euw1"], patch=PATCH, target=1, data_dir=tmp_path)
     assert counts["downloaded"] == 1

@@ -99,6 +99,14 @@ def run_service(
     """Boucle de service. `max_cycles` (tests) : None = sans fin. Retourne les cycles."""
     last_daily_purge = float("-inf")
     cycles = 0
+    # Horodatages de découverte apex/entries PAR PLATEFORME, créés UNE FOIS
+    # avant la boucle et réutilisés à chaque cycle (retour utilisateur
+    # 2026-08-01) : `collect.run` reçoit le MÊME dict à chaque appel, sinon
+    # chaque cycle réinitialiserait ces horodatages et refait la découverte
+    # Emerald/Diamond (coûteuse) à chaque cycle au lieu d'une fois par
+    # `ENTRIES_DISCOVERY_TTL_S` — cause de l'OOM vu en prod une fois les
+    # cycles raccourcis par `DEFAULT_BATCH_TARGET`.
+    discovery_state: dict[str, dict[str, float]] = {}
     while max_cycles is None or cycles < max_cycles:
         cycles += 1
         try:
@@ -111,6 +119,7 @@ def run_service(
                     target=batch_target,
                     dsn=dsn,
                     strict_patch_bounds=False,
+                    discovery_state=discovery_state,
                 )
             )
             refresh_scores(patch, dsn=dsn)
