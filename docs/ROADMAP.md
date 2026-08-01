@@ -1276,3 +1276,55 @@ reconstruire) puis `synergy.matchups.refresh` sur la fenêtre 16.14+16.13
 après le passage au patch suivant (16.15), c'est que le service ne
 recalcule toujours pas ce agrégat tout seul — il faudra alors vraiment
 creuser côté Railway plutôt que re-backfiller à la main à chaque patch.
+
+**Incident prod du 2026-07-31/08-01 : "dernière maj" figée puis OOM en
+boucle** — 4 causes distinctes, chacune corrigée séparément (retour
+utilisateur : "fait ce qui est le plus optimisé pour le long terme") :
+
+1. Auto-déploiement Railway sur CHAQUE push (pas seulement les fichiers du
+   collector) redémarrait le service en plein cycle. **Fix** : Watch Paths
+   Railway scopés aux fichiers du collector.
+2. Deadlock Postgres sur `upsert_players` (transactions concurrentes
+   insérant les mêmes lignes `players` dans un ordre différent). **Fix** :
+   tri par `puuid` avant l'`executemany` (commit `2a2cdad`).
+3. `DEFAULT_BATCH_TARGET=5000` + `asyncio.gather` sur toutes les
+   plateformes : la région la plus lente bloquait `refresh_scores` pendant
+   des heures. **Fix** : abaissé à 500 (commit `800e4e9`) — cycles ~10×
+   plus courts, `refresh_scores` (~1-3 min) se déclenche bien plus souvent.
+4. Régression introduite PAR le fix précédent : `last_apex_discovery`/
+   `last_entries_discovery` étaient des variables locales réinitialisées à
+   chaque appel de `_collect_platform` — avec des cycles 10× plus courts,
+   la découverte Emerald/Diamond (coûteuse, jusqu'à 150k+ joueurs/région)
+   se refaisait à CHAQUE cycle au lieu d'une fois par `ENTRIES_DISCOVERY_TTL_S`
+   → OOM. **Fix** : `discovery_state` créé une fois dans `run_service`,
+   transmis à travers `collect.run` (commit `d7ce28e`).
+
+Un 2e OOM est survenu malgré le fix #4 (apex/entries re-découverte
+correctement espacée dans les logs). Cause réelle, confirmée via le
+graphique Metrics Railway (pics mémoire isolés à 6-7 Go, pas une dérive
+progressive) : `compute._load()`/`matchups.py` chargeaient `agg_duo`
+(~220k lignes)/`agg_trio` (~110k)/`agg_duo_duration` (~560k !)/
+`agg_trio_duration` intégralement en dicts Python à CHAQUE `refresh_scores`
+— le docstring de `compute.py` anticipait déjà ce cas ("à re-profiler
+quand le volume explosera"). Avec `batch_target` abaissé (cause #3),
+`refresh_scores` tourne ~10× plus souvent, exposant ce plafond bien plus
+vite. **Fix en 2 temps** :
+- Mitigation immédiate : `MAX_WINDOW_PATCHES` 3→2 (coupe ~1/3 du volume,
+  réversible).
+- Fix structurel : `compute.py` lit `agg_duo`/`agg_trio`/leurs tables de
+  tranches de durée par PAGES (pagination par clé sur la clé primaire,
+  `_iter_agg_groups`/`_load_duration_buckets`), jamais tout en mémoire.
+  Un curseur serveur nommé a été essayé en premier (approche standard pour
+  ce genre de problème) mais rompt sous le pooler Supabase/Supavisor en
+  mode transaction (`server closed the connection unexpectedly`) — la
+  pagination par clé (requêtes complètes et sans état) est compatible avec
+  n'importe quel mode de pooling. Deuxième piège trouvé en testant contre
+  la prod : la connexion `compute.refresh` n'était pas en autocommit,
+  gardant UNE SEULE transaction ouverte sur toute la durée (dizaines de
+  pages + calcul Python entre chacune) — Supabase la coupait en cours de
+  route ; alignée sur la convention `autocommit=True` déjà en place
+  ailleurs (`db.py`). Validé par les 16 tests d'intégration Postgres de
+  `test_compute_pg.py` (fenêtres multi-patchs, vue combinée, rework inclus).
+  `agg_duo_duration`/`agg_trio_duration` restent chargés en dict complet
+  (juste paginés en lecture) — plus légers par ligne, à re-profiler si les
+  pics reviennent malgré ce fix.

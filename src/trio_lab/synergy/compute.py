@@ -10,10 +10,26 @@ cycle générait des tuples morts sur la totalité de la fenêtre (~500k lignes
 pour score_trio) même quand la ligne était inchangée ; l'UPSERT, guardé par
 `games IS DISTINCT FROM EXCLUDED.games`, ne touche que les combinaisons
 réellement mises à jour par les nouveaux matchs du cycle (cf. mémoire
-`supabase-disk-growth`, bloat constaté le 14/07/2026). Tout tient en
-mémoire : les agrégats sont déjà compactés par (patch, platform,
-combinaison) — à re-profiler quand le volume de trios distincts explosera
-(des millions de lignes possibles à ~1M matchs/patch).
+`supabase-disk-growth`, bloat constaté le 14/07/2026).
+
+`agg_duo`/`agg_trio` sont lus en FLUX par pages (`_iter_agg_groups`), pas
+chargés intégralement en dicts Python : à ~220k lignes `agg_duo` / 110k
+`agg_trio` sur la fenêtre, matérialiser tout (doublé par la vue "toutes
+régions") faisait grimper le service collector à 6-7 Go de RAM par cycle —
+OOM en prod le 2026-08-01 une fois `refresh_scores` déclenché bien plus
+souvent (`DEFAULT_BATCH_TARGET` abaissé). Pagination par CLÉ (pas un curseur
+serveur nommé : testé en prod le 2026-08-01, incompatible avec le pooler
+Supabase/Supavisor en mode transaction — `server closed the connection
+unexpectedly`, chaque FETCH suivant peut atterrir sur une session Postgres
+différente) — chaque page est une requête complète et sans état, et chaque
+itération ne garde en mémoire que la page courante + les lignes d'UN SEUL
+combo en attente, jamais le volume total de la table. `indiv` (agg_champion)
+et `duo_synergies` restent des dicts complets en mémoire : bornés par
+plateformes × rôles × champions (quelques dizaines de milliers d'entrées au
+pire), sans commune mesure avec `agg_duo`/`agg_trio`. `agg_duo_duration`/
+`agg_trio_duration` restent chargés à l'ancienne pour l'instant (lignes plus
+légères — 4 colonnes contre ~14-20 — mais à re-profiler si les pics
+persistent).
 
 La baseline individuelle d'un combo est pondérée avec les MÊMES poids de
 fenêtre que le combo (coupure de rework incluse) : la synergie est une
@@ -25,9 +41,10 @@ from __future__ import annotations
 import logging
 import math
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 
 import psycopg
+from psycopg.rows import dict_row
 
 from trio_lab import db
 from trio_lab.ccref import score as ccref_score
@@ -242,25 +259,105 @@ def _range_pct_fields(
     return {"range_theoretical_pct": pct}
 
 
-def _add_combined_stat_rows(mapping: dict[tuple, list[dict]], columns: tuple[str, ...]) -> None:
-    """Équivalent de `scores.add_combined_platform` pour les lignes dict d'agg_*."""
-    combined: dict[tuple, dict[str, dict]] = {}
-    for (platform, *rest), rows in mapping.items():
-        if platform == scores.ALL_PLATFORMS:
-            continue
-        acc = combined.setdefault((scores.ALL_PLATFORMS, *rest), {})
-        for row in rows:
-            cell = acc.setdefault(row["patch"], {"patch": row["patch"]})
-            for column in columns:
-                value = row.get(column)
-                if value is not None:
-                    cell[column] = cell.get(column, 0) + value
-    for key, per_patch in combined.items():
-        mapping[key] = list(per_patch.values())
+# Lignes par page (cf. `_iter_agg_groups`) : chaque page est une requête SQL
+# complète et sans état (pas un curseur serveur nommé — testé en prod le
+# 2026-08-01 contre le pooler Supabase/Supavisor en mode transaction,
+# `server closed the connection unexpectedly` : un curseur nommé suppose la
+# MÊME session Postgres entre deux FETCH, que le pooler ne garantit pas). La
+# pagination par clé (keyset, ci-dessous) reste bornée en mémoire tout en
+# étant compatible avec n'importe quel mode de pooling.
+_STREAM_PAGE_SIZE = 5000
+
+
+def _finalize_combo_group(rows: list[dict], stat_columns: tuple[str, ...]) -> dict[str, list[dict]]:
+    """Regroupe les lignes d'UN combo par plateforme + reconstruit la vue
+    « toutes régions » (équivalent, sur un seul combo, de
+    `scores.add_combined_platform`)."""
+    by_platform: dict[str, list[dict]] = defaultdict(list)
+    combined_by_patch: dict[str, dict] = {}
+    for row in rows:
+        by_platform[row["platform"]].append(row)
+        cell = combined_by_patch.setdefault(row["patch"], {"patch": row["patch"]})
+        for column in stat_columns:
+            value = row.get(column)
+            if value is not None:
+                cell[column] = cell.get(column, 0) + value
+    by_platform[scores.ALL_PLATFORMS] = list(combined_by_patch.values())
+    return by_platform
+
+
+def _iter_agg_groups(
+    conn: psycopg.Connection,
+    table: str,
+    patches: list[str],
+    key_columns: tuple[str, ...],
+    stat_columns: tuple[str, ...],
+) -> Iterator[tuple[tuple, dict[str, list[dict]]]]:
+    """Flux de `table` (agg_duo/agg_trio) sur `patches`, groupé par combo.
+
+    Pagination par clé (retour utilisateur 2026-08-01, OOM en prod) : à la
+    place d'un dict complet indexé par combinaison (jusqu'à ~220k lignes
+    `agg_duo` / 110k `agg_trio` sur la fenêtre, doublé par la vue combinée),
+    chaque page (`_STREAM_PAGE_SIZE` lignes) est lue par une requête complète
+    ordonnée par `(key_columns, platform, patch)` — clé primaire de
+    `agg_duo`/`agg_trio` (migration 003), donc un ordre total sans ex-æquo,
+    ce qui permet de reprendre exactement là où la page précédente s'est
+    arrêtée (`WHERE (...) > dernière ligne vue`) sans jamais sauter ni
+    dupliquer de ligne, même si un combo est à cheval sur deux pages. Chaque
+    itération ne garde en mémoire que la page courante + les lignes d'UN SEUL
+    combo en attente — jamais le volume total de la table.
+
+    Reconstruit aussi la vue « toutes régions » (équivalent streaming de
+    `scores.add_combined_platform`) : chaque combo est retourné sous la forme
+    `{platform: [lignes dict, ...], ..., "all": [lignes sommées par patch]}`.
+    """
+    key_sql = ", ".join(key_columns)
+    stat_sql = ", ".join(stat_columns)
+    order_columns = (*key_columns, "platform", "patch")
+    order_sql = ", ".join(order_columns)
+
+    pending_key: tuple | None = None
+    pending_rows: list[dict] = []
+    after: tuple | None = None
+    while True:
+        with conn.cursor(row_factory=dict_row) as cur:
+            if after is None:
+                cur.execute(
+                    f"SELECT platform, {key_sql}, patch, {stat_sql}"  # noqa: S608
+                    f" FROM {table} WHERE patch = ANY(%s)"
+                    f" ORDER BY {order_sql} LIMIT %s",
+                    (patches, _STREAM_PAGE_SIZE),
+                )
+            else:
+                placeholders = ", ".join(["%s"] * len(order_columns))
+                cur.execute(
+                    f"SELECT platform, {key_sql}, patch, {stat_sql}"  # noqa: S608
+                    f" FROM {table} WHERE patch = ANY(%s)"
+                    f" AND ({order_sql}) > ({placeholders})"
+                    f" ORDER BY {order_sql} LIMIT %s",
+                    (patches, *after, _STREAM_PAGE_SIZE),
+                )
+            page = cur.fetchall()
+        if not page:
+            break
+        for row in page:
+            key_values = tuple(row[c] for c in key_columns)
+            if pending_key is not None and key_values != pending_key:
+                yield pending_key, _finalize_combo_group(pending_rows, stat_columns)
+                pending_rows = []
+            pending_key = key_values
+            pending_rows.append(row)
+        after = tuple(page[-1][c] for c in order_columns)
+        if len(page) < _STREAM_PAGE_SIZE:
+            break
+    if pending_rows:
+        yield pending_key, _finalize_combo_group(pending_rows, stat_columns)
 
 
 def _load(conn: psycopg.Connection, window: PatchWindow):
-    """Charge les agrégats de la fenêtre, indexés par combinaison."""
+    """Charge les petits référentiels de la fenêtre (agg_champion + tables
+    théoriques CC/portée) — `agg_duo`/`agg_trio` sont lus en flux à part
+    (`_iter_agg_groups`), pas ici."""
     patches = list(window.patches)
     indiv: dict[tuple, _PerPatch] = defaultdict(list)
     for platform, role, champ, patch, games, wins in conn.execute(
@@ -270,31 +367,9 @@ def _load(conn: psycopg.Connection, window: PatchWindow):
     ):
         indiv[(platform, role, champ)].append((patch, games, wins))
 
-    duo_columns = ", ".join(_DUO_STAT_COLUMNS)
-    trio_columns = ", ".join(_TRIO_STAT_COLUMNS)
-    duos: dict[tuple, list[dict]] = defaultdict(list)
-    trios: dict[tuple, list[dict]] = defaultdict(list)
-    with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
-        for row in cur.execute(
-            f"SELECT platform, roles, champ_a, champ_b, patch, {duo_columns}"
-            " FROM agg_duo WHERE patch = ANY(%s)",
-            (patches,),
-        ):
-            duos[(row["platform"], row["roles"], row["champ_a"], row["champ_b"])].append(row)
-        for row in cur.execute(
-            f"SELECT platform, jgl_champion, mid_champion, sup_champion, patch, {trio_columns}"
-            " FROM agg_trio WHERE patch = ANY(%s)",
-            (patches,),
-        ):
-            trios[
-                (row["platform"], row["jgl_champion"], row["mid_champion"], row["sup_champion"])
-            ].append(row)
-
     # Vue « toutes régions » : sommes par patch entre plateformes, matérialisée
     # sous platform='all' comme n'importe quelle autre valeur de colonne.
     scores.add_combined_platform(indiv)
-    _add_combined_stat_rows(duos, _DUO_STAT_COLUMNS)
-    _add_combined_stat_rows(trios, _TRIO_STAT_COLUMNS)
 
     cc_theo_scores = dict(
         conn.execute("SELECT champion_id, score FROM champion_cc_theoretical").fetchall()
@@ -302,7 +377,7 @@ def _load(conn: psycopg.Connection, window: PatchWindow):
     range_theo_scores = dict(
         conn.execute("SELECT champion_id, score FROM champion_range_theoretical").fetchall()
     )
-    return indiv, duos, trios, cc_theo_scores, range_theo_scores
+    return indiv, cc_theo_scores, range_theo_scores
 
 
 def _load_duration_buckets(
@@ -310,20 +385,50 @@ def _load_duration_buckets(
 ) -> dict[tuple, dict[int, _PerPatch]]:
     """Charge `agg_trio_duration`/`agg_duo_duration`, groupé par combo puis par tranche.
 
+    Lu par pages (retour utilisateur 2026-08-01) : jusqu'à ~9 tranches de
+    durée par combo, cette table est PLUS grosse que `agg_duo`/`agg_trio` —
+    une lecture en un seul bloc dépassait `statement_timeout` en prod, une
+    fois `agg_duo`/`agg_trio` eux-mêmes passés en lecture paginée
+    (`_iter_agg_groups`). Même principe de pagination par clé (ordre total
+    sur `platform, *key_columns, duration_bucket, patch` — sous-ensemble de
+    la clé primaire, migration 015), mais remplit ici le même dict complet
+    qu'avant : ces lignes restent bien plus légères (4 colonnes) que celles
+    d'`agg_duo`/`agg_trio`, pas besoin d'un traitement combo par combo.
+
     Réutilise `scores.add_combined_platform` (clé `(platform, *rest)`) en
     incluant la tranche dans `*rest` : la vue 'all' est donc déjà sommée par
     tranche, pas seulement par combo.
     """
     columns = ", ".join(key_columns)
+    order_sql = f"platform, {columns}, duration_bucket, patch"
     flat: dict[tuple, _PerPatch] = defaultdict(list)
-    with conn.cursor() as cur:
-        for row in cur.execute(
-            f"SELECT platform, {columns}, duration_bucket, patch, games, wins"  # noqa: S608
-            f" FROM {table} WHERE patch = ANY(%s)",
-            (patches,),
-        ):
+    after: tuple | None = None
+    while True:
+        with conn.cursor() as cur:
+            if after is None:
+                cur.execute(
+                    f"SELECT platform, {columns}, duration_bucket, patch, games, wins"  # noqa: S608
+                    f" FROM {table} WHERE patch = ANY(%s)"
+                    f" ORDER BY {order_sql} LIMIT %s",
+                    (patches, _STREAM_PAGE_SIZE),
+                )
+            else:
+                placeholders = ", ".join(["%s"] * (3 + len(key_columns)))
+                cur.execute(
+                    f"SELECT platform, {columns}, duration_bucket, patch, games, wins"  # noqa: S608
+                    f" FROM {table} WHERE patch = ANY(%s)"
+                    f" AND ({order_sql}) > ({placeholders})"
+                    f" ORDER BY {order_sql} LIMIT %s",
+                    (patches, *after, _STREAM_PAGE_SIZE),
+                )
+            page = cur.fetchall()
+        for row in page:
             platform, *key, bucket, patch, games, wins = row
             flat[(platform, *key, bucket)].append((patch, games, wins))
+        if len(page) < _STREAM_PAGE_SIZE:
+            break
+        platform, *key, bucket, patch, _games, _wins = page[-1]
+        after = (platform, *key, bucket, patch)
     scores.add_combined_platform(flat)
     grouped: dict[tuple, dict[int, _PerPatch]] = defaultdict(dict)
     for (platform, *key, bucket), rows in flat.items():
@@ -391,8 +496,16 @@ def refresh(
     thresholds: tuple[float, float] = scores.DEFAULT_TIER_THRESHOLDS,
 ) -> dict[str, int]:
     """Recalcule les scores d'une fenêtre. Retourne le nombre de lignes par table."""
-    with psycopg.connect(db.require_dsn(dsn)) as conn:
-        indiv, duos, trios, cc_theo_scores, range_theo_scores = _load(conn, window)
+    # Autocommit (convention `db.py` : chaque instruction est atomique, les
+    # écritures multi-lignes ouvrent leur propre `conn.transaction()`) —
+    # indispensable depuis le passage en lecture paginée (`_iter_agg_groups`) :
+    # une connexion SANS autocommit garde une seule transaction ouverte sur
+    # toute la durée de `refresh` (dizaines de pages + calcul Python entre
+    # chacune, largement plus long qu'un chargement en un bloc), et Supabase
+    # coupe la connexion en cours de route (`server closed the connection
+    # unexpectedly`, reproduit en prod le 2026-08-01 à deux reprises).
+    with psycopg.connect(db.require_dsn(dsn), autocommit=True) as conn:
+        indiv, cc_theo_scores, range_theo_scores = _load(conn, window)
         patches = list(window.patches)
         duo_durations = _load_duration_buckets(
             conn, patches, table="agg_duo_duration", key_columns=("roles", "champ_a", "champ_b")
@@ -410,111 +523,127 @@ def refresh(
 
         duo_rows: list[dict] = []
         duo_synergies: dict[tuple, float] = {}
-        for (platform, roles, a, b), agg_rows in duos.items():
-            weights = window.weights_for((a, b))
-            combo = scores.weighted_wr(_per_patch(agg_rows), weights)
-            if combo is None:
-                continue
-            role_a, role_b = DUO_ROLES[roles]
-            wr_a = member_wr(platform, role_a, a, weights)
-            wr_b = member_wr(platform, role_b, b, weights)
-            if wr_a is None or wr_b is None:
-                continue  # baseline incalculable sur la fenêtre (rework)
-            syn = scores.synergy(combo.wr, (wr_a.wr, wr_b.wr))
-            ci_low, ci_high = scores.wilson_interval(combo.wr, combo.games_eff)
-            syn_ci_low, syn_ci_high = _synergy_ci(combo, (ci_low, ci_high), (wr_a, wr_b))
-            # Le prior du trio utilise la synergie de duo RÉTRÉCIE vers 0 (prior
-            # neutre) : un duo peu joué provient des mêmes matchs que le trio et
-            # reproduirait son extrême — à volume réel le rétrécissement devient
-            # négligeable. La table score_duo publie, elle, la synergie brute.
-            duo_synergies[(platform, roles, a, b)] = scores.smooth(syn, combo.games_eff, 0.0, k)
-            stats = _weighted_stats(agg_rows, weights)
-            cc_by_member = _weighted_stats(agg_rows, weights, pairs=_DUO_POSITION_CC_PAIRS)
-            duo_rows.append(
-                {
-                    "window_label": window.label,
-                    "platform": platform,
-                    "roles": roles,
-                    "champ_a": a,
-                    "champ_b": b,
-                    "games": combo.games,
-                    "games_eff": combo.games_eff,
-                    "wr": combo.wr,
-                    "synergy": syn,
-                    "synergy_ci_low": syn_ci_low,
-                    "synergy_ci_high": syn_ci_high,
-                    "ci_low": ci_low,
-                    "ci_high": ci_high,
-                    "tier": scores.reliability_tier(combo.games_eff, thresholds),
-                    **_scaling_fields(
-                        _scaling_slope(duo_durations.get((platform, roles, a, b)), weights)
-                    ),
-                    **stats,
-                    **cc_by_member,
-                    **_cc_pct_fields(
-                        (a, b), cc_theo_scores, stats["cc_time_s"], combo.games_eff, k
-                    ),
-                    **_range_pct_fields((a, b), range_theo_scores),
-                }
-            )
+        duo_groups = _iter_agg_groups(
+            conn, "agg_duo", patches, ("roles", "champ_a", "champ_b"), _DUO_STAT_COLUMNS
+        )
+        for (roles, a, b), by_platform in duo_groups:
+            for platform, agg_rows in by_platform.items():
+                weights = window.weights_for((a, b))
+                combo = scores.weighted_wr(_per_patch(agg_rows), weights)
+                if combo is None:
+                    continue
+                role_a, role_b = DUO_ROLES[roles]
+                wr_a = member_wr(platform, role_a, a, weights)
+                wr_b = member_wr(platform, role_b, b, weights)
+                if wr_a is None or wr_b is None:
+                    continue  # baseline incalculable sur la fenêtre (rework)
+                syn = scores.synergy(combo.wr, (wr_a.wr, wr_b.wr))
+                ci_low, ci_high = scores.wilson_interval(combo.wr, combo.games_eff)
+                syn_ci_low, syn_ci_high = _synergy_ci(combo, (ci_low, ci_high), (wr_a, wr_b))
+                # Le prior du trio utilise la synergie de duo RÉTRÉCIE vers 0 (prior
+                # neutre) : un duo peu joué provient des mêmes matchs que le trio et
+                # reproduirait son extrême — à volume réel le rétrécissement devient
+                # négligeable. La table score_duo publie, elle, la synergie brute.
+                duo_synergies[(platform, roles, a, b)] = scores.smooth(syn, combo.games_eff, 0.0, k)
+                stats = _weighted_stats(agg_rows, weights)
+                cc_by_member = _weighted_stats(agg_rows, weights, pairs=_DUO_POSITION_CC_PAIRS)
+                duo_rows.append(
+                    {
+                        "window_label": window.label,
+                        "platform": platform,
+                        "roles": roles,
+                        "champ_a": a,
+                        "champ_b": b,
+                        "games": combo.games,
+                        "games_eff": combo.games_eff,
+                        "wr": combo.wr,
+                        "synergy": syn,
+                        "synergy_ci_low": syn_ci_low,
+                        "synergy_ci_high": syn_ci_high,
+                        "ci_low": ci_low,
+                        "ci_high": ci_high,
+                        "tier": scores.reliability_tier(combo.games_eff, thresholds),
+                        **_scaling_fields(
+                            _scaling_slope(duo_durations.get((platform, roles, a, b)), weights)
+                        ),
+                        **stats,
+                        **cc_by_member,
+                        **_cc_pct_fields(
+                            (a, b), cc_theo_scores, stats["cc_time_s"], combo.games_eff, k
+                        ),
+                        **_range_pct_fields((a, b), range_theo_scores),
+                    }
+                )
 
         trio_rows: list[dict] = []
-        for (platform, jgl, mid, sup), agg_rows in trios.items():
-            weights = window.weights_for((jgl, mid, sup))
-            combo = scores.weighted_wr(_per_patch(agg_rows), weights)
-            if combo is None:
-                continue
-            members = [
-                member_wr(platform, "JUNGLE", jgl, weights),
-                member_wr(platform, "MIDDLE", mid, weights),
-                member_wr(platform, "UTILITY", sup, weights),
-            ]
-            if any(m is None for m in members):
-                continue
-            raw = scores.synergy(combo.wr, (m.wr for m in members))
-            pred = scores.trio_prediction(
-                duo_synergies[key]
-                for key in (
-                    (platform, "jgl_mid", jgl, mid),
-                    (platform, "jgl_sup", jgl, sup),
-                    (platform, "mid_sup", mid, sup),
+        trio_groups = _iter_agg_groups(
+            conn,
+            "agg_trio",
+            patches,
+            ("jgl_champion", "mid_champion", "sup_champion"),
+            _TRIO_STAT_COLUMNS,
+        )
+        for (jgl, mid, sup), by_platform in trio_groups:
+            for platform, agg_rows in by_platform.items():
+                weights = window.weights_for((jgl, mid, sup))
+                combo = scores.weighted_wr(_per_patch(agg_rows), weights)
+                if combo is None:
+                    continue
+                members = [
+                    member_wr(platform, "JUNGLE", jgl, weights),
+                    member_wr(platform, "MIDDLE", mid, weights),
+                    member_wr(platform, "UTILITY", sup, weights),
+                ]
+                if any(m is None for m in members):
+                    continue
+                raw = scores.synergy(combo.wr, (m.wr for m in members))
+                pred = scores.trio_prediction(
+                    duo_synergies[key]
+                    for key in (
+                        (platform, "jgl_mid", jgl, mid),
+                        (platform, "jgl_sup", jgl, sup),
+                        (platform, "mid_sup", mid, sup),
+                    )
+                    if key in duo_synergies
                 )
-                if key in duo_synergies
-            )
-            smoothed = scores.smooth(raw, combo.games_eff, pred, k)
-            ci_low, ci_high = scores.wilson_interval(combo.wr, combo.games_eff)
-            syn_ci_low, syn_ci_high = _synergy_ci(combo, (ci_low, ci_high), members)
-            stats = _weighted_stats(agg_rows, weights)
-            cc_by_member = _weighted_stats(agg_rows, weights, pairs=_TRIO_POSITION_CC_PAIRS)
-            trio_rows.append(
-                {
-                    "window_label": window.label,
-                    "platform": platform,
-                    "jgl_champion": jgl,
-                    "mid_champion": mid,
-                    "sup_champion": sup,
-                    "games": combo.games,
-                    "games_eff": combo.games_eff,
-                    "wr": combo.wr,
-                    "synergy_raw": raw,
-                    "synergy_pred": pred,
-                    "synergy": smoothed,
-                    "synergy_ci_low": syn_ci_low,
-                    "synergy_ci_high": syn_ci_high,
-                    "ci_low": ci_low,
-                    "ci_high": ci_high,
-                    "tier": scores.reliability_tier(combo.games_eff, thresholds),
-                    **_scaling_fields(
-                        _scaling_slope(trio_durations.get((platform, jgl, mid, sup)), weights)
-                    ),
-                    **stats,
-                    **cc_by_member,
-                    **_cc_pct_fields(
-                        (jgl, mid, sup), cc_theo_scores, stats["cc_time_s"], combo.games_eff, k
-                    ),
-                    **_range_pct_fields((jgl, mid, sup), range_theo_scores),
-                }
-            )
+                smoothed = scores.smooth(raw, combo.games_eff, pred, k)
+                ci_low, ci_high = scores.wilson_interval(combo.wr, combo.games_eff)
+                syn_ci_low, syn_ci_high = _synergy_ci(combo, (ci_low, ci_high), members)
+                stats = _weighted_stats(agg_rows, weights)
+                cc_by_member = _weighted_stats(agg_rows, weights, pairs=_TRIO_POSITION_CC_PAIRS)
+                trio_rows.append(
+                    {
+                        "window_label": window.label,
+                        "platform": platform,
+                        "jgl_champion": jgl,
+                        "mid_champion": mid,
+                        "sup_champion": sup,
+                        "games": combo.games,
+                        "games_eff": combo.games_eff,
+                        "wr": combo.wr,
+                        "synergy_raw": raw,
+                        "synergy_pred": pred,
+                        "synergy": smoothed,
+                        "synergy_ci_low": syn_ci_low,
+                        "synergy_ci_high": syn_ci_high,
+                        "ci_low": ci_low,
+                        "ci_high": ci_high,
+                        "tier": scores.reliability_tier(combo.games_eff, thresholds),
+                        **_scaling_fields(
+                            _scaling_slope(trio_durations.get((platform, jgl, mid, sup)), weights)
+                        ),
+                        **stats,
+                        **cc_by_member,
+                        **_cc_pct_fields(
+                            (jgl, mid, sup),
+                            cc_theo_scores,
+                            stats["cc_time_s"],
+                            combo.games_eff,
+                            k,
+                        ),
+                        **_range_pct_fields((jgl, mid, sup), range_theo_scores),
+                    }
+                )
 
         with conn.transaction(), conn.cursor() as cur:
             if duo_rows:

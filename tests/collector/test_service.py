@@ -153,7 +153,7 @@ def test_refresh_scores_skips_compute_when_window_empty(monkeypatch):
     assert calls == [("agg", "16.13")]
 
 
-# --- scoring_window : fenêtre bornée aux 3 patchs les plus récents ---
+# --- scoring_window : fenêtre bornée aux MAX_WINDOW_PATCHES patchs les plus récents ---
 
 
 def test_scoring_window_orders_and_caps_patches(monkeypatch):
@@ -175,7 +175,9 @@ def test_scoring_window_orders_and_caps_patches(monkeypatch):
     monkeypatch.setattr(service.psycopg, "connect", lambda dsn: _FakeConn())
     monkeypatch.setattr(service.db, "require_dsn", lambda dsn: "postgres://fake")
     window = service.scoring_window()
-    assert window.patches == ("16.13", "16.12", "16.11")  # 16.10 hors fenêtre
+    # MAX_WINDOW_PATCHES = 2 (abaissé de 3 le 2026-08-01, mitigation OOM) :
+    # 16.11 et 16.10 hors fenêtre.
+    assert window.patches == ("16.13", "16.12")
 
 
 def test_scoring_window_empty_db_returns_none(monkeypatch):
