@@ -1328,3 +1328,13 @@ vite. **Fix en 2 temps** :
   `agg_duo_duration`/`agg_trio_duration` restent chargés en dict complet
   (juste paginés en lecture) — plus légers par ligne, à re-profiler si les
   pics reviennent malgré ce fix.
+
+**Validé en prod le 2026-08-02** : `refresh_scores` complet (agrégats →
+scores → matchups → résilience → draft_suggestions → purges) sans crash sur
+la fenêtre 16.15+16.14 (score_duo: 619 549, score_trio: 890 438). Un
+`statement_timeout` DIFFÉRENT est apparu ensuite sur `purge_stale_participants`
+(`DELETE...USING` en un bloc sur un backlog accumulé pendant l'incident, ~10
+lignes/match) — géré sans crash par la reprise de cycle existante
+(`run_service`), mais corrigé par la même famille de fix : suppression par
+lots de `_PARTICIPANTS_DELETE_BATCH` matchs. `MAX_WINDOW_PATCHES` remonté à
+3 (mitigation devenue inutile, le vrai fix tient la charge).

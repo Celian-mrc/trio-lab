@@ -92,23 +92,41 @@ def purge_stale_objective_events(
     return {"events_deleted": deleted}
 
 
+# Matchs par lot (retour utilisateur 2026-08-02) : `match_participants` a ~10
+# lignes/match, un DELETE...USING en un seul bloc sur plusieurs patchs (jusqu'à
+# quelques millions de lignes) dépasse `statement_timeout` — vu en prod avec
+# un backlog accumulé pendant l'incident OOM (la purge quotidienne n'avait
+# pas pu tourner proprement pendant plusieurs jours). Boucle de petits DELETE,
+# chacun sa propre transaction (autocommit), jusqu'à ce qu'il n'en reste plus.
+_PARTICIPANTS_DELETE_BATCH = 5000
+
+
 def purge_stale_participants(
     *, keep: int = PARTICIPANTS_KEEP, dry_run: bool = False, dsn: str | None = None
 ) -> dict:
     """Purge `match_participants` des patchs au-delà des `keep` plus récents."""
     if keep < 1:
         raise ValueError(f"keep doit être ≥ 1, reçu {keep}")
-    with psycopg.connect(db.require_dsn(dsn)) as conn, conn.transaction():
+    with psycopg.connect(db.require_dsn(dsn), autocommit=True) as conn:
         known = _known_patches(conn, "matches")
         old = known[keep:]
         deleted = 0
         if old and not dry_run:
-            cur = conn.execute(
-                "DELETE FROM match_participants p USING matches m"
-                " WHERE p.match_id = m.match_id AND m.patch = ANY(%s)",
-                (old,),
-            )
-            deleted = cur.rowcount
+            while True:
+                with conn.transaction():
+                    cur = conn.execute(
+                        "DELETE FROM match_participants"
+                        " WHERE match_id IN ("
+                        "   SELECT p.match_id FROM match_participants p"
+                        "   JOIN matches m ON p.match_id = m.match_id"
+                        "   WHERE m.patch = ANY(%s)"
+                        "   LIMIT %s"
+                        " )",
+                        (old, _PARTICIPANTS_DELETE_BATCH),
+                    )
+                    deleted += cur.rowcount
+                if cur.rowcount == 0:
+                    break
     logger.info(
         "rétention participants (keep=%d%s) : patchs purgés %s, %d lignes supprimées",
         keep,

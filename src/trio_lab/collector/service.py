@@ -46,13 +46,11 @@ logger = logging.getLogger(__name__)
 DEFAULT_BATCH_TARGET = 500  # matchs par plateforme et par batch
 CYCLE_ERROR_PAUSE_S = 60
 PURGE_INTERVAL_S = 24 * 3600
-# Abaissé de 3 à 2 le 2026-08-01 (retour utilisateur) : mitigation temporaire
-# le temps de streamer `compute._load`/`compute.refresh` (OOM en prod, pics
-# mémoire à 6-7 Go sur un conteneur limité à 8 Go — `agg_duo`/`agg_trio`
-# chargés intégralement en dicts Python pour toute la fenêtre). Coupe ~1/3 du
-# volume chargé par cycle, au prix d'un peu de profondeur statistique.
-# À remonter à 3 une fois le chargement en flux en place.
-MAX_WINDOW_PATCHES = 2
+# Abaissé de 3 à 2 le 2026-08-01 en mitigation temporaire pendant l'OOM en
+# prod (`compute._load`/`compute.refresh` chargeaient `agg_duo`/`agg_trio`
+# intégralement en dicts Python), remonté à 3 le 2026-08-02 une fois la
+# lecture paginée (`compute._iter_agg_groups`) validée en prod sans crash.
+MAX_WINDOW_PATCHES = 3
 
 
 def scoring_window(dsn: str | None = None) -> PatchWindow | None:
