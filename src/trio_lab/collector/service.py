@@ -32,7 +32,18 @@ from trio_lab.synergy.windows import PatchWindow, make_window, patch_key
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_BATCH_TARGET = 5000  # matchs par plateforme et par batch
+# Abaissé de 5000 à 500 le 2026-08-01 (retour utilisateur) : `collect.run`
+# attend que TOUTES les plateformes atteignent `target` NOUVEAUX matchs
+# (asyncio.gather) avant que `refresh_scores` tourne UNE SEULE FOIS en fin
+# de cycle — une seule région lente (rate limit Riot, réserve de matchs
+# neufs qui s'épuise à mesure que le "déjà connu" grossit) bloque tout le
+# cycle, potentiellement pendant des heures, pendant que le site sert des
+# scores de plus en plus périmés. Un batch 10× plus petit boucle ~10× plus
+# vite : `refresh_scores` (agrégats + scores + suggestions, ~1-3 min mesuré
+# sur la fenêtre courante) se déclenche bien plus souvent pour un coût
+# cumulé négligeable — la fraîcheur du site ne dépend plus du pire cas
+# d'une seule région.
+DEFAULT_BATCH_TARGET = 500  # matchs par plateforme et par batch
 CYCLE_ERROR_PAUSE_S = 60
 PURGE_INTERVAL_S = 24 * 3600
 MAX_WINDOW_PATCHES = 3
