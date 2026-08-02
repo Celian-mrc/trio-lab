@@ -1338,3 +1338,16 @@ lignes/match) — géré sans crash par la reprise de cycle existante
 (`run_service`), mais corrigé par la même famille de fix : suppression par
 lots de `_PARTICIPANTS_DELETE_BATCH` matchs. `MAX_WINDOW_PATCHES` remonté à
 3 (mitigation devenue inutile, le vrai fix tient la charge).
+
+**Régression trouvée par retour utilisateur** ("il y a toujours que 2
+patchs") : `purge_stale_scores` trie les `window_label` par leur seul
+premier patch — remonter `MAX_WINDOW_PATCHES` (2→3) en cours d'incident a
+fait coexister brièvement "16.15+16.14" et "16.15+16.14+16.13", à égalité
+sur ce tri (même premier patch), et le label fraîchement recalculé (3
+patchs) a été purgé au profit du résidu périmé (2 patchs) — le site a servi
+la mauvaise fenêtre jusqu'au cycle suivant. **Fix** : départage par
+profondeur de fenêtre (nombre de patchs) ajouté au tri, régression
+couverte par `test_purge_scores_breaks_tie_on_window_depth`. Se corrige
+tout seul dès que le cycle en cours recalcule "16.15+16.14+16.13" — pas
+d'intervention manuelle nécessaire, juste attendre le prochain
+`refresh_scores`.
