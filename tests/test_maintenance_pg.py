@@ -227,6 +227,21 @@ async def test_purge_scores_keeps_only_most_recent_window(pg_conn):
         assert [r[0] for r in await cur.fetchall()] == ["16.13+16.12"], table
 
 
+async def test_purge_scores_breaks_tie_on_window_depth(pg_conn):
+    """Deux labels partageant le même premier patch (MAX_WINDOW_PATCHES
+    changé entre deux cycles, ex. 2→3 patchs) : le tri par seul premier
+    patch serait à égalité — le plus profond (le plus fraîchement
+    recalculé) doit gagner, pas un ordre arbitraire (régression prod du
+    2026-08-02 : le label à 3 patchs venait d'être purgé au profit du
+    résidu à 2 patchs)."""
+    await _seed_score_window(pg_conn, "16.15+16.14")  # résidu périmé
+    await _seed_score_window(pg_conn, "16.15+16.14+16.13")  # fenêtre courante
+    report = maintenance.purge_stale_scores(dsn=TEST_DSN)
+    assert report == {"purged_window_labels": ["16.15+16.14"], "score_rows_deleted": 3}
+    cur = await pg_conn.execute("SELECT DISTINCT window_label FROM score_trio")
+    assert [r[0] for r in await cur.fetchall()] == ["16.15+16.14+16.13"]
+
+
 async def test_purge_scores_includes_champion_resilience(pg_conn):
     """score_champion_resilience (Phase 8, résilience) : ajoutée à la purge
     le 20/07/2026 en passant son refresh en automatique — retour utilisateur,

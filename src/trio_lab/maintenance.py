@@ -215,15 +215,23 @@ def purge_stale_scores(
 ) -> dict:
     """Purge `score_*` des `window_label` au-delà des `keep` plus récents.
 
-    L'ordre de récence d'un label se lit sur son premier patch (le plus
-    récent de la fenêtre, avant le premier "+").
+    L'ordre de récence d'un label se lit d'abord sur son premier patch (le
+    plus récent de la fenêtre, avant le premier "+"), PUIS sur sa profondeur
+    (nombre de patchs) — deux labels peuvent partager le même premier patch
+    si `MAX_WINDOW_PATCHES` change entre deux cycles (ex. "16.15+16.14" vs
+    "16.15+16.14+16.13") : sans ce départage, le tri ne serait pas
+    déterministe entre les deux et pourrait purger le label fraîchement
+    recalculé au profit d'un résidu périmé (vu en prod le 2026-08-02, cf.
+    ROADMAP).
     """
     if keep < 1:
         raise ValueError(f"keep doit être ≥ 1, reçu {keep}")
     with psycopg.connect(db.require_dsn(dsn)) as conn, conn.transaction():
         rows = conn.execute("SELECT DISTINCT window_label FROM score_trio").fetchall()
         known = sorted(
-            (r[0] for r in rows), key=lambda lbl: patch_key(lbl.split("+")[0]), reverse=True
+            (r[0] for r in rows),
+            key=lambda lbl: (patch_key(lbl.split("+")[0]), len(lbl.split("+"))),
+            reverse=True,
         )
         old = known[keep:]
         deleted = 0
