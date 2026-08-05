@@ -19,7 +19,7 @@ import argparse
 import asyncio
 import logging
 
-from trio_lab import config, db
+from trio_lab import config, db, observability
 from trio_lab.collector import collect, ladder, service, storage
 
 
@@ -60,6 +60,7 @@ def main() -> None:
         level=config.LOG_LEVEL,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+    observability.init_sentry()
     db.use_selector_event_loop()
     platforms = [p.strip() for p in args.platforms.split(",") if p.strip()]
     if args.service:

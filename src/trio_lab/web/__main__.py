@@ -7,7 +7,7 @@ import os
 
 import uvicorn
 
-from trio_lab import config
+from trio_lab import config, observability
 from trio_lab.web.app import create_app
 
 
@@ -15,6 +15,7 @@ def main() -> None:
     logging.basicConfig(
         level=config.LOG_LEVEL, format="%(asctime)s %(levelname)s %(name)s %(message)s"
     )
+    observability.init_sentry()
     uvicorn.run(create_app(), host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
 
 

@@ -1,0 +1,32 @@
+"""Observabilité optionnelle : Sentry (erreurs), à compléter avec les logs
+vers Grafana Cloud une fois le compte créé (retour utilisateur 2026-08-02,
+incident OOM diagnostiqué à la main via les logs Railway).
+
+No-op si les variables d'environnement correspondantes sont absentes (dev
+local, tests, CI) — jamais requis pour faire tourner le projet.
+"""
+
+from __future__ import annotations
+
+import logging
+
+from trio_lab import config
+
+logger = logging.getLogger(__name__)
+
+
+def init_sentry() -> None:
+    """Initialise Sentry si `SENTRY_DSN` est renseignée, no-op sinon.
+
+    Pas de tracing de performance (`traces_sample_rate=0`) : seule la
+    capture d'erreurs nous intéresse ici, pas de coût/quota supplémentaire
+    pour rien. `sentry_sdk` capture automatiquement les exceptions non
+    gérées et les `logger.exception(...)` (déjà en place partout, ex.
+    `collector/service.py`) — aucun changement de code métier nécessaire.
+    """
+    if not config.SENTRY_DSN:
+        return
+    import sentry_sdk
+
+    sentry_sdk.init(dsn=config.SENTRY_DSN, traces_sample_rate=0.0)
+    logger.info("Sentry initialisé")

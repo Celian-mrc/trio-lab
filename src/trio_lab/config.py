@@ -34,6 +34,9 @@ DATABASE_URL: str | None = _get("DATABASE_URL")
 ADMIN_USER: str | None = _get("ADMIN_USER")
 ADMIN_PASSWORD: str | None = _get("ADMIN_PASSWORD")
 
+# --- Observabilité (trio_lab.observability, optionnel — voir .env.example) ---
+SENTRY_DSN: str | None = _get("SENTRY_DSN")
+
 # --- Divers ---
 LOG_LEVEL: str = _get("LOG_LEVEL", "INFO")
 DATA_DIR: Path = Path(_get("DATA_DIR", str(PROJECT_ROOT / "data")))
