@@ -16,6 +16,7 @@ def main() -> None:
         level=config.LOG_LEVEL, format="%(asctime)s %(levelname)s %(name)s %(message)s"
     )
     observability.init_sentry()
+    observability.init_loki_logging("web")
     uvicorn.run(create_app(), host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
 
 

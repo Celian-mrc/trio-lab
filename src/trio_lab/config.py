@@ -36,6 +36,9 @@ ADMIN_PASSWORD: str | None = _get("ADMIN_PASSWORD")
 
 # --- Observabilité (trio_lab.observability, optionnel — voir .env.example) ---
 SENTRY_DSN: str | None = _get("SENTRY_DSN")
+LOKI_URL: str | None = _get("LOKI_URL")
+LOKI_USER: str | None = _get("LOKI_USER")
+LOKI_TOKEN: str | None = _get("LOKI_TOKEN")
 
 # --- Divers ---
 LOG_LEVEL: str = _get("LOG_LEVEL", "INFO")

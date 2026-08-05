@@ -61,6 +61,7 @@ def main() -> None:
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
     observability.init_sentry()
+    observability.init_loki_logging("collector")
     db.use_selector_event_loop()
     platforms = [p.strip() for p in args.platforms.split(",") if p.strip()]
     if args.service:
