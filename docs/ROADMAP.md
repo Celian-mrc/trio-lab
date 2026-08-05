@@ -1351,3 +1351,19 @@ couverte par `test_purge_scores_breaks_tie_on_window_depth`. Se corrige
 tout seul dès que le cycle en cours recalcule "16.15+16.14+16.13" — pas
 d'intervention manuelle nécessaire, juste attendre le prochain
 `refresh_scores`.
+
+**Observabilité ajoutée en marge de l'incident** (retour utilisateur : cette
+nuit a été diagnostiquée à la main via les logs Railway + une capture
+d'écran Metrics, faute d'alerting) — `trio_lab.observability`, no-op sans
+config, deux briques indépendantes :
+- **Sentry** (capture d'erreurs) : `sentry_sdk.init()` dans les deux points
+  d'entrée (collector, web), capture automatiquement tout ce qui passe par
+  `logger.exception(...)`, déjà en place partout — zéro changement de code
+  métier. Testé en direct contre le vrai projet Sentry avant de committer.
+- **Grafana Cloud (Loki)** : logs standard renvoyés via `LokiQueueHandler`
+  (thread à part, jamais sur le thread appelant), tag `service` pour
+  filtrer collector/web dans Grafana. Testé en direct contre le vrai
+  endpoint avant de committer.
+Les deux nécessitent d'ajouter les variables (`SENTRY_DSN`, `LOKI_URL`,
+`LOKI_USER`, `LOKI_TOKEN`) sur Railway pour s'activer en prod (voir
+`.env.example`).
