@@ -321,6 +321,25 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
     app.mount("/static", StaticFiles(directory=_HERE / "static"), name="static")
     templates = Jinja2Templates(directory=_HERE / "templates")
 
+    @app.middleware("http")
+    async def _cache_champion_icons(request: Request, call_next):
+        """`Cache-Control` long terme UNIQUEMENT sur les icônes de champion
+        (retour utilisateur 2026-08-11 : navigation ressentie deux fois plus
+        lente après leur passage en local — `StaticFiles` n'envoie aucun
+        `Cache-Control` par défaut, chaque page revalide/retélécharge donc
+        ~90 icônes au lieu de servir depuis le cache navigateur sans réseau).
+        Jamais élargi à tout `/static/` : CSS/JS s'appuient sur le
+        cache-busting par mtime (`static_version`) pour éviter un incident
+        déjà vécu (CSS périmé après déploiement, retour utilisateur
+        2026-07-13) — un `Cache-Control` agressif sur des URLs SANS
+        versioning serait risqué là, contrairement aux icônes (retour
+        utilisateur : "elles changent très rarement", nom de fichier stable
+        tant que Data Dragon ne renomme pas l'image)."""
+        response = await call_next(request)
+        if request.url.path.startswith("/static/champions/"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return response
+
     @app.get("/riot.txt", response_class=PlainTextResponse)
     def riot_verification() -> str:
         """Vérification de l'URL produit pour la candidature clé de production

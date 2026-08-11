@@ -107,6 +107,26 @@ def _seed_matches(conn) -> None:
         )
 
 
+# --- Cache-Control : icônes de champion en cache long terme, CSS/JS jamais
+# touchés (retour utilisateur 2026-08-11, régression : navigation deux fois
+# plus lente après le passage des icônes en local, faute de Cache-Control) ---
+
+
+def test_champion_icons_get_long_lived_cache_control(client):
+    resp = client.get("/static/champions/Ahri.png")
+    assert resp.status_code == 200
+    assert resp.headers["cache-control"] == "public, max-age=31536000, immutable"
+
+
+def test_css_and_js_get_no_cache_control(client):
+    """Jamais élargi à tout `/static/` : CSS/JS s'appuient sur le
+    cache-busting par mtime (`static_version`), pas sur `Cache-Control` —
+    incident déjà vécu le 2026-07-13 (CSS périmé après déploiement)."""
+    resp = client.get("/static/style.css")
+    assert resp.status_code == 200
+    assert "cache-control" not in resp.headers
+
+
 def test_api_trios_sorted_by_synergy(pg_sync, client):
     _seed_scores(pg_sync)
     payload = client.get("/api/trios").json()
