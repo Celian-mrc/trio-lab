@@ -1313,6 +1313,52 @@ gagner") avec les données déjà en place.
       changent très rarement faudra juste ajouter les nouveaux
       champions") — 233 icônes (7,2 Mo) téléchargées et committées au
       premier lancement.
+      - Suivi immédiat (retour utilisateur : "ça met deux fois plus
+        longtemps") : oubli du `Cache-Control` sur `/static/champions/`
+        (`StaticFiles` n'en envoie aucun par défaut) — corrigé par un
+        middleware SCOPÉ à ce seul chemin, jamais élargi à tout `/static/`
+        (CSS/JS s'appuient volontairement sur le cache-busting par mtime
+        depuis l'incident du 2026-07-13, pas sur `Cache-Control`).
+
+- [x] **Contention IO Supabase + connexions "idle in transaction" (2026-08-11,
+      suivi du point précédent — le Cache-Control n'a pas suffi, la
+      navigation restait à 20-90+ secondes)** : deux causes distinctes,
+      diagnostiquées en direct sur la prod (`pg_stat_activity`, `curl -w`,
+      DevTools Network) plutôt que supposées :
+      1. La pagination par clé de `compute.py` (`_iter_agg_groups`,
+         `_load_duration_buckets`, incident OOM du 2026-08-02) trie sur
+         `(colonnes du combo, platform, patch)` — un ordre qui ne
+         correspond à AUCUN index existant (les clés primaires trient
+         `patch` en tête). Chaque page relançait donc un scan + tri complet
+         de la table au lieu d'un parcours d'index, saturant l'IO disque
+         partagé et ralentissant TOUT le site pendant les cycles du
+         collector. **Fix** : migration 038, 4 nouveaux index
+         `CREATE INDEX CONCURRENTLY` correspondant exactement à l'ordre de
+         tri utilisé (jamais de verrouillage des lectures/écritures en
+         cours). A nécessité de corriger `db.apply_migrations` au passage :
+         `CONCURRENTLY` ne peut pas tourner dans le bloc de transaction
+         implicite que Postgres crée pour tout message multi-instructions
+         (même en autocommit côté client) — le runner exécute désormais
+         chaque instruction séparément (`_split_statements`), sans rien
+         changer pour les migrations `BEGIN`/`COMMIT` existantes (l'état de
+         transaction est au niveau de la session, pas du message réseau).
+      2. Une connexion restait "idle in transaction" (176s observées,
+         `pg_stat_activity`) — ni le pool du service web ni
+         `draft_suggestions.refresh()`/`matchups.refresh()` n'étaient en
+         autocommit, alors que l'interface est intégralement en lecture
+         (vérifié : aucune écriture dans `web/app.py`/`queries.py`) et que
+         ces deux fonctions n'écrivent qu'à la toute fin dans un
+         `conn.transaction()` déjà explicite. **Fix** : autocommit partout
+         (`ConnectionPool(kwargs={"autocommit": True})` côté web,
+         `psycopg.connect(..., autocommit=True)` côté synergy) — supprime
+         la classe de bug entièrement (une requête interrompue côté client
+         ne peut plus laisser de transaction ouverte) plutôt que de compter
+         sur le reset automatique de `psycopg_pool` comme filet de
+         sécurité. `resilience.py` (dépend de `SET LOCAL` donc du scope
+         transactionnel pour contourner un piège de planification Postgres
+         déjà rencontré, cf. `postgres-cte-selfjoin-nestloop-trap`) laissé
+         tel quel — pas concerné par l'incident, changer son mode de
+         connexion sous le coup de la précipitation aurait été risqué.
 
 Phase 8 de nouveau en pause (draft, insights, résilience, flex, poke,
 scouting) — prochaine idée à définir. Reste à faire si repris : traduction

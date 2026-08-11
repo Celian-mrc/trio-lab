@@ -313,7 +313,19 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        app.state.pool = ConnectionPool(db.require_dsn(dsn), min_size=1, max_size=4, open=True)
+        # Autocommit (retour utilisateur 2026-08-11) : l'interface est
+        # entièrement en lecture (aucune écriture dans ce module ni dans
+        # `queries.py`, vérifié) — sans autocommit, une requête interrompue
+        # côté client (onglet fermé, navigation abandonnée en plein
+        # chargement) peut laisser une connexion du pool "idle in
+        # transaction" indéfiniment (constaté en direct en prod : une
+        # connexion bloquée 176s a ralenti TOUT le site, y compris les
+        # autres requêtes). `psycopg_pool` réinitialise déjà les connexions
+        # au retour dans le pool dans le cas normal ; l'autocommit supprime
+        # la classe de bug entièrement plutôt que de compter sur ce filet.
+        app.state.pool = ConnectionPool(
+            db.require_dsn(dsn), min_size=1, max_size=4, open=True, kwargs={"autocommit": True}
+        )
         yield
         app.state.pool.close()
 

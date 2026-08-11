@@ -52,6 +52,23 @@ def applied_versions(conn: psycopg.Connection) -> set[int]:
     return {row[0] for row in conn.execute("SELECT version FROM schema_migrations")}
 
 
+def _split_statements(sql: str) -> list[str]:
+    """Découpe un fichier de migration en instructions séparées (sur `;`).
+
+    Nécessaire depuis la migration 038 (`CREATE INDEX CONCURRENTLY`) : le
+    protocole simple query de Postgres regroupe implicitement PLUSIEURS
+    instructions envoyées d'un coup dans une seule transaction, même sur une
+    connexion en autocommit côté client — or `CONCURRENTLY` refuse
+    justement de tourner dans un bloc de transaction. Envoyer chaque
+    instruction séparément règle ça, et ne change rien pour les migrations
+    BEGIN/COMMIT existantes (l'état de transaction Postgres est au niveau
+    de la session, pas du message réseau — `BEGIN` puis `COMMIT` dans deux
+    appels `execute()` séparés délimitent la même transaction que dans un
+    seul). Split naïf sûr ici : aucune migration n'utilise de corps
+    dollar-quoté (`$$`) ni de point-virgule dans un littéral (vérifié)."""
+    return [stmt.strip() for stmt in sql.split(";") if stmt.strip()]
+
+
 def apply_migrations(dsn: str | None = None, migrations_dir: Path = MIGRATIONS_DIR) -> list[int]:
     """Applique les migrations manquantes dans l'ordre. Retourne les versions appliquées.
 
@@ -66,7 +83,8 @@ def apply_migrations(dsn: str | None = None, migrations_dir: Path = MIGRATIONS_D
             if version in done:
                 continue
             logger.info("migration %s", path.name)
-            conn.execute(path.read_text(encoding="utf-8"))  # type: ignore[arg-type]
+            for statement in _split_statements(path.read_text(encoding="utf-8")):
+                conn.execute(statement)  # type: ignore[arg-type]
             applied.append(version)
         return applied
 

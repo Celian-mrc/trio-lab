@@ -1425,8 +1425,17 @@ def refresh(window: PatchWindow, platform: str, *, dsn: str | None = None) -> in
     """Matérialise les compositions suggérées de `platform` dans
     `draft_suggestion(_counter)`. Retourne le nombre de compositions écrites
     (0 à 18 : jusqu'à 3 par archétype, cf. `propose_drafts`). DELETE +
-    INSERT (même raisonnement que `resilience`/`win_factors`/`gold_factors`)."""
-    with psycopg.connect(db.require_dsn(dsn)) as conn:
+    INSERT (même raisonnement que `resilience`/`win_factors`/`gold_factors`).
+
+    Autocommit (retour utilisateur 2026-08-11) : `propose_drafts` fait de
+    très nombreux allers-retours en lecture (seed shortlist × archétypes,
+    ~30-47s mesuré par région) — sans autocommit, tout ça reste dans UNE
+    seule transaction ouverte jusqu'à la fin, et une connexion qui
+    n'atteint jamais son terme proprement (exception non prévue, process
+    tué) peut rester "idle in transaction" et ralentir tout le reste
+    (constaté en direct en prod, connexion bloquée 176s). `conn.transaction()`
+    ci-dessous délimite explicitement l'écriture, comme `compute.py`."""
+    with psycopg.connect(db.require_dsn(dsn), autocommit=True) as conn:
         pool, zstats = pool_and_zstats(conn, window.label, platform)
         drafts = propose_drafts(conn, window.label, platform, pool, zstats)
         with conn.transaction(), conn.cursor() as cur:

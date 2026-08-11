@@ -79,8 +79,12 @@ def refresh(
     thresholds: tuple[float, float] = scores.DEFAULT_TIER_THRESHOLDS,
 ) -> dict[str, int]:
     """Recalcule les matchups 1v1 d'une fenêtre. Retourne le nombre de lignes écrites."""
+    # Autocommit (retour utilisateur 2026-08-11, cf. compute.py/
+    # draft_suggestions.py) : une connexion sans autocommit qui n'atteint
+    # jamais son terme proprement peut rester "idle in transaction" et
+    # ralentir tout le reste (constaté en direct en prod).
     patches = list(window.patches)
-    with psycopg.connect(db.require_dsn(dsn)) as conn:
+    with psycopg.connect(db.require_dsn(dsn), autocommit=True) as conn:
         baselines = _load_baselines(conn, patches)
         matchups = _load_matchups(conn, patches)
 
