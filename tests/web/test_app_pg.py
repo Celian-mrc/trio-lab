@@ -58,29 +58,24 @@ def client():
 
 
 def _seed_scores(conn) -> None:
-    """Deux trios scorés sur euw1/16.13 : (1,2,3) synergie +.05 (+ CC matérialisé,
-    valeurs arbitraires cohérentes utilisées telles quelles par la page détail,
-    jamais recalculées), (4,5,6) −.02 (CC non matérialisé, teste le chemin None)."""
+    """Deux trios scorés sur euw1/16.13 : (1,2,3) synergie +.05, (4,5,6) −.02."""
     rows = (
-        (1, 2, 3, 40, 0.60, 0.05, 42.0, 50.0, 43.7, 0.015),
-        (4, 5, 6, 80, 0.48, -0.02, None, None, None, None),
+        (1, 2, 3, 40, 0.60, 0.05, 0.015),
+        (4, 5, 6, 80, 0.48, -0.02, None),
     )
-    for jgl, mid, sup, games, wr, syn, cc_theo, cc_emp, cc_blend, scaling in rows:
+    for jgl, mid, sup, games, wr, syn, scaling in rows:
         conn.execute(
             "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
             " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
-            " ci_low, ci_high, tier, cc_theoretical_pct, cc_empirical_pct, cc_blended_pct,"
-            " scaling)"
+            " ci_low, ci_high, tier, scaling)"
             " VALUES ('16.13', 'euw1', %s, %s, %s, %s, %s, %s,"
-            " %s, 0.0, %s, 0.3, 0.8, 'faible', %s, %s, %s, %s)",
-            (jgl, mid, sup, games, float(games), wr, syn, syn, cc_theo, cc_emp, cc_blend, scaling),
+            " %s, 0.0, %s, 0.3, 0.8, 'faible', %s)",
+            (jgl, mid, sup, games, float(games), wr, syn, syn, scaling),
         )
     conn.execute(
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
-        " games_eff, wr, synergy, ci_low, ci_high, tier,"
-        " cc_theoretical_pct, cc_empirical_pct, cc_blended_pct, scaling)"
-        " VALUES ('16.13', 'euw1', 'jgl_mid', 1, 2, 60, 60.0, 0.58, 0.03, 0.4, 0.7, 'moyen',"
-        " 37.5, 45.0, 40.2, -0.01)"
+        " games_eff, wr, synergy, ci_low, ci_high, tier, scaling)"
+        " VALUES ('16.13', 'euw1', 'jgl_mid', 1, 2, 60, 60.0, 0.58, 0.03, 0.4, 0.7, 'moyen', -0.01)"
     )
 
 
@@ -168,11 +163,6 @@ def test_api_trios_champion_filters_combine_with_and(pg_sync, client):
 def test_api_trio_detail_stats(pg_sync, client):
     _seed_scores(pg_sync)
     _seed_matches(pg_sync)
-    for champ_id, cc_score in ((1, 3.0), (2, 4.5), (3, 1.5)):
-        pg_sync.execute(
-            "INSERT INTO champion_cc_theoretical (champion_id, score) VALUES (%s, %s)",
-            (champ_id, cc_score),
-        )
     for role, champ_id, games, wins in (
         ("JUNGLE", 1, 20, 11),
         ("MIDDLE", 2, 20, 9),
@@ -204,29 +194,11 @@ def test_api_trio_detail_stats(pg_sync, client):
     assert stats["avg_duration_win_s"] == pytest.approx(1500.0)
     assert stats["avg_duration_loss_s"] == pytest.approx(2100.0)
     assert payload["duos"][0]["champ_a_name"] == "Lee Sin"
-    # Score CC théorique brut par champion : lu depuis `champion_cc_theoretical`
-    # (table matérialisée, jamais le fichier gelé — absent de l'image Docker
-    # du service web, cf. Dockerfile).
-    cc = payload["cc_theoretical"]
-    assert (cc["jgl"], cc["mid"], cc["sup"]) == (3.0, 4.5, 1.5)
-    assert cc["trio"] == pytest.approx(9.0)
-
-    # Pourcentages 0-100 : lus tels quels depuis score_trio (mêmes valeurs que
-    # la tier list), jamais recalculés côté page détail — cf. `_seed_scores`.
-    cc_scores = payload["cc_scores"]
-    assert cc_scores["theoretical_pct"] == pytest.approx(42.0)
-    assert cc_scores["empirical_pct"] == pytest.approx(50.0)
-    assert cc_scores["blended_pct"] == pytest.approx(43.7)
 
 
 def test_api_duo_detail_stats_and_best_trios(pg_sync, client):
     _seed_scores(pg_sync)
     _seed_matches(pg_sync)
-    for champ_id, cc_score in ((1, 3.0), (2, 4.5)):
-        pg_sync.execute(
-            "INSERT INTO champion_cc_theoretical (champion_id, score) VALUES (%s, %s)",
-            (champ_id, cc_score),
-        )
     for role, champ_id, games, wins in (("JUNGLE", 1, 20, 11), ("MIDDLE", 2, 20, 9)):
         pg_sync.execute(
             "INSERT INTO agg_champion (patch, platform, role, champion_id, games, wins)"
@@ -250,13 +222,6 @@ def test_api_duo_detail_stats_and_best_trios(pg_sync, client):
     best = payload["best_trios"][0]
     assert (best["jgl_champion"], best["mid_champion"], best["sup_champion"]) == (1, 2, 3)
     assert best["synergy"] == pytest.approx(0.05)
-    cc = payload["cc_theoretical"]
-    assert (cc["a"], cc["b"]) == (3.0, 4.5)
-    assert cc["duo"] == pytest.approx(7.5)
-    cc_scores = payload["cc_scores"]
-    assert cc_scores["theoretical_pct"] == pytest.approx(37.5)
-    assert cc_scores["empirical_pct"] == pytest.approx(45.0)
-    assert cc_scores["blended_pct"] == pytest.approx(40.2)
 
 
 def test_api_duo_detail_for_extended_role_pair(pg_sync, client):
@@ -272,10 +237,9 @@ def test_api_duo_detail_for_extended_role_pair(pg_sync, client):
     )
     pg_sync.execute(
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
-        " games_eff, wr, synergy, ci_low, ci_high, tier,"
-        " cc_theoretical_pct, cc_empirical_pct, cc_blended_pct, scaling)"
+        " games_eff, wr, synergy, ci_low, ci_high, tier, scaling)"
         " VALUES ('16.13', 'euw1', 'top_jgl', 1, 2, 40, 40.0, 0.55, 0.02, 0.3, 0.7, 'moyen',"
-        " NULL, NULL, NULL, NULL)"
+        " NULL)"
     )
     for role, champ_id, games, wins in (("TOP", 1, 20, 11), ("JUNGLE", 2, 20, 9)):
         pg_sync.execute(
@@ -428,8 +392,7 @@ def test_html_pages_render(pg_sync, client):
     assert "Scaling" in home.text
     detail = client.get("/trio/1/2/3")
     assert detail.status_code == 200
-    assert "Détail du calcul théorique" in detail.text
-    assert "Mélangé" in detail.text
+    assert "CC par membre" in detail.text
     assert "+1.50 %" in detail.text  # card Scaling (0.015 → signed_pct(2))
     assert "/duo/jgl_mid/1/2" in detail.text  # lien depuis les duos internes
     duos = client.get("/duos")
@@ -966,7 +929,7 @@ def test_draft_page_suggest_shows_advice_from_seed_duo_stats(pg_sync, client):
     )
     pg_sync.execute(
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
-        " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15)"
+        " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_time_s, gold_diff_15)"
         " VALUES ('16.13', 'euw1', 'jgl_mid', 1, 2, 500, 500.0, 0.55, 0.30, 0.0, 0.30, 'eleve',"
         " 0.08, 70.0, 800.0)"
     )
@@ -984,7 +947,7 @@ def test_draft_page_suggest_shows_advice_from_seed_duo_stats(pg_sync, client):
     for roles, champ_a, champ_b, synergy in rows:
         pg_sync.execute(
             "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
-            " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15)"
+            " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_time_s, gold_diff_15)"
             " VALUES ('16.13', 'euw1', %s, %s, %s, 500, 500.0, 0.55, %s, 0.0, %s, 'eleve',"
             " 0.08, 70.0, 800.0)",
             (roles, champ_a, champ_b, synergy, synergy),
@@ -992,7 +955,7 @@ def test_draft_page_suggest_shows_advice_from_seed_duo_stats(pg_sync, client):
     resp = client.get("/draft", params={"suggest": "1"})
     assert resp.status_code == 200
     assert "monte en puissance" in resp.text  # scaling > seuil notable
-    assert "contrôle de foule" in resp.text  # cc_blended_pct >= seuil notable
+    assert "contrôle de foule" in resp.text  # cc_time_s >= seuil notable
     assert "économique attendu tôt" in resp.text  # gold_diff_15 > seuil notable
     # Winrate + IC (retour utilisateur 2026-07-27) : moyenne simple sur les
     # 10 vraies paires, wr=0.55 partout -> 55.0 % ; ci_low=0.0 partout -> 0.0 % ;
@@ -1039,7 +1002,7 @@ def test_draft_page_suggest_renders_both_archetypes_from_shared_champion_pool(pg
     # négatif (-10 %, "early") — gagne "Meilleure synergie", perd "Scaling".
     pg_sync.execute(
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
-        " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15,"
+        " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_time_s, gold_diff_15,"
         " drakes, soul_rate)"
         " VALUES ('16.13', 'euw1', 'jgl_mid', 1, 2, 500, 500.0, 0.55, 0.30, 0.0, 0.30, 'eleve',"
         " -0.10, 20.0, 100.0, 0.02, 0.10)"
@@ -1049,7 +1012,7 @@ def test_draft_page_suggest_renders_both_archetypes_from_shared_champion_pool(pg
     # synergie", gagne "Scaling" (poids scaling = 38.5 %, dominant).
     pg_sync.execute(
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
-        " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15,"
+        " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_time_s, gold_diff_15,"
         " drakes, soul_rate)"
         " VALUES ('16.13', 'euw1', 'top_bot', 4, 5, 500, 500.0, 0.55, 0.05, 0.0, 0.05, 'eleve',"
         " 0.10, 20.0, 100.0, 0.02, 0.10)"
@@ -1073,7 +1036,7 @@ def test_draft_page_suggest_renders_both_archetypes_from_shared_champion_pool(pg
     for roles, champ_a, champ_b, synergy in rows:
         pg_sync.execute(
             "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
-            " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct,"
+            " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_time_s,"
             " gold_diff_15, drakes, soul_rate)"
             " VALUES ('16.13', 'euw1', %s, %s, %s, 500, 500.0, 0.55, %s, 0.0, %s, 'eleve',"
             " 0.0, 20.0, 100.0, 0.02, 0.10)",
@@ -1360,7 +1323,7 @@ def test_draft_page_compose_without_archetype_proposes_one_per_archetype(pg_sync
     for roles, champ_a, champ_b, synergy in rows:
         pg_sync.execute(
             "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
-            " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct,"
+            " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_time_s,"
             " gold_diff_15, drakes, soul_rate, range_theoretical_pct)"
             " VALUES ('16.13', 'euw1', %s, %s, %s, 500, 500.0, 0.55, %s, 0.0, %s, 'eleve',"
             " 0.05, 20.0, 100.0, 0.02, 0.10, 40.0)",
@@ -1476,7 +1439,7 @@ def _seed_counter_scenario(conn) -> None:
     for roles, champ_a, champ_b, synergy in rows:
         conn.execute(
             "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
-            " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct,"
+            " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_time_s,"
             " gold_diff_15, drakes)"
             " VALUES ('16.13', 'euw1', %s, %s, %s, 500, 500.0, 0.55, %s, 0.0, %s, 'eleve',"
             " 0.0, 20.0, 100.0, 0.02)",
@@ -1490,7 +1453,7 @@ def _seed_counter_scenario(conn) -> None:
     ):
         conn.execute(
             "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
-            " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct,"
+            " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_time_s,"
             " gold_diff_15, drakes)"
             " VALUES ('16.13', 'euw1', %s, %s, %s, 500, 500.0, 0.55, 0.005, 0.0, 0.005, 'eleve',"
             " 0.0, 20.0, 100.0, 0.02)",

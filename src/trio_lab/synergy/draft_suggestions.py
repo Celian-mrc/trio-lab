@@ -73,9 +73,7 @@ DRAFT_ROLE_TO_TEAM_POSITION = {
     "bot": "BOTTOM",
     "sup": "UTILITY",
 }
-_STAT_COLUMNS_SQL = (
-    "scaling, cc_blended_pct, gold_diff_15, drakes, soul_rate, range_theoretical_pct"
-)
+_STAT_COLUMNS_SQL = "scaling, cc_time_s, gold_diff_15, drakes, soul_rate, range_theoretical_pct"
 
 # 6 profils de poids ("archétypes", poids arbitraires mais justifiés, pas de
 # test statistique dessus). "synergy" pesé comme les autres axes (100 % pour
@@ -87,7 +85,14 @@ _STAT_COLUMNS_SQL = (
 ARCHETYPE_STAT_COLUMNS = {
     "synergy": "synergy",
     "scaling": "scaling",
-    "cc": "cc_blended_pct",
+    # `cc_time_s` (retour utilisateur 2026-08-11, "éviter d'utiliser des
+    # données théoriques quand on a les vraies données") : mesuré en jeu
+    # (Σ timeCCingOthers/min), 100% API — remplace l'ancien mélange
+    # empirique/théorique (`cc_blended_pct`, retiré). Comparé aux 3 autres
+    # archétypes pondérés sur ce script (2026-08-11) : compositions
+    # identiques pour Scaling/Early/Poke, seul "Contrôle des objectifs"
+    # (poids CC le plus élevé, 24,5 %) change de pick mid/sup.
+    "cc": "cc_time_s",
     "gold": "gold_diff_15",
     "drakes": "drakes",
     "soul": "soul_rate",
@@ -231,7 +236,11 @@ MIN_GAMES_DEFAULT = 400
 # dessus, calibrés au niveau DUO (2 champions) sur la vraie distribution
 # prod (score_duo fiable, n=25 173).
 ADVICE_SCALING_NOTABLE = 0.03
-ADVICE_CC_NOTABLE = 40.0
+# Recalibré le 2026-08-11 (passage à cc_time_s, s/min brut — plus une
+# échelle 0-100) sur la vraie distribution prod de score_duo.cc_time_s
+# (n=158 823) : moyenne 1.86, médiane 1.79, p75=2.36, p90=2.93 — 2.5 se
+# situe juste au-dessus du p75, même sélectivité que l'ancien seuil.
+ADVICE_CC_NOTABLE = 2.5
 ADVICE_GOLD15_NOTABLE = 350.0
 # Colonnes moyennées sur les 10 vraies paires d'un draft complet
 # (`full_draft_stat_averages`) pour l'affichage : scaling/CC/gold servent
@@ -240,7 +249,7 @@ ADVICE_GOLD15_NOTABLE = 350.0
 # utilisateur 2026-07-27) — moyenne simple sur les 10 paires, pas une
 # combinaison statistique rigoureuse des IC, même esprit que les autres
 # stats affichées ici.
-DISPLAY_STAT_COLUMNS = ("scaling", "cc_blended_pct", "gold_diff_15", "wr", "ci_low", "ci_high")
+DISPLAY_STAT_COLUMNS = ("scaling", "cc_time_s", "gold_diff_15", "wr", "ci_low", "ci_high")
 
 # Contres 1v1 : mêmes seuils que l'ancienne sécurité blind pick (retour
 # utilisateur 2026-07-19), vérifiés sur données réelles (16.14+16.13,
@@ -965,7 +974,7 @@ def seed_from_champions(
 
 
 def draft_advice(
-    scaling: float | None, cc_blended_pct: float | None, gold_diff_15: float | None
+    scaling: float | None, cc_time_s: float | None, gold_diff_15: float | None
 ) -> list[str]:
     """Conseils de jeu dérivés des stats moyennes du draft COMPLET (jamais un
     nouveau calcul, juste traduit en phrase). Jamais plus d'1 conseil par
@@ -982,7 +991,7 @@ def draft_advice(
             "Composition plus forte tôt que tard : cherchez à conclure avant que "
             "l'adversaire ne monte en puissance."
         )
-    if cc_blended_pct is not None and cc_blended_pct >= ADVICE_CC_NOTABLE:
+    if cc_time_s is not None and cc_time_s >= ADVICE_CC_NOTABLE:
         tips.append(
             "Bon profil de contrôle de foule : cherchez à engager les combats groupés "
             "plutôt qu'à les éviter."
@@ -1468,7 +1477,7 @@ def refresh(window: PatchWindow, platform: str, *, dsn: str | None = None) -> in
                         "seed_games": seed["games"],
                         "seed_tier": seed["tier"],
                         "advice_scaling": stats.get("scaling"),
-                        "advice_cc": stats.get("cc_blended_pct"),
+                        "advice_cc": stats.get("cc_time_s"),
                         "advice_gold15": stats.get("gold_diff_15"),
                         "wr": stats.get("wr"),
                         "wr_ci_low": stats.get("ci_low"),

@@ -43,7 +43,7 @@ def _seed_scenario(conn) -> None:
     winrate + IC) pour que la moyenne du draft complet reste ces valeurs."""
     conn.execute(
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
-        " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15)"
+        " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_time_s, gold_diff_15)"
         " VALUES ('16.13', 'all', 'jgl_mid', 1, 2, 500, 500.0, 0.55, 0.30, 0.0, 0.30, 'eleve',"
         " 0.08, 70.0, 800.0)"
     )
@@ -61,7 +61,7 @@ def _seed_scenario(conn) -> None:
     for roles, champ_a, champ_b, synergy in rows:
         conn.execute(
             "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
-            " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15)"
+            " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_time_s, gold_diff_15)"
             " VALUES ('16.13', 'all', %s, %s, %s, 500, 500.0, 0.55, %s, 0.0, %s, 'eleve',"
             " 0.08, 70.0, 800.0)",
             (roles, champ_a, champ_b, synergy, synergy),
@@ -186,7 +186,7 @@ def test_propose_drafts_uses_different_seed_duo_per_archetype(pg_sync):
     # négatif — gagne "Meilleure synergie", perd "Scaling".
     pg_sync.execute(
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
-        " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15,"
+        " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_time_s, gold_diff_15,"
         " drakes, soul_rate)"
         " VALUES ('16.13', 'all', 'jgl_mid', 1, 2, 500, 500.0, 0.55, 0.30, 0.0, 0.30, 'eleve',"
         " -0.10, 20.0, 100.0, 0.02, 0.10)"
@@ -198,7 +198,7 @@ def test_propose_drafts_uses_different_seed_duo_per_archetype(pg_sync):
     # colonnes archétype, pour que ce duo reste éligible).
     pg_sync.execute(
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
-        " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15,"
+        " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_time_s, gold_diff_15,"
         " drakes, soul_rate)"
         " VALUES ('16.13', 'all', 'top_bot', 4, 5, 500, 500.0, 0.55, 0.05, 0.0, 0.05, 'eleve',"
         " 0.10, 20.0, 100.0, 0.02, 0.10)"
@@ -218,7 +218,7 @@ def test_propose_drafts_uses_different_seed_duo_per_archetype(pg_sync):
     for roles, champ_a, champ_b, synergy in rows:
         pg_sync.execute(
             "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
-            " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct,"
+            " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_time_s,"
             " gold_diff_15, drakes, soul_rate)"
             " VALUES ('16.13', 'all', %s, %s, %s, 500, 500.0, 0.55, %s, 0.0, %s, 'eleve',"
             " 0.0, 20.0, 100.0, 0.02, 0.10)",
@@ -247,7 +247,7 @@ def test_propose_drafts_range_archetype_prefers_long_range_duo(pg_sync):
     # FAIBLE — gagne "Meilleure synergie", perd "Poke / zone".
     pg_sync.execute(
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
-        " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15,"
+        " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_time_s, gold_diff_15,"
         " drakes, range_theoretical_pct)"
         " VALUES ('16.13', 'all', 'jgl_mid', 1, 2, 500, 500.0, 0.55, 0.30, 0.0, 0.30, 'eleve',"
         " 0.0, 20.0, 100.0, 0.02, 10.0)"
@@ -256,7 +256,7 @@ def test_propose_drafts_range_archetype_prefers_long_range_duo(pg_sync):
     # ÉLEVÉE — perd "Meilleure synergie", gagne "Poke / zone".
     pg_sync.execute(
         "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
-        " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct, gold_diff_15,"
+        " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_time_s, gold_diff_15,"
         " drakes, range_theoretical_pct)"
         " VALUES ('16.13', 'all', 'top_bot', 4, 5, 500, 500.0, 0.55, 0.05, 0.0, 0.05, 'eleve',"
         " 0.0, 20.0, 100.0, 0.02, 90.0)"
@@ -276,7 +276,7 @@ def test_propose_drafts_range_archetype_prefers_long_range_duo(pg_sync):
     for roles, champ_a, champ_b, synergy in rows:
         pg_sync.execute(
             "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
-            " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct,"
+            " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_time_s,"
             " gold_diff_15, drakes, range_theoretical_pct)"
             " VALUES ('16.13', 'all', %s, %s, %s, 500, 500.0, 0.55, %s, 0.0, %s, 'eleve',"
             " 0.0, 20.0, 100.0, 0.02, 50.0)",

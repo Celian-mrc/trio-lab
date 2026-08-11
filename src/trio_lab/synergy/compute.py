@@ -102,9 +102,6 @@ STAT_PAIRS: dict[str, tuple[str, str]] = {
 }
 _AGG_STAT_COLUMNS = ("games", "wins", *(col for pair in STAT_PAIRS.values() for col in pair))
 
-# CC normalisé 0-100 (théorique/empirique/mélangé) : pas une simple moyenne
-# pondérée d'agrégats comme STAT_PAIRS, calculé à part par `_cc_pct_fields`.
-_CC_PCT_COLUMNS = ("cc_theoretical_pct", "cc_empirical_pct", "cc_blended_pct")
 # Portée théorique normalisée 0-100 (retour utilisateur 2026-07-28, compos
 # poke) — calculée à part par `_range_pct_fields`, comme le CC, mais UNE
 # seule colonne : jamais de mélange empirique (aucune stat Riot ne mesure
@@ -125,7 +122,7 @@ _DUO_POSITION_CC_PAIRS: dict[str, tuple[str, str]] = {
     "champ_b_cc_time_s": ("champ_b_cc_sum", "champ_b_cc_n"),
 }
 
-_SCORE_COLUMNS = (*STAT_PAIRS, *_CC_PCT_COLUMNS, *_RANGE_PCT_COLUMNS)
+_SCORE_COLUMNS = (*STAT_PAIRS, *_RANGE_PCT_COLUMNS)
 _SCORE_STAT_SQL = ", ".join(_SCORE_COLUMNS)
 _SCORE_STAT_PLACEHOLDERS = ", ".join(f"%({name})s" for name in _SCORE_COLUMNS)
 
@@ -208,33 +205,6 @@ def _weighted_stats(
 def _per_patch(agg_rows: list[dict]) -> _PerPatch:
     """Projette des lignes dict d'agrégat vers les tuples de `weighted_wr`."""
     return [(r["patch"], r["games"], r["wins"]) for r in agg_rows]
-
-
-def _cc_pct_fields(
-    member_champions: tuple[int, ...],
-    cc_theo_scores: dict[int, float],
-    empirical_cc_time_s: float | None,
-    games_eff: float,
-    k: float,
-) -> dict[str, float | None]:
-    """Scores CC normalisés 0-100 (théorique/empirique/mélangé) d'une combinaison.
-
-    `cc_theo_scores` vide (table `champion_cc_theoretical` pas encore
-    synchronisée, `python -m trio_lab.ccref.sync_theoretical`) : les 3 champs
-    restent `None` plutôt que de faire échouer tout le refresh.
-    """
-    if not cc_theo_scores:
-        return {"cc_theoretical_pct": None, "cc_empirical_pct": None, "cc_blended_pct": None}
-    raw_theo = sum(cc_theo_scores.get(c, 0.0) for c in member_champions)
-    theo_pct = ccref_score.theoretical_pct(
-        raw_theo, member_count=len(member_champions), scores=cc_theo_scores
-    )
-    emp_pct = ccref_score.empirical_pct(empirical_cc_time_s)
-    return {
-        "cc_theoretical_pct": theo_pct,
-        "cc_empirical_pct": emp_pct,
-        "cc_blended_pct": ccref_score.blended_pct(emp_pct, theo_pct, games_eff, k),
-    }
 
 
 def _range_pct_fields(
@@ -355,8 +325,8 @@ def _iter_agg_groups(
 
 
 def _load(conn: psycopg.Connection, window: PatchWindow):
-    """Charge les petits référentiels de la fenêtre (agg_champion + tables
-    théoriques CC/portée) — `agg_duo`/`agg_trio` sont lus en flux à part
+    """Charge les petits référentiels de la fenêtre (agg_champion + table
+    théorique de portée) — `agg_duo`/`agg_trio` sont lus en flux à part
     (`_iter_agg_groups`), pas ici."""
     patches = list(window.patches)
     indiv: dict[tuple, _PerPatch] = defaultdict(list)
@@ -371,13 +341,10 @@ def _load(conn: psycopg.Connection, window: PatchWindow):
     # sous platform='all' comme n'importe quelle autre valeur de colonne.
     scores.add_combined_platform(indiv)
 
-    cc_theo_scores = dict(
-        conn.execute("SELECT champion_id, score FROM champion_cc_theoretical").fetchall()
-    )
     range_theo_scores = dict(
         conn.execute("SELECT champion_id, score FROM champion_range_theoretical").fetchall()
     )
-    return indiv, cc_theo_scores, range_theo_scores
+    return indiv, range_theo_scores
 
 
 def _load_duration_buckets(
@@ -505,7 +472,7 @@ def refresh(
     # coupe la connexion en cours de route (`server closed the connection
     # unexpectedly`, reproduit en prod le 2026-08-01 à deux reprises).
     with psycopg.connect(db.require_dsn(dsn), autocommit=True) as conn:
-        indiv, cc_theo_scores, range_theo_scores = _load(conn, window)
+        indiv, range_theo_scores = _load(conn, window)
         patches = list(window.patches)
         duo_durations = _load_duration_buckets(
             conn, patches, table="agg_duo_duration", key_columns=("roles", "champ_a", "champ_b")
@@ -568,9 +535,6 @@ def refresh(
                         ),
                         **stats,
                         **cc_by_member,
-                        **_cc_pct_fields(
-                            (a, b), cc_theo_scores, stats["cc_time_s"], combo.games_eff, k
-                        ),
                         **_range_pct_fields((a, b), range_theo_scores),
                     }
                 )
@@ -634,13 +598,6 @@ def refresh(
                         ),
                         **stats,
                         **cc_by_member,
-                        **_cc_pct_fields(
-                            (jgl, mid, sup),
-                            cc_theo_scores,
-                            stats["cc_time_s"],
-                            combo.games_eff,
-                            k,
-                        ),
                         **_range_pct_fields((jgl, mid, sup), range_theo_scores),
                     }
                 )

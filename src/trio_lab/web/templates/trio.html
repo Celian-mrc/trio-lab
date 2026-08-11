@@ -113,34 +113,13 @@
   </div>
 
   <div class="card">
-    <h3>CC empirique vs théorique <span class="meta">(0-100)</span></h3>
-    <div class="bar-group">
-      <div class="bar-row">
-        <span class="bar-label" data-tooltip="Mesuré directement sur les games jouées (Σ timeCCingOthers du trio, par minute), plafonné à 6 s/min puis ramené sur 100." aria-label="Mesuré directement sur les games jouées (Σ timeCCingOthers du trio, par minute), plafonné à 6 s/min puis ramené sur 100.">Empirique</span><div class="bar-track"><div class="bar-fill" style="width: {{ cc_scores.empirical_pct or 0 }}%"></div></div><span class="bar-value">{{ cc_scores.empirical_pct | pct100 }}</span>
-      </div>
-      <div class="bar-row">
-        <span class="bar-label" data-tooltip="Score de kit (durées/zones/fiabilité des sorts, cf. détail ci-dessous) ramené sur 100 via un repère fixe : 3 × le score max d'un champion (plafond mathématique, jamais atteignable en pratique)." aria-label="Score de kit (durées/zones/fiabilité des sorts, cf. détail ci-dessous) ramené sur 100 via un repère fixe : 3 × le score max d'un champion (plafond mathématique, jamais atteignable en pratique).">Théorique</span><div class="bar-track"><div class="bar-fill" style="width: {{ cc_scores.theoretical_pct or 0 }}%"></div></div><span class="bar-value">{{ cc_scores.theoretical_pct | pct100 }}</span>
-      </div>
-      <div class="bar-row">
-        <span class="bar-label" data-tooltip="Le score à retenir : combine les deux, en donnant plus de poids à l'empirique quand le trio est beaucoup joué." aria-label="Le score à retenir : combine les deux, en donnant plus de poids à l'empirique quand le trio est beaucoup joué."><strong>Mélangé</strong></span><div class="bar-track"><div class="bar-fill" style="width: {{ cc_scores.blended_pct or 0 }}%"></div></div><span class="bar-value"><strong>{{ cc_scores.blended_pct | pct100 }}</strong></span>
-      </div>
-    </div>
-    <h3 style="margin-top: 1rem;">CC par membre <span class="meta">(s/min, empirique)</span></h3>
+    <h3>CC par membre <span class="meta">(s/min, mesuré en jeu)</span></h3>
     {% set cc = [stats.jgl_cc_time_s, stats.mid_cc_time_s, stats.sup_cc_time_s] %}
     <div class="bar-group">
       <div class="bar-row"><span class="bar-label">{{ jgl.name }}</span><div class="bar-track"><div class="bar-fill" style="width: {{ stats.jgl_cc_time_s | barpct(cc) }}%"></div></div><span class="bar-value">{{ stats.jgl_cc_time_s | num(2) }}</span></div>
       <div class="bar-row"><span class="bar-label">{{ mid.name }}</span><div class="bar-track"><div class="bar-fill" style="width: {{ stats.mid_cc_time_s | barpct(cc) }}%"></div></div><span class="bar-value">{{ stats.mid_cc_time_s | num(2) }}</span></div>
       <div class="bar-row"><span class="bar-label">{{ sup.name }}</span><div class="bar-track"><div class="bar-fill" style="width: {{ stats.sup_cc_time_s | barpct(cc) }}%"></div></div><span class="bar-value">{{ stats.sup_cc_time_s | num(2) }}</span></div>
     </div>
-    <details>
-      <summary class="meta">Détail du calcul théorique (score de kit brut, avant normalisation sur 100)</summary>
-      <table class="narrow kv">
-        <tr><td>Total trio</td><td>{{ cc_theoretical.trio | num(2) }}</td></tr>
-        <tr><td>&nbsp;&nbsp;dont {{ jgl.name }} (jungle)</td><td>{{ cc_theoretical.jgl | num(2) }}</td></tr>
-        <tr><td>&nbsp;&nbsp;dont {{ mid.name }} (mid)</td><td>{{ cc_theoretical.mid | num(2) }}</td></tr>
-        <tr><td>&nbsp;&nbsp;dont {{ sup.name }} (support)</td><td>{{ cc_theoretical.sup | num(2) }}</td></tr>
-      </table>
-    </details>
   </div>
 </div>
 

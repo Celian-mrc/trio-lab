@@ -33,7 +33,6 @@ TRIO_SORTS = {
     "herald": "herald_rate",
     "tower1": "first_tower_rate",
     "cc": "cc_time_s",
-    "cc_blend": "cc_blended_pct",
     "scaling": "scaling",
     "range": "range_theoretical_pct",
 }
@@ -41,8 +40,7 @@ DUO_SORTS = dict(TRIO_SORTS)  # score_duo porte les mêmes colonnes depuis 008/0
 SORT_DIRECTIONS = {"asc": "ASC", "desc": "DESC"}
 _STAT_COLUMNS_SQL = (
     "gold_diff_5, gold_diff_10, gold_diff_15, team_gold_diff_15, vision_score, drakes,"
-    " soul_rate, herald_rate, first_tower_rate, cc_time_s,"
-    " cc_theoretical_pct, cc_empirical_pct, cc_blended_pct, scaling, range_theoretical_pct"
+    " soul_rate, herald_rate, first_tower_rate, cc_time_s, scaling, range_theoretical_pct"
 )
 # Phase 7 (duo généralisé) : les 3 premières restent sourcées sur
 # match_trio_stats (`duo_match_rows`), les 7 suivantes sur match_role_stats
@@ -270,7 +268,6 @@ def trio_score(
             SELECT jgl_champion, mid_champion, sup_champion, games, games_eff, wr,
                    synergy_raw, synergy_pred, synergy, synergy_ci_low, synergy_ci_high,
                    ci_low, ci_high, tier,
-                   cc_theoretical_pct, cc_empirical_pct, cc_blended_pct,
                    scaling, scaling_ci_low, scaling_ci_high
             FROM score_trio
             WHERE window_label = %s AND platform = %s
@@ -376,7 +373,7 @@ def champion_best_partners(
         return cur.execute(
             f"""
             SELECT {partner_col} AS partner_champion, games, games_eff, wr, synergy, tier,
-                   scaling, cc_blended_pct, gold_diff_15, drakes
+                   scaling, cc_time_s, gold_diff_15, drakes
             FROM score_duo
             WHERE window_label = %(window)s AND platform = %(platform)s AND roles = %(roles)s
               AND {fixed_col} = %(champ)s AND tier = ANY(%(tiers)s)
@@ -546,14 +543,6 @@ def champion_resilience(
             query += " AND role = %(role)s"
             params["role"] = role
         return cur.execute(query, params).fetchall()
-
-
-def cc_theoretical_scores(conn: psycopg.Connection) -> dict[int, float]:
-    """Score CC théorique par champion, depuis la table matérialisée (010) —
-    jamais le fichier gelé : le service web ne l'embarque pas (voir Dockerfile),
-    contrairement au pipeline `synergy.compute` qui tourne côté collector."""
-    rows = conn.execute("SELECT champion_id, score FROM champion_cc_theoretical").fetchall()
-    return dict(rows)
 
 
 def trio_duos(
@@ -967,7 +956,7 @@ def draft_suggestions(conn: psycopg.Connection, window: str, platform: str) -> l
         advice_stats = (
             {
                 "scaling": row["advice_scaling"],
-                "cc_blended_pct": row["advice_cc"],
+                "cc_time_s": row["advice_cc"],
                 "gold_diff_15": row["advice_gold15"],
                 "wr": row["wr"],
                 "ci_low": row["wr_ci_low"],

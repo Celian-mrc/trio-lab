@@ -14,9 +14,9 @@
 <section class="cards">
   <div class="card"><h3>Winrate</h3><p class="big-number">{{ baseline.wr | pct }}</p>
     <p class="meta">{{ baseline.games }} games</p></div>
-  <div class="card"><h3>CC théorique</h3>
-    <p class="big-number" data-tooltip="Score de kit brut (durée des stuns/roots/etc., zone, fiabilité, cooldown), avant normalisation — pas sur l'échelle 0-100 des pages trio/duo, seulement comparable entre champions." aria-label="Score de kit brut (durée des stuns/roots/etc., zone, fiabilité, cooldown), avant normalisation — pas sur l'échelle 0-100 des pages trio/duo, seulement comparable entre champions.">{{ cc_theoretical | num(2) }}</p>
-    <p class="meta">score de kit, comparable entre champions</p></div>
+  <div class="card"><h3>CC</h3>
+    <p class="big-number" data-tooltip="Mesuré directement sur les games jouées (Σ timeCCingOthers), par minute de game." aria-label="Mesuré directement sur les games jouées (Σ timeCCingOthers), par minute de game.">{{ stats.cc_time_s | num(2) }}</p>
+    <p class="meta">s/min, mesuré en jeu</p></div>
   <div class="card"><h3>Tempo</h3>
     <p class="big-number">{{ stats.avg_duration_win_s | duration }} <small>win</small>
        / {{ stats.avg_duration_loss_s | duration }} <small>loss</small></p>

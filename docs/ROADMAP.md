@@ -1360,6 +1360,33 @@ gagner") avec les données déjà en place.
          tel quel — pas concerné par l'incident, changer son mode de
          connexion sous le coup de la précipitation aurait été risqué.
 
+- [x] **Retrait du "CC lissé" (2026-08-11, retour utilisateur : "il vaut
+      mieux éviter d'utiliser des données théoriques quand on a les vraies
+      données")** : `cc_theoretical_pct`/`cc_empirical_pct`/`cc_blended_pct`
+      (migration 010) mélangeaient une mesure réelle (CC/min mesuré en jeu)
+      et un score de kit théorique (durée/zone/fiabilité des sorts). La
+      demande initiale ne portait que sur l'affichage (colonne "CC lissé"
+      des tierlist/duos), mais l'axe "cc" des 6 archétypes de draft
+      (`draft_suggestions.py`) utilisait aussi `cc_blended_pct` — vérifié en
+      code après une remise en cause directe de l'utilisateur plutôt qu'une
+      clarification par question à choix (retour d'expérience : privilégier
+      la vérification concrète quand l'utilisateur a déjà une hypothèse
+      technique). Avant bascule, script de comparaison lancé en lecture
+      seule sur la prod (`cc_blended_pct` vs `cc_time_s` comme axe "cc") à
+      la demande de l'utilisateur : 3 archétypes sur 4 identiques
+      (Scaling/Early/Poke), seul "Contrôle des objectifs" (poids CC le plus
+      élevé, 24,5 %) changeait de pick mid/sup. **Fix** : `cc_time_s` (CC/min
+      brut, 100 % API) remplace le mélange partout — axe "cc" des
+      archétypes, seuil `ADVICE_CC_NOTABLE` recalibré sur la vraie
+      distribution prod (40.0 sur l'ancienne échelle 0-100 → 2.5 sur
+      l'échelle brute s/min, p75 de `score_duo.cc_time_s`, n=158 823),
+      colonnes/filtre/légende "CC lissé" retirés des templates, pages
+      détail trio/duo/champion simplifiées (plus de répartition
+      théorique/empirique/mélangée, juste le CC/min réel par membre).
+      Migration 039 (`DROP COLUMN` des 3 colonnes sur `score_trio`/
+      `score_duo`) — `champion_cc_theoretical` (table de référence,
+      immuable) volontairement conservée, sans coût à garder.
+
 Phase 8 de nouveau en pause (draft, insights, résilience, flex, poke,
 scouting) — prochaine idée à définir. Reste à faire si repris : traduction
 anglaise complète de l'interface (retour utilisateur 2026-08-11 : "je pense

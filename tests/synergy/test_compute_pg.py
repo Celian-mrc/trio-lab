@@ -168,46 +168,6 @@ async def test_scaling_null_below_bucket_threshold(pg_conn):
     assert (await cur.fetchone()) == (None, None, None)
 
 
-async def test_cc_pct_columns_materialized_for_duo_and_trio(pg_conn):
-    """`champion_cc_theoretical` peuplée → score_duo/score_trio portent les
-    3 colonnes CC normalisées (théorique/empirique/mélangé), sinon NULL
-    (vérifié implicitement par les autres tests, qui ne la peuplent pas)."""
-    await _seed(pg_conn)
-    for champ_id, cc_score in ((1, 6.0), (2, 1.0), (3, 2.0), (9, 7.0)):  # 9 = max global
-        await pg_conn.execute(
-            "INSERT INTO champion_cc_theoretical (champion_id, score) VALUES (%s, %s)",
-            (champ_id, cc_score),
-        )
-    await pg_conn.execute(
-        "UPDATE agg_trio SET cc_sum = 30, cc_n = 10"  # moyenne 3.0 s/min
-    )
-    await pg_conn.execute(
-        "UPDATE agg_duo SET cc_sum = 30, cc_n = 40 WHERE roles = 'jgl_mid'"  # moyenne 0.75 s/min
-    )
-    compute.refresh(windows.make_window(["16.13"]), dsn=TEST_DSN)
-
-    cur = await pg_conn.execute(
-        "SELECT cc_theoretical_pct, cc_empirical_pct, cc_blended_pct FROM score_trio"
-        " WHERE platform = 'euw1'"
-    )
-    theo, emp, blend = await cur.fetchone()
-    # théorique trio : (6+1+2) / (3×7) × 100 = 42.857 % ; empirique (s/min) : 3/6×100 = 50 %.
-    assert theo == pytest.approx(900 / 21, rel=1e-4)
-    assert emp == pytest.approx(50.0)
-    # games_eff=10, k=200 : mélange = (10×50 + 200×42.857) / 210.
-    assert blend == pytest.approx((10 * 50.0 + 200 * (900 / 21)) / 210, rel=1e-4)
-
-    cur = await pg_conn.execute(
-        "SELECT cc_theoretical_pct, cc_empirical_pct FROM score_duo"
-        " WHERE roles = 'jgl_mid' AND platform = 'euw1'"
-    )
-    theo_duo, emp_duo = await cur.fetchone()
-    # théorique duo (jgl+mid) : (6+1) / (2×7) × 100 = 50 % ; empirique (s/min) :
-    # 0.75/6×100 = 12.5 %.
-    assert theo_duo == pytest.approx(50.0, rel=1e-4)
-    assert emp_duo == pytest.approx(12.5)
-
-
 async def test_range_pct_column_materialized_for_duo_and_trio(pg_conn):
     """`champion_range_theoretical` peuplée → score_duo/score_trio portent
     `range_theoretical_pct`, sinon NULL (vérifié implicitement par les

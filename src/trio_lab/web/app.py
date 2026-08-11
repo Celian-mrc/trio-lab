@@ -485,7 +485,6 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         "herald": (True, 0, 100),
         "tower1": (True, 0, 100),
         "cc": (False, 0, None),
-        "cc_blend": (False, 0, 100),
         "scaling": (True, -100, 100),
     }
 
@@ -711,12 +710,6 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             sup,
         )
         stats = summary.summarize(rows, weights)
-        cc_scores = queries.cc_theoretical_scores(conn)
-        jgl_cc, mid_cc, sup_cc = cc_scores.get(jgl), cc_scores.get(mid), cc_scores.get(sup)
-        members_cc = (jgl_cc, mid_cc, sup_cc)
-        # Total seulement si les 3 membres sont résolus (sinon somme partielle
-        # trompeuse — affichée comme « — » à la place).
-        trio_cc_raw = sum(members_cc) if None not in members_cc else None
         patches = list(patch_window.patches)
         member_wr = {
             "jgl": queries.member_wr(conn, patches, platform, "JUNGLE", jgl, weights),
@@ -728,17 +721,6 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             "stats": stats,
             "member_wr": member_wr,
             "duos": queries.trio_duos(conn, window, platform, jgl, mid, sup),
-            "cc_theoretical": {"jgl": jgl_cc, "mid": mid_cc, "sup": sup_cc, "trio": trio_cc_raw},
-            # Pourcentages 0-100 déjà matérialisés par synergy.compute (mêmes
-            # valeurs que la tier list, jamais recalculés ici : évite toute
-            # dérive et tout accès au fichier gelé côté service web — absent de
-            # l'image Docker (cf. Dockerfile), seul `ccref.sync_theoretical`
-            # (run local, one-shot) en dépend.
-            "cc_scores": {
-                "theoretical_pct": score["cc_theoretical_pct"],
-                "empirical_pct": score["cc_empirical_pct"],
-                "blended_pct": score["cc_blended_pct"],
-            },
         }
 
     @app.get("/trio/{jgl}/{mid}/{sup}", response_class=HTMLResponse)
@@ -790,12 +772,6 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             )
             stats = summary.summarize(rows, weights)
             best_trios = []
-        cc_scores = queries.cc_theoretical_scores(conn)
-        a_cc, b_cc = cc_scores.get(champ_a), cc_scores.get(champ_b)
-        members_cc = (a_cc, b_cc)
-        # Total seulement si les 2 membres sont résolus (sinon somme partielle
-        # trompeuse — affichée comme « — » à la place).
-        duo_cc_raw = sum(members_cc) if None not in members_cc else None
         member_wr = {
             "a": queries.member_wr(conn, patches, platform, role_a, champ_a, weights),
             "b": queries.member_wr(conn, patches, platform, role_b, champ_b, weights),
@@ -805,14 +781,6 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             "stats": stats,
             "member_wr": member_wr,
             "best_trios": best_trios,
-            "cc_theoretical": {"a": a_cc, "b": b_cc, "duo": duo_cc_raw},
-            # Pourcentages 0-100 déjà matérialisés par synergy.compute (mêmes
-            # valeurs que la tier list, jamais recalculés ici — cf. `_trio_detail`.
-            "cc_scores": {
-                "theoretical_pct": score["cc_theoretical_pct"],
-                "empirical_pct": score["cc_empirical_pct"],
-                "blended_pct": score["cc_blended_pct"],
-            },
         }
 
     @app.get("/duo/{roles}/{champ_a}/{champ_b}", response_class=HTMLResponse)
@@ -857,7 +825,6 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             sort=["synergy"],
             direction=["desc"],
         )["rows"][:CHAMPION_TRIOS_SHOWN]
-        cc_theoretical = queries.cc_theoretical_scores(conn).get(champion_id)
         match_rows = queries.champion_match_rows(
             conn,
             patches,
@@ -873,7 +840,6 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             "stats": stats,
             "partners": partners,
             "best_trios": best_trios,
-            "cc_theoretical": cc_theoretical,
         }
 
     @app.get("/champion/{role}/{champion_id}", response_class=HTMLResponse)
@@ -978,7 +944,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         stats = raw["advice_stats"]
         advice = (
             draft_suggestions.draft_advice(
-                stats["scaling"], stats["cc_blended_pct"], stats["gold_diff_15"]
+                stats["scaling"], stats["cc_time_s"], stats["gold_diff_15"]
             )
             if stats
             else []
