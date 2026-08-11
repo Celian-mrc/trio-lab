@@ -113,6 +113,7 @@
   </label>
   {% for role in draft_roles %}
   <input type="hidden" name="seed_{{ role }}" value="{{ seed_names[role] }}">
+  <input type="hidden" name="enemy_{{ role }}" value="{{ enemy_names[role] }}">
   {% endfor %}
   <input type="hidden" name="archetype" value="{{ selected_archetype }}">
   {% for axis in custom_weight_axes %}
@@ -121,6 +122,7 @@
   {% endfor %}
   <input type="hidden" name="w_min_games" value="{{ w_min_games }}">
   <input type="hidden" name="cw_min_games" value="{{ cw_min_games }}">
+  <input type="hidden" name="enemy_min_games" value="{{ enemy_min_games }}">
   <button type="submit">Appliquer</button>
 </form>
 
@@ -129,6 +131,10 @@
   <form method="get" action="/draft" class="draft-compose-form">
     <input type="hidden" name="window" value="{{ window }}">
     <input type="hidden" name="platform" value="{{ platform }}">
+    {% for role in draft_roles %}
+    <input type="hidden" name="enemy_{{ role }}" value="{{ enemy_names[role] }}">
+    {% endfor %}
+    <input type="hidden" name="enemy_min_games" value="{{ enemy_min_games }}">
     <div class="draft-compose-roles">
       {% for role in draft_roles %}
       <label class="draft-compose-role">
@@ -170,6 +176,40 @@
   {% endif %}
 </section>
 
+<section class="draft-compose">
+  <h2>Contre cette équipe</h2>
+  <p class="meta">Renseigne les picks adverses que tu connais (scouting partiel possible) — la composition proposée cherche à la fois de bons contres 1v1 ET une bonne synergie entre elles, pas juste 5 counters isolés.</p>
+  <form method="get" action="/draft" class="draft-compose-form">
+    <input type="hidden" name="window" value="{{ window }}">
+    <input type="hidden" name="platform" value="{{ platform }}">
+    {% for role in draft_roles %}
+    <input type="hidden" name="seed_{{ role }}" value="{{ seed_names[role] }}">
+    {% endfor %}
+    <input type="hidden" name="archetype" value="{{ selected_archetype }}">
+    <div class="draft-compose-roles">
+      {% for role in draft_roles %}
+      <label class="draft-compose-role">
+        <span class="role-badge role-{{ role }}">{{ role | upper }}</span>
+        <input name="enemy_{{ role }}" value="{{ enemy_names[role] }}" list="champion-names" placeholder="champion adverse…">
+      </label>
+      {% endfor %}
+    </div>
+    <div class="draft-compose-submit">
+      <label class="draft-custom-field" data-tooltip="Nombre de games réelles minimum pour qu'un duo compte comme candidat fiable — abaisser ce seuil élargit le choix de champions mais avec moins de données par candidat." aria-label="Fiabilité minimum, en nombre de games réelles">
+        Fiabilité min. (games)
+        <input type="number" name="enemy_min_games" value="{{ enemy_min_games }}" min="0" step="10">
+      </label>
+      <button type="submit" class="button-like">Trouver mes contres</button>
+      <span class="draft-compose-loadbar" aria-hidden="true"></span>
+    </div>
+  </form>
+  {% if counter_error %}
+  <p class="empty">{{ counter_error }}</p>
+  {% elif counter_drafts %}
+  <div class="draft-custom-result">{{ draft_group(counter_drafts) }}</div>
+  {% endif %}
+</section>
+
 <section class="draft-suggest">
   <div class="draft-suggest-head">
     <h2>Compositions suggérées</h2>
@@ -195,7 +235,9 @@
     <input type="hidden" name="platform" value="{{ platform }}">
     {% for role in draft_roles %}
     <input type="hidden" name="seed_{{ role }}" value="{{ seed_names[role] }}">
+    <input type="hidden" name="enemy_{{ role }}" value="{{ enemy_names[role] }}">
     {% endfor %}
+    <input type="hidden" name="enemy_min_games" value="{{ enemy_min_games }}">
     <input type="hidden" name="archetype" value="{{ selected_archetype }}">
     <div class="draft-custom-fields">
       {% for axis in custom_weight_axes %}

@@ -7,6 +7,8 @@ psycopg sync locale. L'index champion est injecté : aucun appel Data Dragon.
 
 from __future__ import annotations
 
+import re
+
 import psycopg
 import pytest
 from fastapi.testclient import TestClient
@@ -1420,6 +1422,122 @@ def test_draft_page_compose_rejects_unknown_archetype(pg_sync, client):
     )
     resp = client.get("/draft", params={"seed_top": "Vi", "archetype": "not-a-real-archetype"})
     assert resp.status_code == 404
+
+
+# --- "Contre cette équipe" (retour utilisateur 2026-08-11) ---
+
+
+def _seed_counter_scenario(conn) -> None:
+    """Pentade 1-5 (index test : 1=Lee Sin/jgl, 2=Ahri/mid, 3=Thresh/sup,
+    4=Vi/top, 5=Orianna/bot), scaling/cc/gold/drakes renseignés (les axes
+    que `DEFAULT_COUNTER_WEIGHTS` pondère en plus de synergy/matchup). Un
+    candidat alternatif au poste bot (6, Leona) a les mêmes 4 paires que 5
+    avec une synergie légèrement plus faible, mais contre largement
+    l'ennemi scouté (7, Zed) au poste BOTTOM — 5 n'a aucune donnée de
+    matchup contre lui."""
+    conn.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    rows = (
+        ("jgl_mid", 1, 2, 0.30),
+        ("jgl_sup", 1, 3, 0.05),
+        ("mid_sup", 2, 3, 0.04),
+        ("top_jgl", 4, 1, 0.02),
+        ("top_mid", 4, 2, 0.02),
+        ("top_sup", 4, 3, 0.03),
+        ("jgl_bot", 1, 5, 0.01),
+        ("mid_bot", 2, 5, 0.01),
+        ("bot_sup", 5, 3, 0.01),
+        ("top_bot", 4, 5, 0.02),
+    )
+    for roles, champ_a, champ_b, synergy in rows:
+        conn.execute(
+            "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
+            " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct,"
+            " gold_diff_15, drakes)"
+            " VALUES ('16.13', 'euw1', %s, %s, %s, 500, 500.0, 0.55, %s, 0.0, %s, 'eleve',"
+            " 0.0, 20.0, 100.0, 0.02)",
+            (roles, champ_a, champ_b, synergy, synergy),
+        )
+    for roles, champ_a, champ_b in (
+        ("jgl_bot", 1, 6),
+        ("mid_bot", 2, 6),
+        ("bot_sup", 6, 3),
+        ("top_bot", 4, 6),
+    ):
+        conn.execute(
+            "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
+            " games_eff, wr, synergy, ci_low, ci_high, tier, scaling, cc_blended_pct,"
+            " gold_diff_15, drakes)"
+            " VALUES ('16.13', 'euw1', %s, %s, %s, 500, 500.0, 0.55, 0.005, 0.0, 0.005, 'eleve',"
+            " 0.0, 20.0, 100.0, 0.02)",
+            (roles, champ_a, champ_b),
+        )
+    conn.execute(
+        "INSERT INTO score_matchup (window_label, platform, role, champ_a, champ_b, games,"
+        " games_eff, wr, delta_raw, delta, ci_low, ci_high, tier)"
+        " VALUES ('16.13', 'euw1', 'BOTTOM', 6, 7, 100, 100.0, 0.70, 0.50, 0.50, 0.40, 0.60,"
+        " 'eleve'),"
+        "        ('16.13', 'euw1', 'BOTTOM', 5, 7, 100, 100.0, 0.55, 0.05, 0.05, 0.0, 0.10,"
+        " 'eleve')"
+    )
+
+
+def test_draft_page_counter_form_prefers_matchup_over_synergy(pg_sync, client):
+    """Retour utilisateur 2026-08-11 : "il ne faudrait pas juste prendre les
+    counters à chaque rôle mais aussi que les champions counter synergisent
+    bien entre eux". Bout en bout via HTTP : le champion 6 (Leona) doit
+    gagner le poste bot à la place du candidat plus synergique (5, Orianna)
+    grâce à son avantage de matchup scouté contre l'ennemi (7, Zed)."""
+    _seed_counter_scenario(pg_sync)
+    resp = client.get("/draft", params={"enemy_bot": "Zed"})
+    assert resp.status_code == 200
+    assert "Contre cette équipe" in resp.text
+    # Le nom d'un champion apparaît TOUJOURS dans le <datalist> d'autocomplétion,
+    # qu'il soit choisi ou non — seule la présence du champion à CÔTÉ du
+    # role-badge "bot" prouve qu'il est bien membre de la composition.
+    assert re.search(r'role-bot">BOT</span>\s*Leona', resp.text)
+    assert not re.search(r'role-bot">BOT</span>\s*Orianna', resp.text)
+
+
+def test_draft_page_counter_form_not_shown_without_submission(pg_sync, client):
+    """Page fraîche (aucun `enemy_*` dans l'URL) : ni résultat ni erreur —
+    même principe que "Compose à partir de tes champions"/"Personnalise tes
+    poids" (retour arrière compatible, formulaire jamais auto-soumis)."""
+    _seed_counter_scenario(pg_sync)
+    resp = client.get("/draft")
+    assert resp.status_code == 200
+    assert "Pas assez de données fiables contre ces picks" not in resp.text
+    assert not re.search(r'role-bot">BOT</span>\s*Leona', resp.text)
+
+
+def test_draft_page_counter_form_shows_error_when_nothing_completes(pg_sync, client):
+    """Ennemi scouté mais aucune donnée fiable en base : message explicite,
+    pas de plantage silencieux (même principe que `manual_error`/`custom_error`)."""
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    resp = client.get("/draft", params={"enemy_bot": "Zed"})
+    assert resp.status_code == 200
+    assert "Pas assez de données fiables contre ces picks" in resp.text
+
+
+def test_draft_page_counter_form_partial_scouting_still_completes(pg_sync, client):
+    """Scouting partiel (1 seul rôle sur 5, sans AUCUNE donnée de matchup
+    pour ce rôle) : les autres rôles ne sont jamais exclus — la composition
+    complète (5 membres) doit quand même s'afficher (retour utilisateur :
+    "exclusion partielle ok")."""
+    _seed_counter_scenario(pg_sync)
+    resp = client.get("/draft", params={"enemy_jgl": "Zed"})
+    assert resp.status_code == 200
+    for name in ("Lee Sin", "Ahri", "Thresh", "Vi"):
+        assert name in resp.text
 
 
 def test_insights_page_empty_state(pg_sync, client):

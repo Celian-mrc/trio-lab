@@ -465,3 +465,81 @@ def test_refine_draft_never_replaces_locked_roles(pg_sync):
     assert refined_placed["bot"] == 5  # jamais remplacé, malgré le champion 6 meilleur
     assert refined_placed == placed
     assert refined_total == pytest.approx(total, abs=1e-6)
+
+
+# --- propose_counter_draft : mode "Contre cette équipe" (retour utilisateur
+# 2026-08-11, "il ne faudrait pas juste prendre les counters à chaque rôle
+# mais aussi que les champions counter synergisent bien entre eux") ---
+
+
+def _seed_bot_alternative(conn, synergy: float) -> None:
+    """Champion 6 : mêmes 4 paires que le bot=5 d'un pentade 1-5
+    (`_insert_pentad`), synergie propre — candidat alternatif au rôle bot."""
+    for roles, champ_a, champ_b in (
+        ("jgl_bot", 1, 6),
+        ("mid_bot", 2, 6),
+        ("bot_sup", 6, 3),
+        ("top_bot", 4, 6),
+    ):
+        conn.execute(
+            "INSERT INTO score_duo (window_label, platform, roles, champ_a, champ_b, games,"
+            " games_eff, wr, synergy, ci_low, ci_high, tier)"
+            " VALUES ('16.13', 'all', %s, %s, %s, 500, 1000.0, 0.55, %s, 0.0, %s, 'eleve')",
+            (roles, champ_a, champ_b, synergy, synergy),
+        )
+
+
+def test_propose_counter_draft_prefers_matchup_when_weighted_heavily(pg_sync):
+    """Pentade 1-5 (synergie uniforme, `_insert_pentad`) : bot=5 gagne le
+    rôle sur la synergie seule (0.01 > 0.005, le candidat alternatif 6).
+    Mais 6 contre largement l'ennemi scouté (champion 99) au poste BOTTOM,
+    5 n'a aucune donnée de matchup contre lui — avec des poids dominés par
+    le matchup, 6 doit gagner le rôle à la place de 5."""
+    _insert_pentad(pg_sync, 1, seed_synergy=0.30, seed_games_eff=1000.0, other_games_eff=1000.0)
+    _seed_bot_alternative(pg_sync, synergy=0.005)  # < 0.01 (synergie des paires de 5)
+    # 2 lignes (retour utilisateur : z-score fiable) pour le rôle BOTTOM
+    # contre l'ennemi scouté (champion 99) — 6 le contre largement, 50 sert
+    # de point de comparaison neutre.
+    pg_sync.execute(
+        "INSERT INTO score_matchup (window_label, platform, role, champ_a, champ_b, games,"
+        " games_eff, wr, delta_raw, delta, ci_low, ci_high, tier)"
+        " VALUES ('16.13', 'all', 'BOTTOM', 6, 99, 100, 100.0, 0.70, 0.50, 0.50, 0.40, 0.60,"
+        " 'eleve'),"
+        "        ('16.13', 'all', 'BOTTOM', 50, 99, 100, 100.0, 0.55, 0.05, 0.05, 0.0, 0.10,"
+        " 'eleve')"
+    )
+    results = draft_suggestions.propose_counter_draft(
+        pg_sync, "16.13", "all", {"bot": 99}, weights={"matchup": 0.9, "synergy": 0.1}
+    )
+    assert results
+    assert results[0]["members"]["bot"] == 6
+
+
+def test_propose_counter_draft_without_scouting_falls_back_to_synergy(pg_sync):
+    """Sans scouting (`enemy={}`), l'axe matchup ne s'applique nulle part
+    (aucun rôle dans `matchup_by_role`) : le rôle bot retombe sur le
+    meilleur candidat en synergie seule (5, cf. test précédent)."""
+    _insert_pentad(pg_sync, 1, seed_synergy=0.30, seed_games_eff=1000.0, other_games_eff=1000.0)
+    _seed_bot_alternative(pg_sync, synergy=0.005)
+    results = draft_suggestions.propose_counter_draft(
+        pg_sync, "16.13", "all", {}, weights={"matchup": 0.9, "synergy": 0.1}
+    )
+    assert results
+    assert results[0]["members"]["bot"] == 5
+
+
+def test_propose_counter_draft_partial_scouting_does_not_exclude_candidates(pg_sync):
+    """Scouting partiel (un seul rôle sur 5, et sans AUCUNE ligne
+    `score_matchup` pour ce rôle/cet ennemi — le pire cas) : les rôles non
+    scoutés (et le rôle scouté sans donnée exploitable) ne sont jamais
+    exclus faute de donnée matchup — une composition complète à 5 doit
+    quand même être produite (retour utilisateur : "exclusion partielle
+    ok"). `weights` limité à matchup/synergy : `_insert_pentad` ne
+    renseigne pas scaling/cc/gold/drakes, hors sujet ici (couvert par les
+    tests `propose_drafts` existants)."""
+    _insert_pentad(pg_sync, 1, seed_synergy=0.30, seed_games_eff=1000.0, other_games_eff=1000.0)
+    results = draft_suggestions.propose_counter_draft(
+        pg_sync, "16.13", "all", {"jgl": 99}, weights={"matchup": 0.40, "synergy": 0.30}
+    )
+    assert results
+    assert set(results[0]["members"].values()) == {1, 2, 3, 4, 5}

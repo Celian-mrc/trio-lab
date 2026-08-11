@@ -1112,6 +1112,12 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         cw_range: str | None = None,
         w_min_games: int = Query(draft_suggestions.MIN_GAMES_DEFAULT, ge=0),
         cw_min_games: int = Query(draft_suggestions.MIN_GAMES_DEFAULT, ge=0),
+        enemy_top: str | None = None,
+        enemy_jgl: str | None = None,
+        enemy_mid: str | None = None,
+        enemy_bot: str | None = None,
+        enemy_sup: str | None = None,
+        enemy_min_games: int = Query(draft_suggestions.MIN_GAMES_DEFAULT, ge=0),
     ):
         raw_seeds = {
             "top": seed_top,
@@ -1124,6 +1130,20 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         # pour le reconstruire tel quel après un changement de fenêtre/région
         # (même principe que filters_qs ailleurs sur le site).
         current_seed_params = {f"seed_{role}": v or "" for role, v in raw_seeds.items()}
+
+        # "Contre cette équipe" (retour utilisateur 2026-08-11) : picks
+        # adverses par rôle, scouting partiel autorisé (0 à 5) — formulaire
+        # séparé de "Compose à partir de tes champions" (rôles ADVERSES, pas
+        # les tiens), même principe d'état courant que les autres.
+        raw_enemy = {
+            "top": enemy_top,
+            "jgl": enemy_jgl,
+            "mid": enemy_mid,
+            "bot": enemy_bot,
+            "sup": enemy_sup,
+        }
+        current_enemy_params = {f"enemy_{role}": v or "" for role, v in raw_enemy.items()}
+        current_enemy_params["enemy_min_games"] = str(enemy_min_games)
 
         # "Personnalise tes poids" (retour utilisateur 2026-07-28) : 5e
         # archétype dans "Compositions suggérées", TOUJOURS en direct (même
@@ -1168,6 +1188,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         with request.app.state.pool.connection() as conn:
             window, platform, context = resolve_context(conn, window, platform)
             seed_picks = {role: resolve_champion(v) for role, v in raw_seeds.items() if v}
+            enemy_picks = {role: resolve_champion(v) for role, v in raw_enemy.items() if v}
 
             # `pool`/`zstats` (le tri par archétype des duos fiables) coûte
             # une requête large (~10 000 lignes) : calculé au plus une fois
@@ -1241,6 +1262,28 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                         " essaie d'autres valeurs."
                     )
 
+            # "Contre cette équipe" (retour utilisateur 2026-08-11) : calcul
+            # à la demande, comme "Compose à partir de tes champions" —
+            # `enemy_picks` est une saisie utilisateur, jamais matérialisable
+            # à l'avance par le collector. `DEFAULT_COUNTER_WEIGHTS` fixe
+            # (pas de formulaire de poids personnalisés pour ce mode, pour
+            # l'instant) — jusqu'à 3 variantes comme les autres archétypes.
+            counter_drafts = None
+            counter_error = None
+            if enemy_picks:
+                counter_raws = draft_suggestions.propose_counter_draft(
+                    conn, window, platform, enemy_picks, min_games=enemy_min_games
+                )
+                if counter_raws:
+                    counter_drafts = _group_draft_variants(
+                        [_build_draft_result(raw, include_seed_pairs=False) for raw in counter_raws]
+                    )[0]
+                else:
+                    counter_error = (
+                        "Pas assez de données fiables contre ces picks —"
+                        " essaie d'autres champions ou baisse le seuil de fiabilité."
+                    )
+
             # Formulaire soumis dès que 1 champion ou un archétype est fourni
             # — une page fraîche n'a ni l'un ni l'autre dans l'URL. Archétype
             # non précisé (retour utilisateur 2026-07-26) : une proposition
@@ -1298,6 +1341,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 **current_seed_params,
                 **current_weight_params,
                 **current_manual_weight_params,
+                **current_enemy_params,
                 "archetype": archetype or "",
                 **overrides,
                 "window": window or "",
@@ -1318,6 +1362,13 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                     role: (champ(seed_picks[role]).name if seed_picks.get(role) else "")
                     for role in DRAFT_ROLES
                 },
+                "enemy_names": {
+                    role: (champ(enemy_picks[role]).name if enemy_picks.get(role) else "")
+                    for role in DRAFT_ROLES
+                },
+                "counter_drafts": counter_drafts,
+                "counter_error": counter_error,
+                "enemy_min_games": enemy_min_games,
                 "archetypes": draft_suggestions.ARCHETYPES,
                 "selected_archetype": archetype or "",
                 "manual_results": manual_results,

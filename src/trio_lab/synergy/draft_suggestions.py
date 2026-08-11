@@ -181,6 +181,23 @@ ARCHETYPES: dict[str, dict] = {
         },
     },
 }
+# Poids par défaut de "Contre cette équipe" (`propose_counter_draft`, retour
+# utilisateur 2026-08-11) : matchup 40 % (l'identité du mode — contrer les
+# picks scoutés), synergy 30 % (mêmes proportions que les 4 profils
+# pondérés d'ARCHETYPES, pour que les contres restent des picks qui
+# fonctionnent ENSEMBLE, pas juste 5 counters isolés), 30 % restants
+# répartis à égalité sur scaling/cc/gold/drakes (pas d'identité de phase de
+# jeu particulière ici, contrairement aux profils ci-dessus). "matchup"
+# n'est PAS une clé d'ARCHETYPE_STAT_COLUMNS : extrait à part avant de
+# passer le reste à `propose_for_weights`, cf. `propose_counter_draft`.
+DEFAULT_COUNTER_WEIGHTS = {
+    "matchup": 0.40,
+    "synergy": 0.30,
+    "scaling": 0.075,
+    "cc": 0.075,
+    "gold": 0.075,
+    "drakes": 0.075,
+}
 SEED_SHORTLIST = 8  # duos de départ essayés par profil avant d'abandonner
 # 3 propositions par archétype sur "Compositions suggérées" (retour
 # utilisateur 2026-07-27) : rang 0 = meilleur score, rang 1 = 2e meilleur
@@ -375,6 +392,34 @@ def _matchup_beats(
         ).fetchall()
 
 
+def _load_matchup_by_role(
+    conn: psycopg.Connection, window: str, platform: str, enemy: dict[str, int]
+) -> dict[str, tuple[dict[int, float], tuple[float, float]]]:
+    """Pour chaque rôle SCOUTÉ de `enemy` (rôle court → champion adverse,
+    scouting partiel autorisé, 0 à 5 entrées) : les deltas `score_matchup`
+    de tous les candidats connus contre ce pick, plus leurs (moyenne,
+    écart-type) pour le z-score — calculé UNE FOIS par rôle ici, pas par
+    candidat à chaque étape de `greedy_complete_draft`/`refine_draft`
+    (mode "Contre cette équipe", retour utilisateur 2026-08-11).
+
+    Rôle absent du résultat (scouting non fourni, ou moins de 2 lignes
+    `score_matchup` pour un z-score fiable) : `_combined_score`/
+    `_matchup_avg_z` ignorent simplement cet axe pour ce rôle, jamais
+    d'exclusion du candidat."""
+    by_role: dict[str, tuple[dict[int, float], tuple[float, float]]] = {}
+    for role, enemy_champion_id in enemy.items():
+        team_position = DRAFT_ROLE_TO_TEAM_POSITION[role]
+        rows = _matchup_candidates(
+            conn, window, platform, team_position, enemy_champion_id, POOL_SIZE
+        )
+        if len(rows) < 2:
+            continue
+        lookup = {r["candidate_champion"]: r["delta"] for r in rows}
+        zstats = zscore_stats(rows, ("delta",))["delta"]
+        by_role[role] = (lookup, zstats)
+    return by_role
+
+
 # --- Moteur de construction d'une composition ---
 
 
@@ -404,13 +449,24 @@ def pool_and_zstats(
 
 
 def archetype_seed_order(
-    pool: list[dict], weights: dict[str, float], zstats: dict[str, tuple[float, float]]
+    pool: list[dict],
+    weights: dict[str, float],
+    zstats: dict[str, tuple[float, float]],
+    *,
+    matchup_weight: float = 0.0,
+    matchup_by_role: dict[str, tuple[dict[int, float], tuple[float, float]]] | None = None,
 ) -> list[dict]:
     """Ordonne `pool` (duos fiables, 10 paires confondues) pour un archétype
     donné : score = Σ poids × z-score(stat), en excluant les duos sans
     donnée sur un axe pondéré. "Meilleure synergie" (`weights =
     {"synergy": 1.0}`) reproduit le tri par synergie brute (z-score d'un
-    seul axe = transformation affine, l'ordre est inchangé)."""
+    seul axe = transformation affine, l'ordre est inchangé).
+
+    `matchup_weight`/`matchup_by_role` (mode "Contre cette équipe") : un duo
+    de départ occupe 2 rôles — le score matchup ajouté est la somme des
+    deltas (z-scorés par rôle) des DEUX champions du duo sur les rôles
+    scoutés, chacun ignoré individuellement si son rôle n'est pas scouté
+    (jamais d'exclusion, cf. `_combined_score`)."""
     scored: list[tuple[dict, float]] = []
     for row in pool:
         total = 0.0
@@ -425,8 +481,19 @@ def archetype_seed_order(
                 break
             mean, std = zstats[col]
             total += weight * (value - mean) / std
-        if not skip:
-            scored.append((row, total))
+        if skip:
+            continue
+        if matchup_weight and matchup_by_role:
+            role_a, role_b = DUO_ROLE_KEYS[row["roles"]]
+            for role, champ in ((role_a, row["champ_a"]), (role_b, row["champ_b"])):
+                entry = matchup_by_role.get(role)
+                if entry is None:
+                    continue
+                lookup, (mean, std) = entry
+                delta = lookup.get(champ)
+                if delta is not None:
+                    total += matchup_weight * (delta - mean) / std
+        scored.append((row, total))
     scored.sort(key=lambda rs: -rs[1])
     return [row for row, _ in scored]
 
@@ -438,13 +505,21 @@ def _sum_synergy(
     anchors: list[tuple[str, str, int]],
     min_games: int,
     stat_columns: Iterable[str] = (),
+    *,
+    matchup_lookup: dict[int, float] | None = None,
 ) -> dict[int, dict]:
     """Σ synergie d'un candidat contre chaque ancrage (rôle, champion déjà
     posé) de `anchors` — ne garde que les candidats couverts par TOUS les
     ancrages (fiabilité ≥ `min_games` pour chacun). `stat_columns` : en plus
     de la Σ synergie, moyenne de chaque colonne sur les paires nouvellement
-    formées où elle est renseignée. Retourne, par candidat couvert :
-    `{"synergy_sum": ..., "stats": {col: moyenne}}`."""
+    formées où elle est renseignée. `matchup_lookup` (mode "Contre cette
+    équipe", retour utilisateur 2026-08-11) : delta `score_matchup` du
+    candidat contre le pick adverse du RÔLE EN COURS (pas un ancrage — le
+    matchup ne dépend que du rôle qu'on remplit, pas de ce qui est déjà
+    posé) ; absent du dict ou lookup `None` → `matchup_delta` reste `None`,
+    l'axe est ignoré pour ce candidat SANS l'exclure (cf. `_combined_score`).
+    Retourne, par candidat couvert : `{"synergy_sum": ..., "stats": {col:
+    moyenne}, "matchup_delta": ...}`."""
     totals: dict[int, float] = {}
     coverage: dict[int, int] = {}
     stat_totals: dict[int, dict[str, float]] = {}
@@ -473,20 +548,35 @@ def _sum_synergy(
         stats = {
             col: stat_totals[cid][col] / stat_counts[cid][col] for col in stat_counts.get(cid, {})
         }
-        result[cid] = {"synergy_sum": total, "stats": stats}
+        entry = {"synergy_sum": total, "stats": stats}
+        if matchup_lookup is not None:
+            entry["matchup_delta"] = matchup_lookup.get(cid)
+        result[cid] = entry
     return result
 
 
 def _combined_score(
-    data: dict, n_anchors: int, weights: dict[str, float], zstats: dict[str, tuple[float, float]]
+    data: dict,
+    n_anchors: int,
+    weights: dict[str, float],
+    zstats: dict[str, tuple[float, float]],
+    *,
+    matchup_weight: float = 0.0,
+    matchup_zstats: tuple[float, float] | None = None,
 ) -> float | None:
     """Score composé (Σ poids × z-score) d'un candidat face à `n_anchors`
     ancrages, à partir de `data` (une entrée de `_sum_synergy` :
     `{"synergy_sum": ..., "stats": {col: moyenne}}`) — factorisé entre
     `greedy_complete_draft` (compléter un rôle vide) et `refine_draft`
     (comparer le champion en place à un remplaçant potentiel). `None` si un
-    axe pondéré manque (candidat écarté du classement, jamais traité comme
-    0)."""
+    axe de `weights` manque (candidat écarté du classement, jamais traité
+    comme 0).
+
+    `matchup_weight`/`matchup_zstats` (mode "Contre cette équipe") :
+    AJOUTÉ au score s'il y a une donnée (`data["matchup_delta"]` non
+    `None`), sinon simplement ignoré — contrairement aux axes de `weights`,
+    l'absence de pick adverse scouté sur ce rôle n'exclut jamais le
+    candidat (retour utilisateur 2026-08-11 : scouting souvent partiel)."""
     combined = 0.0
     for axis, weight in weights.items():
         if weight == 0:
@@ -497,6 +587,11 @@ def _combined_score(
             return None
         mean, std = zstats[col]
         combined += weight * (value - mean) / std
+    if matchup_weight and matchup_zstats is not None:
+        delta = data.get("matchup_delta")
+        if delta is not None:
+            mean, std = matchup_zstats
+            combined += matchup_weight * (delta - mean) / std
     return combined
 
 
@@ -517,6 +612,9 @@ def greedy_complete_draft(
     min_games: int,
     weights: dict[str, float],
     zstats: dict[str, tuple[float, float]],
+    *,
+    matchup_weight: float = 0.0,
+    matchup_by_role: dict[str, tuple[dict[int, float], tuple[float, float]]] | None = None,
 ) -> tuple[dict[str, int], float] | None:
     """Étend un état de départ PARTIEL (`placed`, 1 à 4 rôles déjà posés,
     `total` = Σ synergie déjà couverte par ces paires) en un draft à 5 rôles
@@ -528,7 +626,12 @@ def greedy_complete_draft(
     `None` si un rôle ne peut pas être complété avec une couverture fiable
     complète. Générique sur la taille de `placed` (1 à 5) : réutilisé aussi
     bien pour étendre un duo de départ auto-suggéré que des champions
-    choisis à la main."""
+    choisis à la main.
+
+    `matchup_weight`/`matchup_by_role` (mode "Contre cette équipe") :
+    ajoute le delta `score_matchup` du candidat contre le pick adverse du
+    RÔLE EN COURS de complétion (pas des ancrages déjà posés — le matchup
+    ne dépend que du rôle qu'on remplit)."""
     placed = dict(placed)  # ne jamais muter le dict de l'appelant
     remaining = [r for r in DRAFT_ROLES if r not in placed]
     stat_columns = _stat_columns_for(weights)
@@ -539,13 +642,30 @@ def greedy_complete_draft(
                 (_ROLES_BY_PAIR[frozenset({role, placed_role})], placed_role, placed_champ)
                 for placed_role, placed_champ in placed.items()
             ]
-            scores = _sum_synergy(conn, window, platform, anchors, min_games, stat_columns)
+            role_matchup = matchup_by_role.get(role) if matchup_by_role else None
+            role_lookup, role_zstats = role_matchup if role_matchup else (None, None)
+            scores = _sum_synergy(
+                conn,
+                window,
+                platform,
+                anchors,
+                min_games,
+                stat_columns,
+                matchup_lookup=role_lookup,
+            )
             if not scores:
                 continue
             n_anchors = len(anchors)
             role_best: tuple[int, float, float] | None = None  # cid, synergy_sum, combined_z
             for cid, data in scores.items():
-                combined = _combined_score(data, n_anchors, weights, zstats)
+                combined = _combined_score(
+                    data,
+                    n_anchors,
+                    weights,
+                    zstats,
+                    matchup_weight=matchup_weight,
+                    matchup_zstats=role_zstats,
+                )
                 if combined is None:
                     continue
                 if role_best is None or combined > role_best[2]:
@@ -628,6 +748,8 @@ def refine_draft(
     zstats: dict[str, tuple[float, float]],
     *,
     locked_roles: frozenset[str] = frozenset(),
+    matchup_weight: float = 0.0,
+    matchup_by_role: dict[str, tuple[dict[int, float], tuple[float, float]]] | None = None,
 ) -> tuple[dict[str, int], float]:
     """UN SEUL passage de remplacement sur un draft COMPLET à 5 (retour
     utilisateur 2026-07-27 : "est-ce que le système essaie de remplacer le
@@ -665,19 +787,37 @@ def refine_draft(
             for other_role, other_champ in placed.items()
             if other_role != role
         ]
-        scores = _sum_synergy(conn, window, platform, anchors, min_games, stat_columns)
+        role_matchup = matchup_by_role.get(role) if matchup_by_role else None
+        role_lookup, role_zstats = role_matchup if role_matchup else (None, None)
+        scores = _sum_synergy(
+            conn, window, platform, anchors, min_games, stat_columns, matchup_lookup=role_lookup
+        )
         if not scores:
             continue
         n_anchors = len(anchors)
         current_data = scores.get(current_champ)
         current_combined = (
-            _combined_score(current_data, n_anchors, weights, zstats)
+            _combined_score(
+                current_data,
+                n_anchors,
+                weights,
+                zstats,
+                matchup_weight=matchup_weight,
+                matchup_zstats=role_zstats,
+            )
             if current_data is not None
             else None
         )
         best: tuple[int, float, float] | None = None  # cid, synergy_sum, combined
         for cid, data in scores.items():
-            combined = _combined_score(data, n_anchors, weights, zstats)
+            combined = _combined_score(
+                data,
+                n_anchors,
+                weights,
+                zstats,
+                matchup_weight=matchup_weight,
+                matchup_zstats=role_zstats,
+            )
             if combined is None:
                 continue
             if best is None or combined > best[2]:
@@ -734,6 +874,24 @@ def full_draft_stat_averages(
     return {col: total / n_pairs for col, total in totals.items()}
 
 
+def _matchup_avg_z(
+    placed: dict[str, int],
+    matchup_by_role: dict[str, tuple[dict[int, float], tuple[float, float]]],
+) -> float | None:
+    """Moyenne des z-scores de delta `score_matchup` sur les rôles SCOUTÉS
+    (mode "Contre cette équipe") — moyenne de z-scores (pas de deltas bruts
+    puis z-score global) : chaque rôle a sa propre distribution de deltas
+    contre SON pick adverse, pas comparable directement entre rôles. `None`
+    si aucun rôle scouté n'a de donnée pour le champion posé (scouting
+    partiel, cf. `_combined_score`)."""
+    zscores = []
+    for role, (lookup, (mean, std)) in matchup_by_role.items():
+        delta = lookup.get(placed.get(role))
+        if delta is not None:
+            zscores.append((delta - mean) / std)
+    return sum(zscores) / len(zscores) if zscores else None
+
+
 def full_draft_score(
     conn: psycopg.Connection,
     window: str,
@@ -741,11 +899,18 @@ def full_draft_score(
     placed: dict[str, int],
     weights: dict[str, float],
     zstats: dict[str, tuple[float, float]],
+    *,
+    matchup_weight: float = 0.0,
+    matchup_by_role: dict[str, tuple[dict[int, float], tuple[float, float]]] | None = None,
 ) -> float | None:
     """Score composite (Σ poids × z-score) sur les 10 VRAIES paires d'un
     draft complet `placed` — sert à comparer plusieurs compositions
     candidates FINIES entre elles pour un même archétype, plutôt que de
-    garder la première qui complète."""
+    garder la première qui complète.
+
+    `matchup_weight`/`matchup_by_role` (mode "Contre cette équipe", retour
+    utilisateur 2026-08-11) : ajoute `matchup_weight × _matchup_avg_z(...)`,
+    simplement ignoré si aucun rôle scouté n'a de donnée exploitable."""
     columns = [ARCHETYPE_STAT_COLUMNS[axis] for axis, weight in weights.items() if weight]
     averages = full_draft_stat_averages(conn, window, platform, placed, columns)
     if averages is None:
@@ -757,6 +922,10 @@ def full_draft_score(
         col = ARCHETYPE_STAT_COLUMNS[axis]
         mean, std = zstats[col]
         combined += weight * (averages[col] - mean) / std
+    if matchup_weight and matchup_by_role:
+        avg_z = _matchup_avg_z(placed, matchup_by_role)
+        if avg_z is not None:
+            combined += matchup_weight * avg_z
     return combined
 
 
@@ -921,6 +1090,8 @@ def propose_for_weights(
     weights: dict[str, float],
     *,
     min_games: int = MIN_GAMES_DEFAULT,
+    matchup_weight: float = 0.0,
+    matchup_by_role: dict[str, tuple[dict[int, float], tuple[float, float]]] | None = None,
 ) -> list[dict]:
     """Jusqu'à 3 compositions pour UN jeu de poids donné (retour utilisateur
     2026-07-27 : "des boutons 1/2/3... 3 propositions par archétype" —
@@ -975,19 +1146,45 @@ def propose_for_weights(
     faibles), strengths (points forts)}` — brut (`champion_id`, pas de
     nom/icône), même forme que lue depuis `draft_suggestion(_counter)`
     matérialisées par `refresh`, pour que le rendu (`web/app.py`) traite
-    les 2 sources de façon identique."""
-    seeds = archetype_seed_order(pool, weights, zstats)
+    les 2 sources de façon identique.
+
+    `matchup_weight`/`matchup_by_role` (mode "Contre cette équipe", retour
+    utilisateur 2026-08-11) : simple passe-plat vers `archetype_seed_order`/
+    `greedy_complete_draft`/`full_draft_score`/`refine_draft` — non `None`
+    uniquement pour ce mode, `weights` ne contient jamais l'axe "matchup"
+    lui-même (absent de `ARCHETYPE_STAT_COLUMNS`)."""
+    seeds = archetype_seed_order(
+        pool, weights, zstats, matchup_weight=matchup_weight, matchup_by_role=matchup_by_role
+    )
     candidates: list[tuple[float, dict, dict, float]] = []
     for seed_row in seeds[:SEED_SHORTLIST]:
         role_a, role_b = DUO_ROLE_KEYS[seed_row["roles"]]
         seed_placed = {role_a: seed_row["champ_a"], role_b: seed_row["champ_b"]}
         completed = greedy_complete_draft(
-            conn, window, platform, seed_placed, seed_row["synergy"], min_games, weights, zstats
+            conn,
+            window,
+            platform,
+            seed_placed,
+            seed_row["synergy"],
+            min_games,
+            weights,
+            zstats,
+            matchup_weight=matchup_weight,
+            matchup_by_role=matchup_by_role,
         )
         if completed is None:
             continue
         placed, total = completed
-        score = full_draft_score(conn, window, platform, placed, weights, zstats)
+        score = full_draft_score(
+            conn,
+            window,
+            platform,
+            placed,
+            weights,
+            zstats,
+            matchup_weight=matchup_weight,
+            matchup_by_role=matchup_by_role,
+        )
         if score is None:
             continue
         candidates.append((score, seed_row, placed, total))
@@ -1029,7 +1226,16 @@ def propose_for_weights(
     for i, selection in zip(selected_idx, selections, strict=True):
         _, seed_row, placed, total = candidates[i]
         placed, total = refine_draft(
-            conn, window, platform, placed, total, min_games, weights, zstats
+            conn,
+            window,
+            platform,
+            placed,
+            total,
+            min_games,
+            weights,
+            zstats,
+            matchup_weight=matchup_weight,
+            matchup_by_role=matchup_by_role,
         )
         final_set = _champion_set(placed)
         if final_set in seen_final:
@@ -1089,6 +1295,52 @@ def propose_drafts(
             )
         )
     return results
+
+
+def propose_counter_draft(
+    conn: psycopg.Connection,
+    window: str,
+    platform: str,
+    enemy: dict[str, int],
+    *,
+    weights: dict[str, float] | None = None,
+    min_games: int = MIN_GAMES_DEFAULT,
+) -> list[dict]:
+    """Mode "Contre cette équipe" (retour utilisateur 2026-08-11 : "il ne
+    faudrait pas juste prendre les counters à chaque rôle mais aussi que
+    les champions counter synergisent bien entre eux"). Calculé À LA
+    DEMANDE (pas matérialisé par le service 24/24, comme "Compose à partir
+    de tes champions"/"Personnalise tes poids") : `enemy` est une saisie
+    utilisateur, jamais connue à l'avance.
+
+    `enemy` : 0 à 5 entrées (rôle court → champion_id adverse), scouting
+    partiel autorisé — un rôle absent n'exclut aucun candidat, l'axe
+    matchup est simplement ignoré pour ce rôle (cf. `_combined_score`,
+    `_matchup_avg_z`). Avec `enemy` vide, dégénère proprement en un profil
+    pondéré synergy(0.30) + scaling/cc/gold/drakes(0.075 chacun) — le poids
+    matchup (0.40 par défaut) ne s'applique simplement nulle part.
+
+    `weights` : `DEFAULT_COUNTER_WEIGHTS` si `None` — la clé `"matchup"` en
+    est extraite ici (pas un axe `ARCHETYPE_STAT_COLUMNS`, `propose_for_weights`
+    ne doit jamais la voir), le reste suit le même moteur que les 6
+    archétypes fixes."""
+    weights = dict(weights) if weights is not None else dict(DEFAULT_COUNTER_WEIGHTS)
+    matchup_weight = weights.pop("matchup", 0.0)
+    pool, zstats = pool_and_zstats(conn, window, platform, min_games)
+    matchup_by_role = _load_matchup_by_role(conn, window, platform, enemy)
+    return propose_for_weights(
+        conn,
+        window,
+        platform,
+        pool,
+        zstats,
+        "counter",
+        "Contre cette équipe",
+        weights,
+        min_games=min_games,
+        matchup_weight=matchup_weight,
+        matchup_by_role=matchup_by_role,
+    )
 
 
 # --- Matérialisation (service 24/24) ---

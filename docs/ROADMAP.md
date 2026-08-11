@@ -1258,8 +1258,52 @@ gagner") avec les données déjà en place.
         (Mordekaiser/Bel'Veth/Twisted Fate/Ziggs/Poppy) avec son winrate
         (55.6 % [52.1–59.1 %]) et sa synergie (+37.9 %) inline.
 
-Phase 8 close pour l'instant (draft, insights, résilience, flex, poke)
-— prochaine idée à définir.
+- [x] **Indicateur de chargement global (2026-08-11, retour utilisateur : en
+      vue d'une présentation à des coachs/équipes e-sport, "le chargement
+      des pages peut être assez long et il n'y a pas d'indications que
+      c'est en train de charger")** : `#page-loading-bar` dans `base.html`,
+      cible de `hx-indicator` sur `<body hx-boost>` — hérité par TOUTE la
+      navigation boostée, y compris le tri des en-têtes de colonne (un lien
+      `<a>` classique, vérifié avant de coder : aucun câblage spécifique
+      nécessaire). Même animation que les indicateurs déjà en place sur les
+      formulaires draft (`draft-loadbar-slide`), pas de nouveau style.
+
+- [x] **Mode "Contre cette équipe" (2026-08-11, retour utilisateur : "il ne
+      faudrait pas juste prendre les counters à chaque rôle mais aussi que
+      les champions counter synergisent bien entre eux")** : nouvel axe
+      "matchup" (`score_matchup.delta` vs le pick adverse scouté du MÊME
+      rôle) injecté dans le moteur existant (`greedy_complete_draft`/
+      `refine_draft`/`full_draft_score`/`archetype_seed_order`, tous
+      étendus avec des paramètres `matchup_weight`/`matchup_by_role`
+      optionnels, défaut désactivé — les 6 archétypes fixes et "Personnalise
+      tes poids" n'y voient que du feu). Poids par défaut validés avec
+      l'utilisateur : matchup 40 %, synergy 30 %, scaling/cc/gold/drakes
+      7,5 % chacun (`DEFAULT_COUNTER_WEIGHTS`).
+      - **Exclusion partielle** (validé avec l'utilisateur avant de coder) :
+        contrairement aux axes de `weights` (candidat exclu si un axe
+        pondéré manque), l'absence de pick adverse scouté sur un rôle — ou
+        l'absence de donnée `score_matchup` pour ce matchup précis —
+        n'exclut JAMAIS le candidat, l'axe matchup est simplement ignoré
+        pour ce rôle. Scouting réel rarement complet à 5/5.
+      - Calculé À LA DEMANDE (`propose_counter_draft`), jamais matérialisé
+        par le service 24/24 — les picks adverses sont une saisie
+        utilisateur au moment de la requête, comme "Compose à partir de tes
+        champions"/"Personnalise tes poids".
+      - Validé par 3 tests d'intégration Postgres prouvant un comportement
+        RÉEL (pas juste "ça ne plante pas") : le matchup peut faire gagner
+        un candidat moins synergique quand il est assez pesé, retombe
+        proprement sur la synergie seule sans scouting, et un scouting
+        partiel (voire une absence totale de donnée matchup pour le rôle
+        scouté) ne bloque jamais la complétion — plus 1 test bout-en-bout
+        HTTP confirmant le même comportement à travers le formulaire web.
+
+Phase 8 de nouveau en pause (draft, insights, résilience, flex, poke,
+scouting) — prochaine idée à définir. Reste à faire si repris : traduction
+anglaise complète de l'interface (retour utilisateur 2026-08-11 : "je pense
+que le plus simple est de penser le site entièrement et uniquement en
+anglais, tous les coachs parlent anglais") — délibérément APRÈS ce mode
+scouting plutôt qu'avant, pour ne traduire les nouvelles chaînes qu'une
+seule fois.
 
 **Gap constaté en marge de cette révision (2026-07-19)** : `agg_matchup`/
 `score_matchup` étaient vides en prod alors que le code (`stats/aggregate.py`
