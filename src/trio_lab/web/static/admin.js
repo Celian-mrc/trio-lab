@@ -76,7 +76,7 @@ document.addEventListener("DOMContentLoaded", function () {
         labels: sizesData.labels,
         datasets: [
           {
-            label: "Taille",
+            label: "Size",
             data: sizesData.bytes.map(function (b) {
               return b / (1024 * 1024);
             }),
@@ -93,13 +93,13 @@ document.addEventListener("DOMContentLoaded", function () {
           tooltip: {
             callbacks: {
               label: function (ctx) {
-                return ctx.parsed.x.toFixed(1) + " Mo";
+                return ctx.parsed.x.toFixed(1) + " MB";
               },
             },
           },
         },
         scales: {
-          x: { grid: { color: border }, title: { display: true, text: "Mo", color: mutedFg } },
+          x: { grid: { color: border }, title: { display: true, text: "MB", color: mutedFg } },
           y: { grid: { display: false } },
         },
       },

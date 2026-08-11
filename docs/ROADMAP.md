@@ -1387,13 +1387,35 @@ gagner") avec les données déjà en place.
       `score_duo`) — `champion_cc_theoretical` (table de référence,
       immuable) volontairement conservée, sans coût à garder.
 
+- [x] **Traduction anglaise complète de l'interface (2026-08-12, retour
+      utilisateur 2026-08-11 : "je pense que le plus simple est de penser le
+      site entièrement et uniquement en anglais, tous les coachs parlent
+      anglais")** : délibérément APRÈS le mode "Contre cette équipe" et le
+      retrait du CC lissé, pour ne traduire les nouvelles chaînes qu'une
+      seule fois. Périmètre : les 13 templates, les libellés d'archétypes de
+      draft (`draft_suggestions.ARCHETYPES`), les conseils de draft
+      (`draft_advice`), les messages d'erreur HTTP renvoyés au client
+      (`app.py`), les dicts de libellés (win/gold factors, résilience,
+      axes d'archétypes) — PAS les docstrings/commentaires internes ni les
+      logs (convention CLAUDE.md : docstrings en français OK). Décision
+      actée avec l'utilisateur pour les tiers de fiabilité
+      (`faible`/`moyen`/`eleve`) : traduits seulement à l'affichage
+      (`app.TIER_LABELS`, nouveau global Jinja), les valeurs internes
+      (colonnes `score_duo.tier`/`score_trio.tier`, classes CSS
+      `.tier-*`, query params `min_tier`) restent inchangées — pas de
+      migration de données pour un changement purement cosmétique côté
+      utilisateur, même logique que l'axe interne "cc". Nettoyage au
+      passage : un bloc `<details>` obsolète expliquant l'ancien calcul
+      CC empirique/théorique/mélangé subsistait dans `trio.html`/`duo.html`
+      depuis le retrait du CC lissé (raté à l'époque) — supprimé ici.
+      Suite de tests mise à jour en conséquence (assertions sur texte
+      affiché). Les libellés d'archétypes déjà matérialisés en base
+      (`draft_suggestion.label`, écrits par le collector) restent en
+      français jusqu'au prochain cycle de rafraîchissement du service
+      24/24 après déploiement — auto-corrigé, pas d'action manuelle.
+
 Phase 8 de nouveau en pause (draft, insights, résilience, flex, poke,
-scouting) — prochaine idée à définir. Reste à faire si repris : traduction
-anglaise complète de l'interface (retour utilisateur 2026-08-11 : "je pense
-que le plus simple est de penser le site entièrement et uniquement en
-anglais, tous les coachs parlent anglais") — délibérément APRÈS ce mode
-scouting plutôt qu'avant, pour ne traduire les nouvelles chaînes qu'une
-seule fois.
+scouting) — prochaine idée à définir.
 
 **Gap constaté en marge de cette révision (2026-07-19)** : `agg_matchup`/
 `score_matchup` étaient vides en prod alors que le code (`stats/aggregate.py`

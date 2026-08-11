@@ -120,7 +120,7 @@ def test_refresh_materializes_composition_and_counter(pg_sync):
             wr_ci_high,
         ) = rows[0]
         assert archetype == "synergy"
-        assert label == "Meilleure synergie"
+        assert label == "Best synergy"
         assert (top, jgl, mid, bot, sup) == (4, 1, 2, 5, 3)
         assert total == pytest.approx(0.51, abs=1e-6)
         assert seed_roles == "jgl_mid"
@@ -287,7 +287,7 @@ def test_propose_drafts_range_archetype_prefers_long_range_duo(pg_sync):
     by_archetype = {r["archetype"]: r for r in results}
     assert "synergy" in by_archetype
     assert "range" in by_archetype
-    assert by_archetype["range"]["label"] == "Poke / zone"
+    assert by_archetype["range"]["label"] == "Poke / zone control"
     synergy_seed = by_archetype["synergy"]["seed_pairs"][0]
     range_seed = by_archetype["range"]["seed_pairs"][0]
     assert {synergy_seed["champ_a"], synergy_seed["champ_b"]} == {1, 2}

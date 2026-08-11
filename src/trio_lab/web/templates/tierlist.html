@@ -1,47 +1,47 @@
 {% extends "base.html" %}
 {% from "_threshold_filters.html" import threshold_fields %}
-{% block title %}Tier list des trios — Trio Lab{% endblock %}
+{% block title %}Trio tier list — Trio Lab{% endblock %}
 {% block content %}
-<h1>Tier list des trios jungle / mid / support</h1>
+<h1>Jungle / mid / support trio tier list</h1>
 
 <form method="get" action="/" class="filters">
-  <label>Fenêtre
+  <label>Window
     <select name="window">
       {% for w in windows %}<option value="{{ w }}" {{ 'selected' if w == window }}>{{ w }}</option>{% endfor %}
     </select>
   </label>
-  <label>Région
+  <label>Region
     <select name="platform">
-      {% for p in platforms %}<option value="{{ p }}" {{ 'selected' if p == platform }}>{{ 'toutes régions' if p == 'all' else p }}</option>{% endfor %}
+      {% for p in platforms %}<option value="{{ p }}" {{ 'selected' if p == platform }}>{{ 'all regions' if p == 'all' else p }}</option>{% endfor %}
     </select>
   </label>
   <label>Jungle
-    <input name="jgl" list="champion-names" value="{{ jgl_search }}" placeholder="tous">
+    <input name="jgl" list="champion-names" value="{{ jgl_search }}" placeholder="any">
   </label>
   <label>Mid
-    <input name="mid" list="champion-names" value="{{ mid_search }}" placeholder="tous">
+    <input name="mid" list="champion-names" value="{{ mid_search }}" placeholder="any">
   </label>
   <label>Support
-    <input name="sup" list="champion-names" value="{{ sup_search }}" placeholder="tous">
+    <input name="sup" list="champion-names" value="{{ sup_search }}" placeholder="any">
   </label>
   <datalist id="champion-names">
     {% for name in champion_names %}<option value="{{ name }}">{% endfor %}
   </datalist>
-  <label>Games min. <input type="number" name="min_games" value="{{ min_games }}" min="0" step="1"></label>
-  <label>Fiabilité min.
+  <label>Min. games <input type="number" name="min_games" value="{{ min_games }}" min="0" step="1"></label>
+  <label>Min. reliability
     <select name="min_tier">
       {% for t in ('faible', 'moyen', 'eleve') %}
-      <option value="{{ t }}" {{ 'selected' if min_tier == t }}>{{ t }}</option>
+      <option value="{{ t }}" {{ 'selected' if min_tier == t }}>{{ TIER_LABELS[t] }}</option>
       {% endfor %}
     </select>
   </label>
   {{ threshold_fields(min_values, max_values) }}
   <input type="hidden" name="sort" value="{{ sort }}">
   <input type="hidden" name="dir" value="{{ direction }}">
-  <button type="submit">Filtrer</button>
+  <button type="submit">Filter</button>
 </form>
 
-<p class="meta">{{ total }} trios — page {{ page }} / {{ ((total - 1) // per_page) + 1 if total else 1 }} — cliquer un en-tête pour trier, re-cliquer pour inverser, Maj-clic pour ajouter un critère de tri supplémentaire (comme Excel/Sheets)</p>
+<p class="meta">{{ total }} trios — page {{ page }} / {{ ((total - 1) // per_page) + 1 if total else 1 }} — click a header to sort, click again to reverse, Shift-click to add another sort criterion (like Excel/Sheets)</p>
 
 {% macro sort_link(key, label) %}
 {% set idx = sorts.index(key) if key in sorts else -1 %}
@@ -54,24 +54,24 @@
     <tr>
       <th class="col-combo">Trio</th>
       <th>{{ sort_link('games', 'Games') }}</th>
-      <th data-tooltip="Intervalle de Wilson à 95 % sous le winrate" aria-label="Intervalle de Wilson à 95 % sous le winrate">{{ sort_link('wr', 'WR') }}</th>
-      <th>{{ sort_link('synergy', 'Synergie') }}</th>
+      <th data-tooltip="95% Wilson interval under the winrate" aria-label="95% Wilson interval under the winrate">{{ sort_link('wr', 'WR') }}</th>
+      <th>{{ sort_link('synergy', 'Synergy') }}</th>
       <th>
         <span class="gold-header">
           <span class="gold-label">Gold</span>
           <span class="gold-values">{{ sort_link('gold5', '@5') }}{{ sort_link('gold10', '@10') }}{{ sort_link('gold15', '@15') }}</span>
         </span>
       </th>
-      <th data-tooltip="Diff. de gold@15 de l’ÉQUIPE ENTIÈRE (5 joueurs, pas seulement le trio) — disponible seulement sur les patchs récents, colonne source (match_role_stats) sans historique profond" aria-label="Diff. de gold@15 de l’équipe entière (5 joueurs) — disponible seulement sur les patchs récents">Gold@15 équipe</th>
-      <th data-tooltip="Score de vision du trio par minute de game (moyenne) — pas cumulé, pour ne pas favoriser les trios aux games plus longues" aria-label="Score de vision du trio par minute de game (moyenne) — pas cumulé, pour ne pas favoriser les trios aux games plus longues">{{ sort_link('vision', 'Vision/min') }}</th>
-      <th data-tooltip="Drakes pris par l’équipe, par minute de game (moyenne) — pas cumulé" aria-label="Drakes pris par l’équipe, par minute de game (moyenne) — pas cumulé">{{ sort_link('drakes', 'Drakes/min') }}</th>
-      <th data-tooltip="Taux d’obtention de l’âme" aria-label="Taux d’obtention de l’âme">{{ sort_link('soul', 'Âme') }}</th>
-      <th data-tooltip="Taux de prise du héraut" aria-label="Taux de prise du héraut">{{ sort_link('herald', 'Héraut') }}</th>
-      <th data-tooltip="Taux de première tour" aria-label="Taux de première tour">{{ sort_link('tower1', '1re tour') }}</th>
-      <th data-tooltip="CC infligé mesuré en jeu, cumul trio (Σ timeCCingOthers), par minute de game." aria-label="CC infligé mesuré en jeu, cumul trio (Σ timeCCingOthers), par minute de game.">{{ sort_link('cc', 'CC/min') }}</th>
-      <th data-tooltip="Pente du winrate selon la durée de la game (tranches de 5 min) : positif = ce trio gagne plus souvent en game longue, négatif = il gagne plus souvent en game courte. Mesuré uniquement (pas de prédiction si peu de games)." aria-label="Pente du winrate selon la durée de la game (tranches de 5 min) : positif = ce trio gagne plus souvent en game longue, négatif = il gagne plus souvent en game courte. Mesuré uniquement (pas de prédiction si peu de games).">{{ sort_link('scaling', 'Scaling') }}</th>
-      <th data-tooltip="Portée théorique (attaques + sorts) sur 100 — jamais mesuré en jeu, purement calculé depuis les caractéristiques des champions (aucune stat Riot ne mesure la distance de poke réelle)." aria-label="Portée théorique sur 100 — jamais mesuré en jeu, purement calculé depuis les caractéristiques des champions.">{{ sort_link('range', 'Portée') }}</th>
-      <th>Fiabilité</th>
+      <th data-tooltip="Gold@15 diff. for the WHOLE TEAM (5 players, not just the trio) — only available on recent patches, source column (match_role_stats) has no deep history" aria-label="Gold@15 diff. for the whole team (5 players) — only available on recent patches">Team Gold@15</th>
+      <th data-tooltip="Trio vision score per minute of game (average) — not cumulative, so as not to favor trios with longer games" aria-label="Trio vision score per minute of game (average) — not cumulative, so as not to favor trios with longer games">{{ sort_link('vision', 'Vision/min') }}</th>
+      <th data-tooltip="Drakes taken by the team, per minute of game (average) — not cumulative" aria-label="Drakes taken by the team, per minute of game (average) — not cumulative">{{ sort_link('drakes', 'Drakes/min') }}</th>
+      <th data-tooltip="Soul acquisition rate" aria-label="Soul acquisition rate">{{ sort_link('soul', 'Soul') }}</th>
+      <th data-tooltip="Herald take rate" aria-label="Herald take rate">{{ sort_link('herald', 'Herald') }}</th>
+      <th data-tooltip="First tower rate" aria-label="First tower rate">{{ sort_link('tower1', '1st tower') }}</th>
+      <th data-tooltip="CC inflicted, measured in-game, trio total (Σ timeCCingOthers), per minute of game." aria-label="CC inflicted, measured in-game, trio total (Σ timeCCingOthers), per minute of game.">{{ sort_link('cc', 'CC/min') }}</th>
+      <th data-tooltip="Winrate slope by game duration (5 min buckets): positive = this trio wins more often in long games, negative = it wins more often in short games. Measured only (no prediction with few games)." aria-label="Winrate slope by game duration (5 min buckets): positive = this trio wins more often in long games, negative = it wins more often in short games. Measured only (no prediction with few games).">{{ sort_link('scaling', 'Scaling') }}</th>
+      <th data-tooltip="Theoretical range (auto-attacks + spells) out of 100 — never measured in-game, purely computed from champion characteristics (no Riot stat measures actual poke distance)." aria-label="Theoretical range out of 100 — never measured in-game, purely computed from champion characteristics.">{{ sort_link('range', 'Range') }}</th>
+      <th>Reliability</th>
     </tr>
   </thead>
   <tbody>
@@ -107,17 +107,17 @@
       <td>{{ r.cc_time_s | num(2) }}</td>
       <td class="{{ 'pos' if r.scaling and r.scaling > 0 else 'neg' if r.scaling and r.scaling < 0 }}">{{ r.scaling | signed_pct(2) }}</td>
       <td>{{ r.range_theoretical_pct | pct100 }}</td>
-      <td><span class="tier tier-{{ r.tier }}">{{ r.tier }}</span></td>
+      <td><span class="tier tier-{{ r.tier }}">{{ TIER_LABELS[r.tier] }}</span></td>
     </tr>
     {% else %}
-    <tr><td colspan="16" class="empty">Aucun trio ne correspond aux filtres.</td></tr>
+    <tr><td colspan="16" class="empty">No trio matches the filters.</td></tr>
     {% endfor %}
   </tbody>
 </table>
 
 <nav class="pagination">
-  {% if page > 1 %}<a href="/?{{ filters_qs }}&sort={{ sort }}&dir={{ direction }}&page={{ page - 1 }}">← précédente</a>{% endif %}
-  {% if page * per_page < total %}<a href="/?{{ filters_qs }}&sort={{ sort }}&dir={{ direction }}&page={{ page + 1 }}">suivante →</a>{% endif %}
+  {% if page > 1 %}<a href="/?{{ filters_qs }}&sort={{ sort }}&dir={{ direction }}&page={{ page - 1 }}">← previous</a>{% endif %}
+  {% if page * per_page < total %}<a href="/?{{ filters_qs }}&sort={{ sort }}&dir={{ direction }}&page={{ page + 1 }}">next →</a>{% endif %}
 </nav>
 
 {% include "_legend.html" %}

@@ -41,18 +41,24 @@ logger = logging.getLogger(__name__)
 _HERE = Path(__file__).resolve().parent
 
 ROLE_LABELS = {"jgl": "Jungle", "mid": "Mid", "sup": "Support", "top": "Top", "bot": "ADC"}
+# Affichage anglais des tiers de fiabilité — les valeurs internes
+# (score_duo.tier/score_trio.tier, classes CSS .tier-*, query params
+# min_tier) restent en français (faible/moyen/eleve) : pas de migration de
+# données pour un changement purement cosmétique, retour utilisateur
+# 2026-08-12 ("il faut juste que l'affichage soit en anglais").
+TIER_LABELS = {"faible": "low", "moyen": "medium", "eleve": "high"}
 # Libellés lisibles des axes d'archétype (synergy.draft_suggestions.
 # ARCHETYPE_STAT_COLUMNS) — retour utilisateur 2026-07-26 : afficher le
 # poids de chaque métrique sur les cartes de composition, pas seulement le
 # nom de l'archétype.
 DRAFT_ARCHETYPE_AXIS_LABELS = {
-    "synergy": "Synergie",
+    "synergy": "Synergy",
     "scaling": "Scaling",
     "cc": "CC",
     "gold": "Gold@15",
     "drakes": "Drakes",
-    "soul": "Âme",
-    "range": "Portée",
+    "soul": "Soul",
+    "range": "Range",
     "wr": "Winrate",
 }
 # Ordre d'affichage des champs du formulaire "Personnalise tes poids"
@@ -100,31 +106,31 @@ _DRAFT_ROLES_BY_PAIR = {frozenset(v): k for k, v in DUO_ROLE_KEYS.items()}
 # utilisateur + audit) : résultats de fin de partie, pas bornés à 15 min —
 # cf. docstring synergy/win_factors.py.
 WIN_FACTOR_LABELS = {
-    "team_gold_diff_15": "Avantage gold d'ÉQUIPE à 15 min",
-    "team_cc_per_min": "CC d'équipe / min",
-    "team_vision_per_min": "Vision d'équipe / min",
-    "jgl_cs_diff_15": "CS jungle vs adverse à 15 min",
+    "team_gold_diff_15": "TEAM gold advantage at 15 min",
+    "team_cc_per_min": "Team CC / min",
+    "team_vision_per_min": "Team vision / min",
+    "jgl_cs_diff_15": "Jungle CS vs enemy at 15 min",
 }
 # Libellés lisibles pour la section "qu'est-ce qui construit l'avantage au
 # gold" de /insights (synergy.gold_factors.FEATURES).
 GOLD_FACTOR_LABELS = {
-    "team_baseline_wr": "Force brute des picks (WR baseline)",
-    "team_matchup_delta": "Avantage de matchup (vs même rôle adverse)",
-    "team_trio_synergy": "Synergie du trio jungle/mid/support",
-    "jgl_cs_diff_15": "CS jungle vs adverse à 15 min",
-    "first_blood_team": "Premier sang",
-    "herald_taken_pre15": "Héraut pris avant 15 min",
-    "dragons_taken_pre15": "Dragons pris avant 15 min",
-    "wards_pre15": "Wards posées/détruites avant 15 min",
+    "team_baseline_wr": "Raw pick strength (baseline WR)",
+    "team_matchup_delta": "Matchup advantage (vs same enemy role)",
+    "team_trio_synergy": "Jungle/mid/support trio synergy",
+    "jgl_cs_diff_15": "Jungle CS vs enemy at 15 min",
+    "first_blood_team": "First blood",
+    "herald_taken_pre15": "Herald taken before 15 min",
+    "dragons_taken_pre15": "Dragons taken before 15 min",
+    "wards_pre15": "Wards placed/destroyed before 15 min",
 }
 # Profil de résilience par champion (Phase 8, /resilience, retour
 # utilisateur 2026-07-20) : mêmes 3 facteurs que synergy.resilience.FACTORS,
 # choisis pour leur signal réel et leur indépendance mutuelle (corrélations
 # de Pearson vérifiées en session).
 RESILIENCE_FACTOR_LABELS = {
-    "team_gold_diff_15": "Avantage gold d'équipe à 15 min",
-    "jgl_cs_diff_15": "CS jungle d'équipe à 15 min",
-    "first_blood_team": "Premier sang d'équipe",
+    "team_gold_diff_15": "Team gold advantage at 15 min",
+    "jgl_cs_diff_15": "Team jungle CS at 15 min",
+    "first_blood_team": "Team first blood",
 }
 # Seuil de classement "en avance"/"en retard" par facteur — affiché sur la
 # page (retour utilisateur 2026-07-20 : le seuil était invisible). Doit
@@ -132,11 +138,10 @@ RESILIENCE_FACTOR_LABELS = {
 # `_is_ahead` (pas de dépendance croisée : ce module web n'importe pas le
 # module de calcul batch, même séparation que les libellés au-dessus).
 RESILIENCE_FACTOR_THRESHOLDS = {
-    "team_gold_diff_15": "en avance = plus de 1000 gold d'écart, en retard = moins de "
-    "-1000 gold — entre les deux (zone neutre), la game ne compte ni pour ni contre",
-    "jgl_cs_diff_15": "en avance = au moins 1 CS jungle d'écart, en retard = déficit "
-    "(pas de zone neutre)",
-    "first_blood_team": "en avance = équipe qui a le premier sang, en retard = l'adverse",
+    "team_gold_diff_15": "ahead = more than 1000 gold difference, behind = less than "
+    "-1000 gold — in between (neutral zone), the game counts for neither",
+    "jgl_cs_diff_15": "ahead = at least 1 jungle CS difference, behind = deficit (no neutral zone)",
+    "first_blood_team": "ahead = team with first blood, behind = the enemy team",
 }
 # En dessous de ce nombre de games d'un côté (avance OU retard), l'écart de
 # WR est trop bruité pour être lu comme un signal — exclu, pas juste grisé
@@ -216,7 +221,7 @@ def require_admin(credentials: HTTPBasicCredentials = Depends(_admin_security)) 
     )
     if not valid:
         raise HTTPException(
-            status_code=401, detail="Non autorisé", headers={"WWW-Authenticate": "Basic"}
+            status_code=401, detail="Unauthorized", headers={"WWW-Authenticate": "Basic"}
         )
     return credentials.username
 
@@ -288,24 +293,24 @@ def _fmt_bytes(value: int | None) -> str:
 
 
 def _fmt_since(value: datetime | None) -> str:
-    """Ancienneté relative d'un horodatage (« il y a 4 min »).
+    """Ancienneté relative d'un horodatage (« 4 min ago »).
 
-    Pas d'apostrophe dans le texte (ex. « à l'instant ») : Jinja l'échapperait
-    en `&#39;` dans le HTML rendu, ce qui casse toute comparaison de chaîne
-    littérale côté tests — vécu.
+    Pas d'apostrophe dans le texte : Jinja l'échapperait en `&#39;` dans le
+    HTML rendu, ce qui casse toute comparaison de chaîne littérale côté
+    tests — vécu.
     """
     if value is None:
-        return "jamais"
+        return "never"
     delta = datetime.now(UTC) - value
     minutes = int(delta.total_seconds() // 60)
     if minutes < 1:
-        return "il y a quelques secondes"
+        return "a few seconds ago"
     if minutes < 60:
-        return f"il y a {minutes} min"
+        return f"{minutes} min ago"
     hours = minutes // 60
     if hours < 24:
-        return f"il y a {hours} h"
-    return f"il y a {hours // 24} j"
+        return f"{hours} h ago"
+    return f"{hours // 24} d ago"
 
 
 def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
@@ -403,6 +408,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
 
     templates.env.globals["champ"] = champ
     templates.env.globals["ROLE_LABELS"] = ROLE_LABELS
+    templates.env.globals["TIER_LABELS"] = TIER_LABELS
     templates.env.globals["ROLE_TO_TEAM_POSITION"] = ROLE_TO_TEAM_POSITION
     templates.env.globals["DUO_ROLE_KEYS"] = DUO_ROLE_KEYS
     templates.env.globals["RIOT_ROLE_LABELS"] = RIOT_ROLE_LABELS
@@ -422,7 +428,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             return int(text)
         found = champions.name_lookup(champ_index()).get(text.casefold())
         if found is None:
-            raise HTTPException(404, f"champion inconnu : {text}")
+            raise HTTPException(404, f"unknown champion: {text}")
         return found
 
     _MAX_SORT_LEVELS = 4
@@ -438,13 +444,13 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         sorts = [s for s in sort_param.split(",") if s]
         dirs = [d for d in dir_param.split(",") if d]
         if not sorts or len(sorts) != len(dirs) or len(sorts) > _MAX_SORT_LEVELS:
-            raise HTTPException(404, f"tri invalide : sort={sort_param!r} dir={dir_param!r}")
+            raise HTTPException(404, f"invalid sort: sort={sort_param!r} dir={dir_param!r}")
         for s in sorts:
             if s not in valid:
-                raise HTTPException(404, f"tri inconnu : {s!r}")
+                raise HTTPException(404, f"unknown sort: {s!r}")
         for d in dirs:
             if d not in queries.SORT_DIRECTIONS:
-                raise HTTPException(404, f"sens de tri inconnu : {d!r}")
+                raise HTTPException(404, f"unknown sort direction: {d!r}")
         return sorts, dirs
 
     def _parse_optional_float(
@@ -459,11 +465,11 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         try:
             parsed = float(value)
         except ValueError:
-            raise HTTPException(404, f"valeur numérique invalide : {value!r}") from None
+            raise HTTPException(404, f"invalid numeric value: {value!r}") from None
         if ge is not None and parsed < ge:
-            raise HTTPException(404, f"valeur trop basse : {value!r}")
+            raise HTTPException(404, f"value too low: {value!r}")
         if le is not None and parsed > le:
-            raise HTTPException(404, f"valeur trop haute : {value!r}")
+            raise HTTPException(404, f"value too high: {value!r}")
         return parsed
 
     # Filtres par seuil "au moins X", une entrée par colonne triable sauf
@@ -521,16 +527,16 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         """(fenêtre, plateforme) validées + le contexte commun des templates."""
         known = queries.available_windows(conn)
         if not known:
-            raise HTTPException(503, "aucun score matérialisé (lancer python -m trio_lab.synergy)")
+            raise HTTPException(503, "no materialized scores (run python -m trio_lab.synergy)")
         if window is None:
             window = known[0]
         elif window not in known:
-            raise HTTPException(404, f"fenêtre non matérialisée : {window}")
+            raise HTTPException(404, f"window not materialized: {window}")
         platforms = queries.available_platforms(conn, window)
         if platform is None:
             platform = platforms[0]
         elif platform not in platforms:
-            raise HTTPException(404, f"plateforme absente de la fenêtre : {platform}")
+            raise HTTPException(404, f"platform not present in window: {platform}")
         freshness = queries.window_freshness(conn, window)
         context = {
             "window": window,
@@ -698,7 +704,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
     def _trio_detail(conn, window: str, platform: str, jgl: int, mid: int, sup: int) -> dict:
         score = queries.trio_score(conn, window, platform, jgl, mid, sup)
         if score is None:
-            raise HTTPException(404, "trio non scoré sur cette fenêtre/plateforme")
+            raise HTTPException(404, "trio not scored for this window/platform")
         patch_window = make_window(window.split("+"))
         weights = patch_window.weights_for((jgl, mid, sup))
         rows = queries.trio_match_rows(
@@ -742,7 +748,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
     ) -> dict:
         score = queries.duo_score(conn, window, platform, roles, champ_a, champ_b)
         if score is None:
-            raise HTTPException(404, "duo non scoré sur cette fenêtre/plateforme")
+            raise HTTPException(404, "duo not scored for this window/platform")
         patch_window = make_window(window.split("+"))
         weights = patch_window.weights_for((champ_a, champ_b))
         role_a, role_b = DUO_ROLES[roles]
@@ -793,7 +799,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         platform: str | None = None,
     ):
         if roles not in queries.DUO_ROLES:
-            raise HTTPException(404, f"roles inconnu : {roles!r}")
+            raise HTTPException(404, f"unknown roles: {roles!r}")
         with request.app.state.pool.connection() as conn:
             window, platform, context = resolve_context(conn, window, platform)
             detail = _duo_detail(conn, window, platform, roles, champ_a, champ_b)
@@ -809,7 +815,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             conn, patches, platform, ROLE_TO_TEAM_POSITION[role], champion_id, weights
         )
         if baseline is None:
-            raise HTTPException(404, "champion non scoré dans ce rôle sur cette fenêtre")
+            raise HTTPException(404, "champion not scored in this role for this window")
         partners = {
             partner_role: queries.champion_best_partners(
                 conn, window, platform, roles, role, champion_id, CHAMPION_PARTNERS_SHOWN
@@ -851,7 +857,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         platform: str | None = None,
     ):
         if role not in ROLE_TO_TEAM_POSITION:
-            raise HTTPException(404, f"rôle inconnu : {role!r}")
+            raise HTTPException(404, f"unknown role: {role!r}")
         with request.app.state.pool.connection() as conn:
             window, platform, context = resolve_context(conn, window, platform)
             detail = _champion_detail(conn, window, platform, role, champion_id)
@@ -1073,12 +1079,12 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 for axis in CUSTOM_WEIGHT_AXES
             }
         except ValueError:
-            return None, "Poids invalides : utilise des nombres."
+            return None, "Invalid weights: use numbers."
         if any(v < 0 for v in values.values()):
-            return None, "Les poids ne peuvent pas être négatifs."
+            return None, "Weights cannot be negative."
         total = sum(values.values())
         if abs(total - 100.0) > 0.5:
-            return None, f"La somme des poids doit faire 100 % (actuellement {total:.0f} %)."
+            return None, f"Weights must add up to 100% (currently {total:.0f}%)."
         return {axis: v / 100.0 for axis, v in values.items()}, None
 
     @app.get("/draft", response_class=HTMLResponse)
@@ -1245,7 +1251,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                     pool,
                     zstats,
                     "custom",
-                    "Personnalisé",
+                    "Custom",
                     custom_weights,
                     min_games=w_min_games,
                 )
@@ -1255,8 +1261,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                     )[0]
                 else:
                     custom_error = (
-                        "Pas assez de données fiables pour cette répartition de poids —"
-                        " essaie d'autres valeurs."
+                        "Not enough reliable data for this weight split — try other values."
                     )
 
             # "Contre cette équipe" (retour utilisateur 2026-08-11) : calcul
@@ -1277,8 +1282,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                     )[0]
                 else:
                     counter_error = (
-                        "Pas assez de données fiables contre ces picks —"
-                        " essaie d'autres champions ou baisse le seuil de fiabilité."
+                        "Not enough reliable data against these picks —"
+                        " try other champions or lower the reliability threshold."
                     )
 
             # Formulaire soumis dès que 1 champion ou un archétype est fourni
@@ -1295,22 +1300,22 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                     and archetype != "custom"
                     and archetype not in draft_suggestions.ARCHETYPES
                 ):
-                    raise HTTPException(404, f"archétype inconnu : {archetype!r}")
+                    raise HTTPException(404, f"unknown archetype: {archetype!r}")
                 if not seed_picks:
-                    manual_error = "Choisis au moins 1 champion avant de compléter la draft."
+                    manual_error = "Pick at least 1 champion before completing the draft."
                 elif archetype == "custom" and manual_custom_weights is None:
                     # "Personnalisé" choisi mais poids absents/invalides —
                     # jamais un plantage silencieux (retour utilisateur
                     # 2026-07-28).
                     manual_error = manual_custom_error or (
-                        "Renseigne des poids qui totalisent 100 % ci-dessus."
+                        "Enter weights that add up to 100% above."
                     )
                 else:
                     _, zstats = _get_pool_zstats(cw_min_games)
                     keys = [archetype] if archetype else list(draft_suggestions.ARCHETYPES)
                     for key in keys:
                         if key == "custom":
-                            label, weights = "Personnalisé", manual_custom_weights
+                            label, weights = "Custom", manual_custom_weights
                         else:
                             label = draft_suggestions.ARCHETYPES[key]["label"]
                             weights = draft_suggestions.ARCHETYPES[key]["weights"]
@@ -1329,8 +1334,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                             manual_results.append(_build_draft_result(raw))
                     if not manual_results:
                         manual_error = (
-                            "Pas assez de données fiables pour compléter cette composition —"
-                            " essaie d'autres champions ou un autre archétype."
+                            "Not enough reliable data to complete this composition —"
+                            " try other champions or a different archetype."
                         )
 
         def _draft_url(**overrides: str) -> str:
@@ -1600,9 +1605,9 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         max_wr_behind: str | None = None,
     ):
         if factor not in RESILIENCE_FACTOR_LABELS:
-            raise HTTPException(404, f"facteur inconnu : {factor!r}")
+            raise HTTPException(404, f"unknown factor: {factor!r}")
         if role and role not in RIOT_ROLE_LABELS:
-            raise HTTPException(404, f"rôle inconnu : {role!r}")
+            raise HTTPException(404, f"unknown role: {role!r}")
         # Un <select> vide envoie `role=` (chaîne vide), pas une clé absente —
         # `champion_resilience` teste `role is not None` : sans cette
         # normalisation, choisir "tous" (valeur "") ajoutait silencieusement
@@ -1782,7 +1787,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             if abs(gold_deviation) < FLEX_MIN_DEVIATION:
                 continue  # profil ~= la moyenne du rôle : pas un vrai signal hybride
             name = champ(cid).name
-            direction = "au-dessus" if gold_deviation > 0 else "en dessous"
+            direction = "above" if gold_deviation > 0 else "below"
             base_dmg_per_gold = base["avg_dmg_per_gold"]
             dmg_deviation = (
                 profile["avg_dmg_per_gold"] / base_dmg_per_gold - 1
@@ -1811,9 +1816,9 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                     "wr_secondary": wr_secondary,
                     "wr_deviation": wr_deviation,
                     "sentence": (
-                        f"{name} joue {RIOT_ROLE_LABELS[row_role]} dans {100 * share:.0f} %"
-                        f" de ses games ({games}/{totals[cid]}) — profil de gold"
-                        f" {100 * abs(gold_deviation):.0f} % {direction} de la moyenne du rôle."
+                        f"{name} plays {RIOT_ROLE_LABELS[row_role]} in {100 * share:.0f}%"
+                        f" of their games ({games}/{totals[cid]}) — gold profile"
+                        f" {100 * abs(gold_deviation):.0f}% {direction} the role average."
                     ),
                 }
             )
@@ -1829,7 +1834,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         dir: str = "desc",
     ):
         if role and role not in RIOT_ROLE_LABELS:
-            raise HTTPException(404, f"rôle inconnu : {role!r}")
+            raise HTTPException(404, f"unknown role: {role!r}")
         sort = sort if sort in _FLEX_SORT_KEYS else "deviation"
         with request.app.state.pool.connection() as conn:
             window, platform, context = resolve_context(conn, window, platform)
@@ -2040,7 +2045,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         platform: str | None = None,
     ):
         if roles not in queries.DUO_ROLES:
-            raise HTTPException(404, f"roles inconnu : {roles!r}")
+            raise HTTPException(404, f"unknown roles: {roles!r}")
         with request.app.state.pool.connection() as conn:
             window, platform, _ = resolve_context(conn, window, platform)
             detail = _duo_detail(conn, window, platform, roles, champ_a, champ_b)

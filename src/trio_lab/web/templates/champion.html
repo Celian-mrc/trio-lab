@@ -8,29 +8,29 @@
     {{ c.name }} <small>{{ ROLE_LABELS[role] }}</small>
   </span>
 </h1>
-<p class="meta">Winrate individuel toutes compositions confondues (même fenêtre) — pas les stats
-  d'un trio ou duo précis.</p>
+<p class="meta">Individual winrate across all compositions (same window) — not the stats
+  of a specific trio or duo.</p>
 
 <section class="cards">
   <div class="card"><h3>Winrate</h3><p class="big-number">{{ baseline.wr | pct }}</p>
     <p class="meta">{{ baseline.games }} games</p></div>
   <div class="card"><h3>CC</h3>
-    <p class="big-number" data-tooltip="Mesuré directement sur les games jouées (Σ timeCCingOthers), par minute de game." aria-label="Mesuré directement sur les games jouées (Σ timeCCingOthers), par minute de game.">{{ stats.cc_time_s | num(2) }}</p>
-    <p class="meta">s/min, mesuré en jeu</p></div>
+    <p class="big-number" data-tooltip="Measured directly on played games (Σ timeCCingOthers), per minute of game." aria-label="Measured directly on played games (Σ timeCCingOthers), per minute of game.">{{ stats.cc_time_s | num(2) }}</p>
+    <p class="meta">s/min, measured in-game</p></div>
   <div class="card"><h3>Tempo</h3>
     <p class="big-number">{{ stats.avg_duration_win_s | duration }} <small>win</small>
        / {{ stats.avg_duration_loss_s | duration }} <small>loss</small></p>
-    <p class="meta">durée moyenne des parties</p></div>
+    <p class="meta">average game duration</p></div>
 </section>
 
 <section class="columns">
   {% for partner_role, rows in partners.items() %}
   <div>
-    <h2>Meilleurs {{ {'jgl': 'junglers', 'mid': 'mids', 'sup': 'supports'}[partner_role] }}</h2>
-    <p class="meta">Fiabilité moyenne ou élevée uniquement (≥ 50 games pondérées) — un duo à 1-2
-      games n'apparaît pas ici même avec une synergie extrême.</p>
+    <h2>Best {{ {'jgl': 'junglers', 'mid': 'mids', 'sup': 'supports'}[partner_role] }}</h2>
+    <p class="meta">Medium or high reliability only (≥ 50 weighted games) — a duo with 1-2
+      games doesn't appear here even with an extreme synergy.</p>
     <table class="narrow">
-      <thead><tr><th>Champion</th><th>Games</th><th>WR</th><th>Synergie</th><th>Fiabilité</th></tr></thead>
+      <thead><tr><th>Champion</th><th>Games</th><th>WR</th><th>Synergy</th><th>Reliability</th></tr></thead>
       <tbody>
         {% for r in rows %}
         {% set p = champ(r.partner_champion) %}
@@ -43,10 +43,10 @@
           <td>{{ r.games }}</td>
           <td>{{ r.wr | pct }}</td>
           <td class="{{ 'pos' if r.synergy > 0 else 'neg' if r.synergy < 0 }}">{{ r.synergy | signed_pct }}</td>
-          <td><span class="tier tier-{{ r.tier }}">{{ r.tier }}</span></td>
+          <td><span class="tier tier-{{ r.tier }}">{{ TIER_LABELS[r.tier] }}</span></td>
         </tr>
         {% else %}
-        <tr><td colspan="5" class="empty">Aucun duo scoré.</td></tr>
+        <tr><td colspan="5" class="empty">No duo scored.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -55,10 +55,10 @@
 </section>
 
 <section>
-  <h2>Meilleurs trios</h2>
+  <h2>Best trios</h2>
   <table class="data">
     <thead>
-      <tr><th class="col-combo">Trio</th><th>Games</th><th>WR</th><th>Synergie</th><th>Fiabilité</th></tr>
+      <tr><th class="col-combo">Trio</th><th>Games</th><th>WR</th><th>Synergy</th><th>Reliability</th></tr>
     </thead>
     <tbody>
       {% for t in best_trios %}
@@ -74,10 +74,10 @@
         <td>{{ t.games }}</td>
         <td>{{ t.wr | pct }}</td>
         <td class="{{ 'pos' if t.synergy > 0 else 'neg' if t.synergy < 0 }}">{{ t.synergy | signed_pct }}</td>
-        <td><span class="tier tier-{{ t.tier }}">{{ t.tier }}</span></td>
+        <td><span class="tier tier-{{ t.tier }}">{{ TIER_LABELS[t.tier] }}</span></td>
       </tr>
       {% else %}
-      <tr><td colspan="5" class="empty">Aucun trio scoré pour ce champion dans ce rôle.</td></tr>
+      <tr><td colspan="5" class="empty">No trio scored for this champion in this role.</td></tr>
       {% endfor %}
     </tbody>
   </table>

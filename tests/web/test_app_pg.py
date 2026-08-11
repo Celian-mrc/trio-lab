@@ -392,7 +392,7 @@ def test_html_pages_render(pg_sync, client):
     assert "Scaling" in home.text
     detail = client.get("/trio/1/2/3")
     assert detail.status_code == 200
-    assert "CC par membre" in detail.text
+    assert "CC per member" in detail.text
     assert "+1.50 %" in detail.text  # card Scaling (0.015 → signed_pct(2))
     assert "/duo/jgl_mid/1/2" in detail.text  # lien depuis les duos internes
     duos = client.get("/duos")
@@ -401,15 +401,15 @@ def test_html_pages_render(pg_sync, client):
     assert "/duo/jgl_mid/1/2" in duos.text  # lien vers la page détail duo
     duo_detail = client.get("/duo/jgl_mid/1/2")
     assert duo_detail.status_code == 200
-    assert "Meilleurs supports" in duo_detail.text  # roles=jgl_mid → 3e rôle libre = support
+    assert "Best supports" in duo_detail.text  # roles=jgl_mid → 3e rôle libre = support
     # Avantage gold/Objectifs/Combat/Vision affichés aussi sur la page duo
     # (retour utilisateur, 2026-07-19) : stats d'équipe dans les games de ce
     # duo pour les 3 paires historiques (via match_trio_stats, comme le trio),
     # vraiment décomposées à 2 membres pour les 7 nouvelles (match_role_stats).
-    assert "Avantage gold du trio" in duo_detail.text  # roles=jgl_mid → paire historique
-    assert "Objectifs" in duo_detail.text
+    assert "Trio gold advantage" in duo_detail.text  # roles=jgl_mid → paire historique
+    assert "Objectives" in duo_detail.text
     assert "Combat" in duo_detail.text
-    assert "Héraut" in duo_detail.text
+    assert "Herald" in duo_detail.text
 
 
 def test_tierlist_and_duos_pages_show_team_gold15(pg_sync, client):
@@ -424,10 +424,10 @@ def test_tierlist_and_duos_pages_show_team_gold15(pg_sync, client):
     )
     pg_sync.execute("UPDATE score_duo SET team_gold_diff_15 = 210 WHERE roles = 'jgl_mid'")
     home = client.get("/")
-    assert "Gold@15 équipe" in home.text
+    assert "Team Gold@15" in home.text
     assert "-320" in home.text
     duos = client.get("/duos")
-    assert "Gold@15 équipe" in duos.text
+    assert "Team Gold@15" in duos.text
     assert "+210" in duos.text
 
 
@@ -448,7 +448,7 @@ def test_champion_page_shows_baseline_partners_and_trios(pg_sync, client):
     assert response.status_code == 200
     assert "Lee Sin" in response.text
     assert "20 games" in response.text
-    assert "Meilleurs mids" in response.text
+    assert "Best mids" in response.text
     assert "Ahri" in response.text  # meilleur mid via score_duo jgl_mid (1,2)
     assert "/trio/1/2/3" in response.text  # meilleurs trios
     # Pas de tableaux gold/objectifs/combat & vision sur cette page : ce sont des
@@ -483,8 +483,8 @@ def test_champion_page_hides_low_reliability_partners_and_trios(pg_sync, client)
     assert response.status_code == 200
     assert "Ahri" not in response.text  # duo jgl_mid (1,2) reste tier 'faible'
     assert "/trio/1/2/3" not in response.text  # trio (1,2,3) reste tier 'faible'
-    assert "Aucun duo scoré" in response.text
-    assert "Aucun trio scoré" in response.text
+    assert "No duo scored" in response.text
+    assert "No trio scored" in response.text
 
 
 def test_champion_page_unknown_role_is_404(pg_sync, client):
@@ -503,7 +503,7 @@ def test_context_bar_shows_window_volume_and_freshness(pg_sync, client):
     _seed_matches(pg_sync)  # 2 matchs bruts, patch 16.13, collected_at = now()
     home = client.get("/")
     assert "2 games" in home.text
-    assert "maj il y a quelques secondes" in home.text
+    assert "updated a few seconds ago" in home.text
 
 
 def test_unknown_window_and_trio_are_404(pg_sync, client):
@@ -522,7 +522,7 @@ def test_empty_role_param_is_accepted(pg_sync, client):
     _seed_scores(pg_sync)
     response = client.get("/", params={"role": "", "min_tier": "moyen", "min_games": 3})
     assert response.status_code == 200
-    assert "Aucun trio" in response.text  # tout le seed est tier 'faible'
+    assert "No trio" in response.text  # tout le seed est tier 'faible'
     assert client.get("/", params={"sort": "gold10"}).status_code == 200
     payload = client.get("/api/trios", params={"role": "", "min_tier": "eleve"}).json()
     assert payload["rows"] == []
@@ -731,7 +731,7 @@ def test_threshold_filter_tooltip_on_span_not_label(pg_sync, client):
     _seed_scores(pg_sync)
     html = client.get("/").text
     assert "<label data-tooltip=" not in html
-    assert 'span data-tooltip="Ne montre que les combos dans cette plage de WR' in html
+    assert 'span data-tooltip="Only show combos within this WR' in html
 
 
 def test_threshold_filter_only_active_fields_visible_by_default(pg_sync, client):
@@ -793,7 +793,7 @@ def test_draft_page_shows_precomputed_compositions_for_platform_all(pg_sync, cli
         " top_champion, jgl_champion, mid_champion, bot_champion, sup_champion,"
         " total_synergy, seed_roles, seed_champ_a, seed_champ_b, seed_synergy, seed_games,"
         " seed_tier, advice_scaling, advice_cc, advice_gold15)"
-        " VALUES ('16.13', 'all', 'synergy', 'Meilleure synergie', 4, 1, 2, 5, 3, 0.51,"
+        " VALUES ('16.13', 'all', 'synergy', 'Best synergy', 4, 1, 2, 5, 3, 0.51,"
         " 'jgl_mid', 1, 2, 0.30, 60, 'eleve', 0.08, 70.0, 800.0)"
     )
     pg_sync.execute(
@@ -808,7 +808,7 @@ def test_draft_page_shows_precomputed_compositions_for_platform_all(pg_sync, cli
     for name in ("Vi", "Lee Sin", "Ahri", "Orianna", "Thresh", "Leona"):
         assert name in resp.text
     assert "+51.0 %" in resp.text
-    assert "monte en puissance" in resp.text  # advice_scaling = 0.08 > seuil
+    assert "scales up with game duration" in resp.text  # advice_scaling = 0.08 > seuil
 
 
 def test_draft_page_falls_back_to_button_when_nothing_precomputed(pg_sync, client):
@@ -823,7 +823,7 @@ def test_draft_page_falls_back_to_button_when_nothing_precomputed(pg_sync, clien
     )
     resp = client.get("/draft", params={"platform": "all"})
     assert resp.status_code == 200
-    assert "Proposer des compositions" in resp.text
+    assert "Suggest compositions" in resp.text
     assert "draft-suggest-card" not in resp.text
 
 
@@ -840,8 +840,8 @@ def test_draft_page_suggest_button_shown_but_not_computed_by_default(pg_sync, cl
     )
     resp = client.get("/draft")
     assert resp.status_code == 200
-    assert "Compositions suggérées" in resp.text
-    assert "Proposer des compositions" in resp.text
+    assert "Suggested compositions" in resp.text
+    assert "Suggest compositions" in resp.text
     # Pas de calcul : ni carte de composition, ni message "pas assez de duos".
     assert "draft-suggest-card" not in resp.text
     assert "Pas assez de duos fiables" not in resp.text
@@ -900,7 +900,7 @@ def test_draft_page_suggest_proposes_synergy_based_composition(pg_sync, client):
     resp = client.get("/draft", params={"suggest": "1"})
     assert resp.status_code == 200
     assert "draft-suggest-card" in resp.text
-    assert "Meilleure synergie" in resp.text
+    assert "Best synergy" in resp.text
     # Les 5 membres de la composition (index de test : 1=Lee Sin, 2=Ahri,
     # 3=Thresh, 4=Vi, 5=Orianna).
     for name in ("Vi", "Lee Sin", "Ahri", "Orianna", "Thresh"):
@@ -954,14 +954,14 @@ def test_draft_page_suggest_shows_advice_from_seed_duo_stats(pg_sync, client):
         )
     resp = client.get("/draft", params={"suggest": "1"})
     assert resp.status_code == 200
-    assert "monte en puissance" in resp.text  # scaling > seuil notable
-    assert "contrôle de foule" in resp.text  # cc_time_s >= seuil notable
-    assert "économique attendu tôt" in resp.text  # gold_diff_15 > seuil notable
+    assert "scales up with game duration" in resp.text  # scaling > seuil notable
+    assert "crowd control profile" in resp.text  # cc_time_s >= seuil notable
+    assert "economic advantage expected" in resp.text  # gold_diff_15 > seuil notable
     # Winrate + IC (retour utilisateur 2026-07-27) : moyenne simple sur les
     # 10 vraies paires, wr=0.55 partout -> 55.0 % ; ci_low=0.0 partout -> 0.0 % ;
     # ci_high = synergie de chaque paire (.30+.05+.04+.02+.02+.03+.01+.01+.01+.02)/10
     # = .051 -> 5.1 %.
-    assert "Winrate : 55.0 %" in resp.text
+    assert "Winrate: 55.0 %" in resp.text
     assert "[0.0 % – 5.1 %]" in resp.text
 
 
@@ -976,8 +976,8 @@ def test_draft_page_suggest_skips_archetypes_without_stat_data(pg_sync, client):
     resp = client.get("/draft", params={"suggest": "1"})
     assert resp.status_code == 200
     assert resp.text.count("draft-suggest-card") == 2
-    assert "Meilleure synergie" in resp.text
-    assert "Meilleur winrate" in resp.text
+    assert "Best synergy" in resp.text
+    assert "Best winrate" in resp.text
     # "Scaling / fin de partie" reste dans le <select> du formulaire "Compose
     # à partir de tes champions" (toujours proposé) : on cible précisément
     # le titre de carte, pas le texte libre de la page.
@@ -1044,8 +1044,8 @@ def test_draft_page_suggest_renders_both_archetypes_from_shared_champion_pool(pg
         )
     resp = client.get("/draft", params={"suggest": "1"})
     assert resp.status_code == 200
-    assert "Meilleure synergie" in resp.text
-    assert "Scaling / fin de partie" in resp.text
+    assert "Best synergy" in resp.text
+    assert "Scaling / late game" in resp.text
 
 
 def _insert_pentad(
@@ -1105,7 +1105,7 @@ def test_draft_page_suggest_shows_variant_tabs_for_multiple_propositions(pg_sync
     assert resp.text.count('data-variant-index="0"') >= 1
     assert resp.text.count('data-variant-index="1" hidden') >= 1
     assert resp.text.count('data-variant-index="2" hidden') >= 1
-    assert 'data-selection="reliable" title="La plus fiable"' in resp.text
+    assert 'data-selection="reliable" title="Most reliable"' in resp.text
 
 
 def test_draft_page_custom_weights_shows_own_section(pg_sync, client):
@@ -1127,7 +1127,7 @@ def test_draft_page_custom_weights_shows_own_section(pg_sync, client):
         },
     )
     assert resp.status_code == 200
-    assert "Personnalisé" in resp.text
+    assert "Custom" in resp.text
     assert '<div class="draft-custom-result">' in resp.text
     for name in ("Vi", "Lee Sin", "Ahri", "Orianna", "Thresh"):
         assert name in resp.text
@@ -1143,7 +1143,7 @@ def test_draft_page_custom_weights_requires_sum_to_100(pg_sync, client):
         params={"w_synergy": "50", "w_scaling": "20", "w_cc": "0", "w_gold": "0"},
     )
     assert resp.status_code == 200
-    assert "La somme des poids doit faire 100" in resp.text
+    assert "Weights must add up to 100" in resp.text
     assert "70" in resp.text  # rappelle la somme actuelle
     assert '<div class="draft-custom-result">' not in resp.text
 
@@ -1156,7 +1156,7 @@ def test_draft_page_custom_weights_rejects_negative(pg_sync, client):
         params={"w_synergy": "-10", "w_scaling": "110", "w_cc": "0", "w_gold": "0"},
     )
     assert resp.status_code == 200
-    assert "ne peuvent pas être négatifs" in resp.text
+    assert "cannot be negative" in resp.text
 
 
 def test_draft_page_no_custom_weights_shows_neither_card_nor_error(pg_sync, client):
@@ -1197,7 +1197,7 @@ def test_draft_page_compose_with_custom_weights(pg_sync, client):
         },
     )
     assert resp.status_code == 200
-    assert '<h3 class="draft-suggest-label">Personnalisé</h3>' in resp.text
+    assert '<h3 class="draft-suggest-label">Custom</h3>' in resp.text
     for name in ("Vi", "Lee Sin", "Ahri", "Orianna", "Thresh"):
         assert name in resp.text
     # Indépendance des 2 formulaires (retour utilisateur 2026-07-28) : seuls
@@ -1216,7 +1216,7 @@ def test_draft_page_compose_custom_archetype_without_weights_shows_error(pg_sync
         "/draft", params={"seed_jgl": "Lee Sin", "seed_mid": "Ahri", "archetype": "custom"}
     )
     assert resp.status_code == 200
-    assert "Renseigne des poids qui totalisent 100 % ci-dessus." in resp.text
+    assert "Enter weights that add up to 100% above." in resp.text
 
 
 def test_draft_page_suggest_shows_counters(pg_sync, client):
@@ -1239,7 +1239,7 @@ def test_draft_page_suggest_shows_counters(pg_sync, client):
     # juste "le rôle jungle" dans l'abstrait, et dit explicitement que c'est
     # un point FAIBLE (retour utilisateur 2026-07-26 : la 1ère formulation
     # "contre Lee Sin" ne disait pas si la draft était forte ou faible).
-    assert "Lee Sin puni(e) par" in resp.text
+    assert "Lee Sin loses to:" in resp.text
     assert "Leona" in resp.text
     assert "+10.0 %" in resp.text
 
@@ -1259,11 +1259,11 @@ def test_draft_page_suggest_shows_strengths_and_weights(pg_sync, client):
     )
     resp = client.get("/draft", params={"suggest": "1"})
     assert resp.status_code == 200
-    assert "Points forts" in resp.text
-    assert "Lee Sin domine" in resp.text
+    assert "Strengths" in resp.text
+    assert "Lee Sin beats:" in resp.text
     assert "Zed" in resp.text
     assert "+12.0 %" in resp.text
-    assert "Synergie 100 %" in resp.text
+    assert "Synergy 100 %" in resp.text
 
 
 def test_draft_page_suggest_no_counters_shows_message(pg_sync, client):
@@ -1272,7 +1272,7 @@ def test_draft_page_suggest_no_counters_shows_message(pg_sync, client):
     _seed_suggest_scenario(pg_sync)
     resp = client.get("/draft", params={"suggest": "1"})
     assert resp.status_code == 200
-    assert "Aucun contre 1v1 notable." in resp.text
+    assert "No notable 1v1 matchup." in resp.text
 
 
 def test_draft_page_compose_from_champions_completes_and_shows_reliability(pg_sync, client):
@@ -1285,12 +1285,12 @@ def test_draft_page_compose_from_champions_completes_and_shows_reliability(pg_sy
         "/draft", params={"seed_jgl": "Lee Sin", "seed_mid": "Ahri", "archetype": "synergy"}
     )
     assert resp.status_code == 200
-    assert "Meilleure synergie" in resp.text
+    assert "Best synergy" in resp.text
     for name in ("Vi", "Lee Sin", "Ahri", "Orianna", "Thresh"):
         assert name in resp.text
     assert "+51.0 %" in resp.text
     assert "Lee Sin + Ahri" in resp.text
-    assert "+30.0 %, eleve (500)" in resp.text
+    assert "+30.0 %, high (500)" in resp.text
 
 
 def test_draft_page_compose_without_archetype_proposes_one_per_archetype(pg_sync, client):
@@ -1331,11 +1331,11 @@ def test_draft_page_compose_without_archetype_proposes_one_per_archetype(pg_sync
         )
     resp = client.get("/draft", params={"seed_jgl": "Lee Sin", "seed_mid": "Ahri"})
     assert resp.status_code == 200
-    assert "Meilleure synergie" in resp.text
-    assert "Meilleur winrate" in resp.text
-    assert "Scaling / fin de partie" in resp.text
-    assert "Avantage early / lane" in resp.text
-    assert "Contrôle des objectifs" in resp.text
+    assert "Best synergy" in resp.text
+    assert "Best winrate" in resp.text
+    assert "Scaling / late game" in resp.text
+    assert "Early / laning advantage" in resp.text
+    assert "Objective control" in resp.text
     assert "Poke / zone" in resp.text
     assert resp.text.count("draft-suggest-card") == 6
 
@@ -1376,7 +1376,7 @@ def test_draft_page_compose_shows_no_data_for_unplayed_pair(pg_sync, client):
     )
     assert resp.status_code == 200
     assert "Vi + Thresh" in resp.text
-    assert "aucune donnée" in resp.text
+    assert "no data" in resp.text
     for name in ("Vi", "Lee Sin", "Ahri", "Orianna", "Thresh"):
         assert name in resp.text
 
@@ -1393,7 +1393,7 @@ def test_draft_page_compose_requires_at_least_one_champion(pg_sync, client):
     )
     resp = client.get("/draft", params={"archetype": "synergy"})
     assert resp.status_code == 200
-    assert "Choisis au moins 1 champion" in resp.text
+    assert "Pick at least 1 champion" in resp.text
 
 
 def test_draft_page_compose_rejects_unknown_archetype(pg_sync, client):
@@ -1478,7 +1478,7 @@ def test_draft_page_counter_form_prefers_matchup_over_synergy(pg_sync, client):
     _seed_counter_scenario(pg_sync)
     resp = client.get("/draft", params={"enemy_bot": "Zed"})
     assert resp.status_code == 200
-    assert "Contre cette équipe" in resp.text
+    assert "Counter this team" in resp.text
     # Le nom d'un champion apparaît TOUJOURS dans le <datalist> d'autocomplétion,
     # qu'il soit choisi ou non — seule la présence du champion à CÔTÉ du
     # role-badge "bot" prouve qu'il est bien membre de la composition.
@@ -1493,7 +1493,7 @@ def test_draft_page_counter_form_not_shown_without_submission(pg_sync, client):
     _seed_counter_scenario(pg_sync)
     resp = client.get("/draft")
     assert resp.status_code == 200
-    assert "Pas assez de données fiables contre ces picks" not in resp.text
+    assert "Not enough reliable data against these picks" not in resp.text
     assert not re.search(r'role-bot">BOT</span>\s*Leona', resp.text)
 
 
@@ -1508,7 +1508,7 @@ def test_draft_page_counter_form_shows_error_when_nothing_completes(pg_sync, cli
     )
     resp = client.get("/draft", params={"enemy_bot": "Zed"})
     assert resp.status_code == 200
-    assert "Pas assez de données fiables contre ces picks" in resp.text
+    assert "Not enough reliable data against these picks" in resp.text
 
 
 def test_draft_page_counter_form_partial_scouting_still_completes(pg_sync, client):
@@ -1564,13 +1564,13 @@ def test_insights_page_shows_aligned_combined_table(pg_sync, client):
         )
     resp = client.get("/insights")
     assert resp.status_code == 200
-    assert "équipe complète des 5 rôles" in resp.text
-    assert "ÉQUIPE à 15 min" in resp.text  # apostrophe échappée en HTML (d&#39;ÉQUIPE)
-    assert "CS jungle vs adverse à 15 min" in resp.text
-    assert "équipe / min" in resp.text  # "Vision d'équipe / min", apostrophe échappée en HTML
+    assert "full team of 5 roles" in resp.text
+    assert "TEAM gold advantage at 15 min" in resp.text
+    assert "Jungle CS vs enemy at 15 min" in resp.text
+    assert "Team vision / min" in resp.text
     # team_gold_diff_15 doit apparaître avant team_vision_per_min : l'ordre
     # suit FEATURES, pas la valeur du coefficient.
-    assert resp.text.index("Avantage gold") < resp.text.index("équipe / min")
+    assert resp.text.index("TEAM gold advantage") < resp.text.index("Team vision / min")
     # Conversion en probabilité absolue (retour utilisateur 2026-07-19),
     # seul format affiché depuis le retrait du ×N (retour utilisateur
     # 2026-07-24, jugé peu lisible) : sigmoid(intercept) →
@@ -1609,7 +1609,7 @@ def test_insights_page_shows_win_factors_holdout_auc(pg_sync, client):
         )
     resp = client.get("/insights")
     assert resp.status_code == 200
-    assert "Fiabilité du modèle" in resp.text
+    assert "Model reliability" in resp.text
     assert "0.821" in resp.text
     assert "0.734" in resp.text
     # jamais dans le tableau de coefficients (pas une vraie feature).
@@ -1644,15 +1644,15 @@ def test_insights_page_shows_gold_factors_section(pg_sync, client):
         )
     resp = client.get("/insights")
     assert resp.status_code == 200
-    assert "Qu'est-ce qui construit cet avantage au gold" in resp.text
+    assert "What builds this gold advantage" in resp.text
     assert "62 %" in resp.text  # R² draft seul
     assert "68 %" in resp.text  # R² complet
-    assert "Force brute des picks (WR baseline)" in resp.text
+    assert "Raw pick strength (baseline WR)" in resp.text
     assert "+247 gold" in resp.text
     assert "-12 gold" in resp.text
     # team_baseline_wr (bloc draft) doit apparaître avant jgl_cs_diff_15
     # (bloc exécution) : ordre fixe GOLD_FACTOR_FEATURES.
-    assert resp.text.index("Force brute des picks") < resp.text.index("CS jungle vs adverse")
+    assert resp.text.index("Raw pick strength") < resp.text.index("Jungle CS vs enemy")
 
 
 def test_resilience_page_shows_per_champion_ahead_behind_gap(pg_sync, client):
@@ -1733,8 +1733,8 @@ def test_resilience_page_min_max_filters(pg_sync, client):
     resp = client.get("/resilience", params={"factor": "team_gold_diff_15", "min_games": "201"})
     assert "Lee Sin" not in resp.text
     assert "Vi" not in resp.text
-    assert "Aucun champion ne correspond à ces filtres" in resp.text
-    assert "Rien à afficher" not in resp.text
+    assert "No champion matches these filters" in resp.text
+    assert "Nothing to show" not in resp.text
 
 
 def test_resilience_page_shows_materialization_hint_only_without_any_reliable_data(pg_sync, client):
@@ -1749,8 +1749,8 @@ def test_resilience_page_shows_materialization_hint_only_without_any_reliable_da
         " 0.0, 0.0, 1.0, 'faible')"
     )
     resp = client.get("/resilience", params={"factor": "team_gold_diff_15"})
-    assert "Rien à afficher" in resp.text
-    assert "Aucun champion ne correspond à ces filtres" not in resp.text
+    assert "Nothing to show" in resp.text
+    assert "No champion matches these filters" not in resp.text
 
 
 def test_flex_page_detects_off_role_resource_deviation(pg_sync, client):
@@ -1798,7 +1798,7 @@ def test_flex_page_detects_off_role_resource_deviation(pg_sync, client):
     # 2026-07-20 : ×1.08 remplacé par un écart % coloré, plus parlant).
     assert "+8 %" in resp.text
     # Phrase en langage clair, pas juste des chiffres bruts (retour utilisateur).
-    assert "Lee Sin joue Support dans 33 % de ses games (150/450)" in resp.text
+    assert "Lee Sin plays Support in 33% of their games (150/450)" in resp.text
     # Filtre par rôle : Support seulement.
     resp_role = client.get("/flex", params={"role": "UTILITY"})
     assert resp_role.status_code == 200

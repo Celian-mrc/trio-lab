@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Compositions et contres — Trio Lab{% endblock %}
+{% block title %}Compositions & counters — Trio Lab{% endblock %}
 {% block content %}
 {% macro matchup_block(title, block, verb, color, extra_class) %}
 <div class="draft-counters {{ extra_class }}">
@@ -31,7 +31,7 @@
   {% if d.weights %}
   <p class="draft-suggest-weights meta">
     {% for w in d.weights %}{{ w.label }} {{ w.value | pct(0) }}{% if not loop.last %} · {% endif %}{% endfor %}
-    {%- if d.selection == 'reliable' %} · la plus fiable{% endif %}
+    {%- if d.selection == 'reliable' %} · most reliable{% endif %}
   </p>
   {% endif %}
   <div class="draft-suggest-members">
@@ -43,17 +43,17 @@
     </span>
     {% endfor %}
   </div>
-  <p class="meta draft-suggest-synergy">Synergie :
+  <p class="meta draft-suggest-synergy">Synergy:
     <span class="{{ 'pos' if d.total_synergy > 0 else 'neg' if d.total_synergy < 0 }}">{{ d.total_synergy | signed_pct }}</span>
     {% if d.wr %}
-    · Winrate : {{ d.wr.value | pct }} <span class="sub">[{{ d.wr.ci_low | pct }} – {{ d.wr.ci_high | pct }}]</span>
+    · Winrate: {{ d.wr.value | pct }} <span class="sub">[{{ d.wr.ci_low | pct }} – {{ d.wr.ci_high | pct }}]</span>
     {% endif %}
   </p>
   {% if d.seed_pairs %}
   <ul class="draft-seed-pairs">
     {% for p in d.seed_pairs %}
     <li>{{ p.champion_a.name }} + {{ p.champion_b.name }} —
-      {% if p.tier %}{{ p.synergy | signed_pct }}, {{ p.tier }} ({{ p.games }}){% else %}aucune donnée{% endif %}
+      {% if p.tier %}{{ p.synergy | signed_pct }}, {{ TIER_LABELS[p.tier] }} ({{ p.games }}){% else %}no data{% endif %}
     </li>
     {% endfor %}
   </ul>
@@ -64,13 +64,13 @@
   </ul>
   {% endif %}
   {% if d.strengths %}
-  {{ matchup_block("Points forts", d.strengths, "domine :", "pos", "draft-counters-strengths") }}
+  {{ matchup_block("Strengths", d.strengths, "beats:", "pos", "draft-counters-strengths") }}
   {% endif %}
   {% if d.counters %}
-  {{ matchup_block("Points faibles", d.counters, "puni(e) par :", "neg", "draft-counters-weaknesses") }}
+  {{ matchup_block("Weaknesses", d.counters, "loses to:", "neg", "draft-counters-weaknesses") }}
   {% endif %}
   {% if not d.strengths and not d.counters %}
-  <p class="meta draft-suggest-no-counters">Aucun contre 1v1 notable.</p>
+  <p class="meta draft-suggest-no-counters">No notable 1v1 matchup.</p>
   {% endif %}
 </div>
 {% endmacro %}
@@ -87,7 +87,7 @@
     {% if g.variants | length > 1 %}
     <div class="draft-variant-tabs">
       {% for v in g.variants %}
-      <button type="button" class="draft-variant-tab{{ ' active' if loop.first }}" data-variant-index="{{ loop.index0 }}" data-selection="{{ v.selection }}"{% if v.selection == 'reliable' %} title="La plus fiable"{% endif %}>{{ loop.index }}</button>
+      <button type="button" class="draft-variant-tab{{ ' active' if loop.first }}" data-variant-index="{{ loop.index0 }}" data-selection="{{ v.selection }}"{% if v.selection == 'reliable' %} title="Most reliable"{% endif %}>{{ loop.index }}</button>
       {% endfor %}
     </div>
     {% endif %}
@@ -95,20 +95,20 @@
   {% for v in g.variants %}{{ draft_variant_body(v, loop.first, loop.index0) }}{% endfor %}
 </div>
 {% endmacro %}
-<h1>Compositions et contres</h1>
+<h1>Compositions & counters</h1>
 <datalist id="champion-names">
   {% for name in champion_names %}<option value="{{ name }}">{% endfor %}
 </datalist>
 
 <form method="get" action="/draft" class="filters">
-  <label>Fenêtre
+  <label>Window
     <select name="window">
       {% for w in windows %}<option value="{{ w }}" {{ 'selected' if w == window }}>{{ w }}</option>{% endfor %}
     </select>
   </label>
-  <label>Région
+  <label>Region
     <select name="platform">
-      {% for p in platforms %}<option value="{{ p }}" {{ 'selected' if p == platform }}>{{ 'toutes régions' if p == 'all' else p }}</option>{% endfor %}
+      {% for p in platforms %}<option value="{{ p }}" {{ 'selected' if p == platform }}>{{ 'all regions' if p == 'all' else p }}</option>{% endfor %}
     </select>
   </label>
   {% for role in draft_roles %}
@@ -123,11 +123,11 @@
   <input type="hidden" name="w_min_games" value="{{ w_min_games }}">
   <input type="hidden" name="cw_min_games" value="{{ cw_min_games }}">
   <input type="hidden" name="enemy_min_games" value="{{ enemy_min_games }}">
-  <button type="submit">Appliquer</button>
+  <button type="submit">Apply</button>
 </form>
 
 <section class="draft-compose">
-  <h2>Compose à partir de tes champions</h2>
+  <h2>Compose from your champions</h2>
   <form method="get" action="/draft" class="draft-compose-form">
     <input type="hidden" name="window" value="{{ window }}">
     <input type="hidden" name="platform" value="{{ platform }}">
@@ -145,17 +145,17 @@
     </div>
     <div class="draft-compose-submit">
       <select name="archetype">
-        <option value="">tous les archétypes</option>
+        <option value="">all archetypes</option>
         {% for key, a in archetypes.items() %}
         <option value="{{ key }}" {{ 'selected' if key == selected_archetype }}>{{ a.label }}</option>
         {% endfor %}
-        <option value="custom" {{ 'selected' if selected_archetype == 'custom' }}>Personnalisé</option>
+        <option value="custom" {{ 'selected' if selected_archetype == 'custom' }}>Custom</option>
       </select>
-      <label class="draft-custom-field" data-tooltip="Nombre de games réelles minimum pour qu'un duo compte comme candidat fiable — abaisser ce seuil élargit le choix de champions mais avec moins de données par candidat." aria-label="Fiabilité minimum, en nombre de games réelles">
-        Fiabilité min. (games)
+      <label class="draft-custom-field" data-tooltip="Minimum number of real games for a duo to count as a reliable candidate — lowering this threshold widens the champion pool but with less data per candidate." aria-label="Minimum reliability, in real games">
+        Min. reliability (games)
         <input type="number" name="cw_min_games" value="{{ cw_min_games }}" min="0" step="10">
       </label>
-      <button type="submit" class="button-like">Compléter la draft</button>
+      <button type="submit" class="button-like">Complete the draft</button>
       <span class="draft-compose-loadbar" aria-hidden="true"></span>
     </div>
     <div class="draft-compose-weights"{{ '' if selected_archetype == 'custom' else ' hidden' }}>
@@ -177,8 +177,8 @@
 </section>
 
 <section class="draft-compose">
-  <h2>Contre cette équipe</h2>
-  <p class="meta">Renseigne les picks adverses que tu connais (scouting partiel possible) — la composition proposée cherche à la fois de bons contres 1v1 ET une bonne synergie entre elles, pas juste 5 counters isolés.</p>
+  <h2>Counter this team</h2>
+  <p class="meta">Enter the enemy picks you know (partial scouting is fine) — the suggested composition looks for both good 1v1 counters AND good synergy between them, not just 5 isolated counters.</p>
   <form method="get" action="/draft" class="draft-compose-form">
     <input type="hidden" name="window" value="{{ window }}">
     <input type="hidden" name="platform" value="{{ platform }}">
@@ -190,16 +190,16 @@
       {% for role in draft_roles %}
       <label class="draft-compose-role">
         <span class="role-badge role-{{ role }}">{{ role | upper }}</span>
-        <input name="enemy_{{ role }}" value="{{ enemy_names[role] }}" list="champion-names" placeholder="champion adverse…">
+        <input name="enemy_{{ role }}" value="{{ enemy_names[role] }}" list="champion-names" placeholder="enemy champion…">
       </label>
       {% endfor %}
     </div>
     <div class="draft-compose-submit">
-      <label class="draft-custom-field" data-tooltip="Nombre de games réelles minimum pour qu'un duo compte comme candidat fiable — abaisser ce seuil élargit le choix de champions mais avec moins de données par candidat." aria-label="Fiabilité minimum, en nombre de games réelles">
-        Fiabilité min. (games)
+      <label class="draft-custom-field" data-tooltip="Minimum number of real games for a duo to count as a reliable candidate — lowering this threshold widens the champion pool but with less data per candidate." aria-label="Minimum reliability, in real games">
+        Min. reliability (games)
         <input type="number" name="enemy_min_games" value="{{ enemy_min_games }}" min="0" step="10">
       </label>
-      <button type="submit" class="button-like">Trouver mes contres</button>
+      <button type="submit" class="button-like">Find my counters</button>
       <span class="draft-compose-loadbar" aria-hidden="true"></span>
     </div>
   </form>
@@ -212,14 +212,14 @@
 
 <section class="draft-suggest">
   <div class="draft-suggest-head">
-    <h2>Compositions suggérées</h2>
+    <h2>Suggested compositions</h2>
     {% if suggested_drafts is none %}
-    <a class="button-like" href="{{ suggest_url }}">Proposer des compositions</a>
+    <a class="button-like" href="{{ suggest_url }}">Suggest compositions</a>
     {% endif %}
   </div>
   {% if suggested_drafts is not none %}
   {% if not suggested_drafts %}
-  <p class="empty">Pas assez de duos fiables sur cette fenêtre.</p>
+  <p class="empty">Not enough reliable duos on this window.</p>
   {% else %}
   <div class="draft-suggest-grid">
     {% for g in suggested_drafts %}{{ draft_group(g) }}{% endfor %}
@@ -229,7 +229,7 @@
 </section>
 
 <section class="draft-custom">
-  <h2>Personnalise tes poids</h2>
+  <h2>Customize your weights</h2>
   <form method="get" action="/draft" class="draft-custom-form">
     <input type="hidden" name="window" value="{{ window }}">
     <input type="hidden" name="platform" value="{{ platform }}">
@@ -248,11 +248,11 @@
       {% endfor %}
     </div>
     <div class="draft-custom-submit">
-      <label class="draft-custom-field" data-tooltip="Nombre de games réelles minimum pour qu'un duo compte comme candidat fiable — abaisser ce seuil élargit le choix de champions mais avec moins de données par candidat." aria-label="Fiabilité minimum, en nombre de games réelles">
-        Fiabilité min. (games)
+      <label class="draft-custom-field" data-tooltip="Minimum number of real games for a duo to count as a reliable candidate — lowering this threshold widens the champion pool but with less data per candidate." aria-label="Minimum reliability, in real games">
+        Min. reliability (games)
         <input type="number" name="w_min_games" value="{{ w_min_games }}" min="0" step="10">
       </label>
-      <button type="submit" class="button-like">Générer ma composition</button>
+      <button type="submit" class="button-like">Generate my composition</button>
       <span class="draft-custom-loadbar" aria-hidden="true"></span>
     </div>
   </form>

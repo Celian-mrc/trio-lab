@@ -108,7 +108,7 @@ ARCHETYPE_STAT_COLUMNS = {
     "wr": "wr",
 }
 ARCHETYPES: dict[str, dict] = {
-    "synergy": {"label": "Meilleure synergie", "weights": {"synergy": 1.0}},
+    "synergy": {"label": "Best synergy", "weights": {"synergy": 1.0}},
     # Retour utilisateur 2026-07-28 ("le chemin inverse... la meilleure compo
     # avec le meilleur winrate") : même construction que "Meilleure
     # synergie" (poids 1.0 sur un seul axe = tri par valeur brute, le
@@ -116,9 +116,9 @@ ARCHETYPES: dict[str, dict] = {
     # winrate MOYEN sur les 10 vraies paires, pas une prédiction du draft
     # entier (aucun modèle de ce type dans le projet, cf. win_factors.py qui
     # prédit à partir du gold d'ÉQUIPE, pas d'une composition).
-    "winrate": {"label": "Meilleur winrate", "weights": {"wr": 1.0}},
+    "winrate": {"label": "Best winrate", "weights": {"wr": 1.0}},
     "scaling": {
-        "label": "Scaling / fin de partie",
+        "label": "Scaling / late game",
         "weights": {
             "synergy": 0.30,
             "scaling": 0.385,
@@ -134,7 +134,7 @@ ARCHETYPES: dict[str, dict] = {
         },
     },
     "early": {
-        "label": "Avantage early / lane",
+        "label": "Early / laning advantage",
         "weights": {
             "synergy": 0.30,
             "scaling": 0.0,
@@ -153,7 +153,7 @@ ARCHETYPES: dict[str, dict] = {
         },
     },
     "objectives": {
-        "label": "Contrôle des objectifs",
+        "label": "Objective control",
         "weights": {
             "synergy": 0.30,
             "scaling": 0.07,
@@ -163,7 +163,7 @@ ARCHETYPES: dict[str, dict] = {
         },
     },
     "range": {
-        "label": "Poke / zone",
+        "label": "Poke / zone control",
         "weights": {
             "synergy": 0.30,
             # Identité de l'archétype (retour utilisateur 2026-07-28) : score
@@ -983,28 +983,26 @@ def draft_advice(
     tips: list[str] = []
     if scaling is not None and scaling > ADVICE_SCALING_NOTABLE:
         tips.append(
-            "Composition qui monte en puissance avec la durée de la game : évitez les "
-            "combats forcés tôt, cherchez à faire durer."
+            "Composition that scales up with game duration: avoid forced fights early, "
+            "look to play for a long game."
         )
     elif scaling is not None and scaling < -ADVICE_SCALING_NOTABLE:
         tips.append(
-            "Composition plus forte tôt que tard : cherchez à conclure avant que "
-            "l'adversaire ne monte en puissance."
+            "Composition stronger early than late: look to close out the game before "
+            "the enemy scales up."
         )
     if cc_time_s is not None and cc_time_s >= ADVICE_CC_NOTABLE:
         tips.append(
-            "Bon profil de contrôle de foule : cherchez à engager les combats groupés "
-            "plutôt qu'à les éviter."
+            "Good crowd control profile: look to engage in grouped fights rather than avoid them."
         )
     if gold_diff_15 is not None and gold_diff_15 > ADVICE_GOLD15_NOTABLE:
         tips.append(
-            "Avantage économique attendu tôt en lane : jouez agressif dans les 15 "
-            "premières minutes."
+            "Early economic advantage expected in lane: play aggressive in the first 15 minutes."
         )
     elif gold_diff_15 is not None and gold_diff_15 < -ADVICE_GOLD15_NOTABLE:
         tips.append(
-            "Léger déficit économique attendu : jouez prudent en lane, cherchez votre "
-            "impact ailleurs (jungle, objectifs)."
+            "Slight economic deficit expected: play safe in lane, look for impact "
+            "elsewhere (jungle, objectives)."
         )
     return tips
 
@@ -1344,7 +1342,7 @@ def propose_counter_draft(
         pool,
         zstats,
         "counter",
-        "Contre cette équipe",
+        "Counter this team",
         weights,
         min_games=min_games,
         matchup_weight=matchup_weight,

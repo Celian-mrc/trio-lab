@@ -15,31 +15,31 @@
 
 <section class="cards">
   <div class="card"><h3>Winrate</h3><p class="big-number">{{ score.wr | pct }}</p>
-    <p class="meta">{{ score.games }} games · IC {{ score.ci_low | pct(0) }} – {{ score.ci_high | pct(0) }}</p></div>
-  <div class="card"><h3>Synergie</h3>
+    <p class="meta">{{ score.games }} games · CI {{ score.ci_low | pct(0) }} – {{ score.ci_high | pct(0) }}</p></div>
+  <div class="card"><h3>Synergy</h3>
     <p class="big-number {{ 'pos' if score.synergy > 0 else 'neg' if score.synergy < 0 }}"
-       data-tooltip="Le score à retenir : mélange la synergie brute et la prédiction duos ci-dessous, en donnant plus de poids à la brute quand ce trio a beaucoup de games." aria-label="Le score à retenir : mélange la synergie brute et la prédiction duos ci-dessous, en donnant plus de poids à la brute quand ce trio a beaucoup de games.">{{ score.synergy | signed_pct }}</p>
+       data-tooltip="The number to remember: blends the raw synergy and the duo prediction below, giving more weight to the raw value when this trio has a lot of games." aria-label="The number to remember: blends the raw synergy and the duo prediction below, giving more weight to the raw value when this trio has a lot of games.">{{ score.synergy | signed_pct }}</p>
     <p class="meta">
-      <span data-tooltip="Écart entre le winrate réel de ce trio et la moyenne des winrates individuels de ses 3 champions, mesuré uniquement sur les games de ce trio." aria-label="Écart entre le winrate réel de ce trio et la moyenne des winrates individuels de ses 3 champions, mesuré uniquement sur les games de ce trio.">brute {{ score.synergy_raw | signed_pct }}</span>
-      · <span data-tooltip="Ce que la synergie de ce trio devrait valoir d'après ses 3 duos internes (jgl+mid, jgl+sup, mid+sup) — le repère utilisé quand le trio complet a encore peu de games." aria-label="Ce que la synergie de ce trio devrait valoir d'après ses 3 duos internes (jgl+mid, jgl+sup, mid+sup) — le repère utilisé quand le trio complet a encore peu de games.">prédiction duos {{ score.synergy_pred | signed_pct }}</span>
-      · <span data-tooltip="Fiabilité du score selon le nombre de games de ce trio : faible = on se fie surtout à la prédiction duos, élevé = la synergie brute domine." aria-label="Fiabilité du score selon le nombre de games de ce trio : faible = on se fie surtout à la prédiction duos, élevé = la synergie brute domine.">fiabilité <span class="tier tier-{{ score.tier }}">{{ score.tier }}</span></span>
+      <span data-tooltip="Gap between this trio's actual winrate and the average of the individual winrates of its 3 champions, measured only on this trio's games." aria-label="Gap between this trio's actual winrate and the average of the individual winrates of its 3 champions, measured only on this trio's games.">raw {{ score.synergy_raw | signed_pct }}</span>
+      · <span data-tooltip="What this trio's synergy should be based on its 3 internal duos (jgl+mid, jgl+sup, mid+sup) — the reference used while the full trio still has few games." aria-label="What this trio's synergy should be based on its 3 internal duos (jgl+mid, jgl+sup, mid+sup) — the reference used while the full trio still has few games.">duo prediction {{ score.synergy_pred | signed_pct }}</span>
+      · <span data-tooltip="Score reliability based on this trio's game count: low = mostly relying on the duo prediction, high = raw synergy dominates." aria-label="Score reliability based on this trio's game count: low = mostly relying on the duo prediction, high = raw synergy dominates.">reliability <span class="tier tier-{{ score.tier }}">{{ TIER_LABELS[score.tier] }}</span></span>
     </p>
-    <p class="meta" data-tooltip="Intervalle de confiance à 95 % sur la synergie brute (méthode de Newcombe, même principe que le Wilson du winrate mais pour un écart entre 2 proportions) : si l'intervalle contient 0, ce trio pourrait n'avoir aucune synergie réelle." aria-label="Intervalle de confiance à 95 % sur la synergie brute (méthode de Newcombe, même principe que le Wilson du winrate mais pour un écart entre 2 proportions) : si l'intervalle contient 0, ce trio pourrait n'avoir aucune synergie réelle.">IC synergie brute {{ score.synergy_ci_low | signed_pct }} – {{ score.synergy_ci_high | signed_pct }}</p>
-    <p class="meta" data-tooltip="Winrate individuel de chaque champion dans son rôle (toutes compositions confondues, même fenêtre) — la moyenne de ces 3 valeurs est la base soustraite au winrate du trio pour obtenir la synergie brute." aria-label="Winrate individuel de chaque champion dans son rôle (toutes compositions confondues, même fenêtre) — la moyenne de ces 3 valeurs est la base soustraite au winrate du trio pour obtenir la synergie brute.">WR individuels : {{ jgl.name }} {{ member_wr.jgl | pct }} · {{ mid.name }} {{ member_wr.mid | pct }} · {{ sup.name }} {{ member_wr.sup | pct }}</p>
+    <p class="meta" data-tooltip="95% confidence interval on the raw synergy (Newcombe method, same principle as the winrate's Wilson interval but for a difference between 2 proportions): if the interval contains 0, this trio might have no real synergy at all." aria-label="95% confidence interval on the raw synergy (Newcombe method, same principle as the winrate's Wilson interval but for a difference between 2 proportions): if the interval contains 0, this trio might have no real synergy at all.">raw synergy CI {{ score.synergy_ci_low | signed_pct }} – {{ score.synergy_ci_high | signed_pct }}</p>
+    <p class="meta" data-tooltip="Individual winrate of each champion in their role (all compositions combined, same window) — the average of these 3 values is the baseline subtracted from the trio's winrate to get the raw synergy." aria-label="Individual winrate of each champion in their role (all compositions combined, same window) — the average of these 3 values is the baseline subtracted from the trio's winrate to get the raw synergy.">Individual WR: {{ jgl.name }} {{ member_wr.jgl | pct }} · {{ mid.name }} {{ member_wr.mid | pct }} · {{ sup.name }} {{ member_wr.sup | pct }}</p>
   </div>
   <div class="card"><h3>Tempo</h3>
     <p class="big-number">{{ stats.avg_duration_win_s | duration }} <small>win</small>
        / {{ stats.avg_duration_loss_s | duration }} <small>loss</small></p>
-    <p class="meta">durée moyenne des parties</p></div>
+    <p class="meta">average game duration</p></div>
   <div class="card"><h3>Scaling</h3>
     <p class="big-number {{ 'pos' if score.scaling and score.scaling > 0 else 'neg' if score.scaling and score.scaling < 0 }}"
-       data-tooltip="Pente du winrate selon la durée de la game (tranches de 5 min), mesurée uniquement (pas de prédiction si peu de games) : positif = ce trio gagne plus souvent en game longue, négatif = il gagne plus souvent en game courte." aria-label="Pente du winrate selon la durée de la game (tranches de 5 min), mesurée uniquement (pas de prédiction si peu de games) : positif = ce trio gagne plus souvent en game longue, négatif = il gagne plus souvent en game courte.">{{ score.scaling | signed_pct(2) }}</p>
-    <p class="meta">points de WR par tranche de 5 min</p>
-    <p class="meta" data-tooltip="Intervalle de confiance à 95 % sur la pente (erreur-type de la régression) : si l'intervalle contient 0, ce trio pourrait n'avoir aucune tendance réelle selon la durée." aria-label="Intervalle de confiance à 95 % sur la pente (erreur-type de la régression) : si l'intervalle contient 0, ce trio pourrait n'avoir aucune tendance réelle selon la durée.">IC {{ score.scaling_ci_low | signed_pct(2) }} – {{ score.scaling_ci_high | signed_pct(2) }}</p></div>
+       data-tooltip="Winrate slope by game duration (5 min buckets), measured only (no prediction with few games): positive = this trio wins more often in long games, negative = it wins more often in short games." aria-label="Winrate slope by game duration (5 min buckets), measured only (no prediction with few games): positive = this trio wins more often in long games, negative = it wins more often in short games.">{{ score.scaling | signed_pct(2) }}</p>
+    <p class="meta">WR points per 5 min bucket</p>
+    <p class="meta" data-tooltip="95% confidence interval on the slope (regression standard error): if the interval contains 0, this trio might have no real trend based on duration." aria-label="95% confidence interval on the slope (regression standard error): if the interval contains 0, this trio might have no real trend based on duration.">CI {{ score.scaling_ci_low | signed_pct(2) }} – {{ score.scaling_ci_high | signed_pct(2) }}</p></div>
 </section>
 
 <section>
-  <h2>Avantage gold du trio</h2>
+  <h2>Trio gold advantage</h2>
   <div class="gold-diff-grid">
     {% for m, v in stats.gold_diff.items() %}
     {% set n = stats.gold_diff_n[m] %}
@@ -53,7 +53,7 @@
         <div class="fill {{ 'pos' if v > 0 else 'neg' }}" style="width: {{ (v | barpct_abs(gold_diff_bar_cap)) / 2 }}%"></div>
         {% endif %}
       </div>
-      <div class="n" data-tooltip="Nombre de games (sur {{ stats.games }} au total) ayant duré au moins {{ m }} min — la moyenne ci-dessus ne porte que sur ce sous-ensemble." aria-label="Nombre de games (sur {{ stats.games }} au total) ayant duré au moins {{ m }} min — la moyenne ci-dessus ne porte que sur ce sous-ensemble.">{{ n }} games ({{ sample_pct | round | int }}%)</div>
+      <div class="n" data-tooltip="Number of games (out of {{ stats.games }} total) that lasted at least {{ m }} min — the average above only covers this subset." aria-label="Number of games (out of {{ stats.games }} total) that lasted at least {{ m }} min — the average above only covers this subset.">{{ n }} games ({{ sample_pct | round | int }}%)</div>
     </div>
     {% endfor %}
   </div>
@@ -61,19 +61,19 @@
 
 <div class="stat-grid">
   <div class="card">
-    <h3>Objectifs</h3>
+    <h3>Objectives</h3>
     <div class="kv-list">
-      <div class="row"><span>Grubs pris (moy.)</span><span>{{ stats.grubs_taken | num }}</span></div>
-      <div class="row"><span>Héraut</span><span>{{ stats.herald_taken | pct }}</span></div>
+      <div class="row"><span>Grubs taken (avg.)</span><span>{{ stats.grubs_taken | num }}</span></div>
+      <div class="row"><span>Herald</span><span>{{ stats.herald_taken | pct }}</span></div>
       <div class="row"><span>Drakes / min</span><span>{{ stats.drakes_taken | num(2) }}</span></div>
-      <div class="row"><span>Âme obtenue</span><span>{{ stats.soul_taken | pct }}</span></div>
-      <div class="row"><span>WR avec l'âme</span><span>{{ stats.wr_with_soul | pct }}</span></div>
-      <div class="row"><span>WR sans l'âme</span><span>{{ stats.wr_without_soul | pct }}</span></div>
-      <div class="row"><span>Premier Nashor</span><span>{{ stats.nashor_first | pct }}</span></div>
-      <div class="row"><span>Timing 1er Nashor</span><span>{{ stats.nashor_first_s | duration }}</span></div>
-      <div class="row"><span>Première tour</span><span>{{ stats.first_tower | pct }}</span></div>
-      <div class="row"><span>Tours détruites (moy.)</span><span>{{ stats.towers_destroyed | num }}</span></div>
-      <div class="row"><span>Plaques (moy.)</span><span>{{ stats.plates_taken | num }}</span></div>
+      <div class="row"><span>Soul taken</span><span>{{ stats.soul_taken | pct }}</span></div>
+      <div class="row"><span>WR with soul</span><span>{{ stats.wr_with_soul | pct }}</span></div>
+      <div class="row"><span>WR without soul</span><span>{{ stats.wr_without_soul | pct }}</span></div>
+      <div class="row"><span>First Baron</span><span>{{ stats.nashor_first | pct }}</span></div>
+      <div class="row"><span>First Baron timing</span><span>{{ stats.nashor_first_s | duration }}</span></div>
+      <div class="row"><span>First tower</span><span>{{ stats.first_tower | pct }}</span></div>
+      <div class="row"><span>Towers destroyed (avg.)</span><span>{{ stats.towers_destroyed | num }}</span></div>
+      <div class="row"><span>Plates (avg.)</span><span>{{ stats.plates_taken | num }}</span></div>
     </div>
   </div>
 
@@ -82,17 +82,17 @@
     <div class="kv-list">
       <div class="row"><span>First blood (trio)</span><span>{{ stats.first_blood_trio | pct }}</span></div>
       <div class="row"><span>Kill participation &lt; 15 min</span><span>{{ stats.kill_participation_pre15 | pct }}</span></div>
-      <div class="row"><span>Part des dégâts de l'équipe</span><span>{{ stats.damage_share | pct }}</span></div>
+      <div class="row"><span>Team damage share</span><span>{{ stats.damage_share | pct }}</span></div>
       <div class="row">
-        <span data-tooltip="Écart de CS jungle du jungler vs le jungler adverse à la 15e minute (jungleMinionsKilled de la timeline) : signal de domination early jungle (invades, pathing), avant que les rotations macro ne redistribuent le farm." aria-label="Écart de CS jungle du jungler vs le jungler adverse à la 15e minute (jungleMinionsKilled de la timeline) : signal de domination early jungle (invades, pathing), avant que les rotations macro ne redistribuent le farm.">CS jungle vs adverse à 15 min</span>
+        <span data-tooltip="Jungler's jungle CS diff vs the enemy jungler at minute 15 (jungleMinionsKilled from the timeline): signal of early jungle dominance (invades, pathing), before macro rotations redistribute farm." aria-label="Jungler's jungle CS diff vs the enemy jungler at minute 15 (jungleMinionsKilled from the timeline): signal of early jungle dominance (invades, pathing), before macro rotations redistribute farm.">Jungle CS vs enemy at 15 min</span>
         <span class="{{ 'pos' if stats.jgl_cs_diff_15 and stats.jgl_cs_diff_15 > 0 else 'neg' if stats.jgl_cs_diff_15 and stats.jgl_cs_diff_15 < 0 }}">{{ stats.jgl_cs_diff_15 | signed_int }}</span>
       </div>
     </div>
   </div>
 
   <div class="card">
-    <h3>Dégâts / gold, par membre</h3>
-    <p class="meta" data-tooltip="Dégâts aux champions ÷ gold gagné : met en avant un champion qui rend beaucoup avec peu de ressources, indépendamment de la priorité qu'on lui donne." aria-label="Dégâts aux champions ÷ gold gagné : met en avant un champion qui rend beaucoup avec peu de ressources, indépendamment de la priorité qu'on lui donne.">efficacité de ressources</p>
+    <h3>Damage / gold, per member</h3>
+    <p class="meta" data-tooltip="Damage to champions ÷ gold earned: highlights a champion who returns a lot with few resources, regardless of the priority given to them." aria-label="Damage to champions ÷ gold earned: highlights a champion who returns a lot with few resources, regardless of the priority given to them.">resource efficiency</p>
     {% set dpg = [stats.jgl_dmg_per_gold, stats.mid_dmg_per_gold, stats.sup_dmg_per_gold] %}
     <div class="bar-group">
       <div class="bar-row"><span class="bar-label">{{ jgl.name }}</span><div class="bar-track"><div class="bar-fill" style="width: {{ stats.jgl_dmg_per_gold | barpct(dpg) }}%"></div></div><span class="bar-value">{{ stats.jgl_dmg_per_gold | num(2) }}</span></div>
@@ -102,18 +102,18 @@
   </div>
 
   <div class="card">
-    <h3>Vision <span class="meta">(par minute)</span></h3>
+    <h3>Vision <span class="meta">(per minute)</span></h3>
     <p class="big-number" style="font-size: 1.3rem;">{{ stats.vision_score | num(2) }}</p>
-    <p class="meta">score de vision, trio</p>
+    <p class="meta">vision score, trio</p>
     {% set wards = [stats.wards_placed, stats.wards_killed] %}
     <div class="bar-group">
-      <div class="bar-row"><span class="bar-label">Posés</span><div class="bar-track"><div class="bar-fill" style="width: {{ stats.wards_placed | barpct(wards) }}%"></div></div><span class="bar-value">{{ stats.wards_placed | num(2) }}/min</span></div>
-      <div class="bar-row"><span class="bar-label">Détruits</span><div class="bar-track"><div class="bar-fill" style="width: {{ stats.wards_killed | barpct(wards) }}%"></div></div><span class="bar-value">{{ stats.wards_killed | num(2) }}/min</span></div>
+      <div class="bar-row"><span class="bar-label">Placed</span><div class="bar-track"><div class="bar-fill" style="width: {{ stats.wards_placed | barpct(wards) }}%"></div></div><span class="bar-value">{{ stats.wards_placed | num(2) }}/min</span></div>
+      <div class="bar-row"><span class="bar-label">Destroyed</span><div class="bar-track"><div class="bar-fill" style="width: {{ stats.wards_killed | barpct(wards) }}%"></div></div><span class="bar-value">{{ stats.wards_killed | num(2) }}/min</span></div>
     </div>
   </div>
 
   <div class="card">
-    <h3>CC par membre <span class="meta">(s/min, mesuré en jeu)</span></h3>
+    <h3>CC per member <span class="meta">(s/min, measured in-game)</span></h3>
     {% set cc = [stats.jgl_cc_time_s, stats.mid_cc_time_s, stats.sup_cc_time_s] %}
     <div class="bar-group">
       <div class="bar-row"><span class="bar-label">{{ jgl.name }}</span><div class="bar-track"><div class="bar-fill" style="width: {{ stats.jgl_cc_time_s | barpct(cc) }}%"></div></div><span class="bar-value">{{ stats.jgl_cc_time_s | num(2) }}</span></div>
@@ -124,9 +124,9 @@
 </div>
 
 <section>
-  <h2>Duos internes</h2>
+  <h2>Internal duos</h2>
   <table class="narrow">
-    <thead><tr><th>Duo</th><th>Games</th><th>WR</th><th>Synergie</th></tr></thead>
+    <thead><tr><th>Duo</th><th>Games</th><th>WR</th><th>Synergy</th></tr></thead>
     <tbody>
       {% for d in duos %}
       <tr>
@@ -136,24 +136,9 @@
         <td class="{{ 'pos' if d.synergy > 0 else 'neg' if d.synergy < 0 }}">{{ d.synergy | signed_pct }}</td>
       </tr>
       {% else %}
-      <tr><td colspan="4" class="empty">Aucun duo scoré.</td></tr>
+      <tr><td colspan="4" class="empty">No duo scored.</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </section>
-
-<details class="legend">
-  <summary>Empirique, théorique, mélangé : comment ça se calcule ?</summary>
-  <p><strong>Empirique</strong> : le CC réellement infligé par ce trio
-  (<code>timeCCingOthers</code>, le chrono officiel de Riot), rapporté à la
-  minute de game puis plafonné à 6 s/min (~p99 des trios) et ramené sur 100
-  pour ne pas laisser quelques valeurs extrêmes écraser l'échelle.
-  <strong>Théorique</strong> : un score
-  de kit (durée des stuns/roots/etc., zone d'effet, fiabilité des sorts —
-  cf. détail ci-dessus), ramené sur 100 via un repère fixe : 3× le score
-  max d'un champion (un plafond mathématique, jamais atteignable en
-  pratique, aucun champion n'occupant plusieurs rôles). <strong>Mélangé</strong>
-  : combine les deux, pondéré par le volume de games du trio — c'est le
-  chiffre à retenir par défaut.</p>
-</details>
 {% endblock %}

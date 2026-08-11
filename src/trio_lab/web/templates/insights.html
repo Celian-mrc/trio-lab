@@ -1,49 +1,49 @@
 {% extends "base.html" %}
-{% block title %}Ce qui fait gagner — Trio Lab{% endblock %}
+{% block title %}What wins games — Trio Lab{% endblock %}
 {% block content %}
-<h1>Ce qui fait gagner</h1>
-<p class="meta">Ce tableau classe les facteurs de jeu selon leur poids réel dans la victoire, sur
-  toutes les games de la fenêtre (<strong>équipe complète des 5 rôles</strong> — top/jungle/mid/adc/
-  support, pas seulement jungle/mid/support), mesurés à <strong>15 minutes</strong> uniquement (rien
-  de plus tardif — un objectif pris à 25 min ne peut pas causer un avantage mesuré à 15 min). « Poids
-  réel » : chaque facteur est isolé des autres, pour ne pas confondre corrélation et cause — ex. le CS
-  jungle en avance est en partie ce qui construit l'avance au gold elle-même, ce calcul essaie de
-  démêler les deux plutôt que de tout mettre sur le même plan.</p>
-<p class="meta"><strong>Comment lire les chiffres</strong> : chaque cellule montre une probabilité de
-  victoire AVANT ce facteur → APRÈS (ex. « 49 % → 81 % »). « Avant » = une game dans l'état moyen de
-  cette population (aucun facteur particulier) ; « après » = la même game avec CE facteur poussé à
-  « un écart-type au-dessus de sa moyenne » (retour utilisateur 2026-07-24 : le format précédent en
-  ×N — odds ratio — était retiré, jugé peu lisible et trompeur quand gagner/perdre est ~50/50). Vert =
-  ce facteur aide à gagner, rouge = associé à la défaite. Attention à la colonne « Derrière au gold » :
-  la « moyenne » n'y est PAS la même qu'en population complète (toutes les games y sont déjà en
-  déficit), donc « ce facteur poussé d'un écart-type » veut dire « un peu moins en retard que la
-  moyenne des games menées », pas « passer en avance ».</p>
+<h1>What wins games</h1>
+<p class="meta">This table ranks game factors by their real weight on winning, across
+  all games of the window (<strong>full team of 5 roles</strong> — top/jungle/mid/adc/
+  support, not just jungle/mid/support), measured at <strong>15 minutes</strong> only (nothing
+  later — an objective taken at 25 min can't cause an advantage measured at 15 min). "Real
+  weight": each factor is isolated from the others, so as not to confuse correlation with cause — e.g. being ahead on jungle
+  CS is partly what builds the gold advantage itself, this calculation tries to
+  disentangle the two rather than treating everything as equal.</p>
+<p class="meta"><strong>How to read the numbers</strong>: each cell shows a win probability
+  BEFORE this factor → AFTER (e.g. "49% → 81%"). "Before" = a game in the average state of
+  this population (no particular factor); "after" = the same game with THIS factor pushed to
+  "one standard deviation above its mean" (user feedback 2026-07-24: the previous ×N format —
+  odds ratio — was dropped, deemed hard to read and misleading when winning/losing is ~50/50). Green =
+  this factor helps win, red = associated with losing. Watch out for the "Behind on gold" column:
+  the "average" there is NOT the same as in the full population (all games there are already at a
+  deficit), so "this factor pushed by one standard deviation" means "a bit less behind than
+  the average losing-early game", not "moving ahead".</p>
 {% if all_auc or behind_auc %}
-<p class="meta"><strong>Fiabilité du modèle</strong> : AUC (capacité à distinguer une victoire d'une
-  défaite à partir des seuls facteurs ci-dessus) mesuré sur un échantillon <strong>jamais vu à
-  l'ajustement</strong> (20 % des games mises de côté avant tout calcul, pas une mesure optimiste sur
-  les données d'entraînement) —
-  {% if all_auc %}{{ all_auc | num(3) }} pour la population complète{% endif %}{% if all_auc and behind_auc %}, {% endif %}{% if behind_auc %}{{ behind_auc | num(3) }} pour « derrière au gold »{% endif %}.
-  0,5 = aucun pouvoir prédictif (équivalent à deviner), 1,0 = parfait. Pour repère, un modèle dédié
-  bien plus riche (dégâts, niveau, kills, objectifs par rôle) atteint 0,81 à 15 min sur des games de
-  très haut niveau.</p>
+<p class="meta"><strong>Model reliability</strong>: AUC (ability to distinguish a win from a
+  loss from the factors above alone) measured on a sample <strong>never seen during
+  fitting</strong> (20% of games held out before any calculation, not an optimistic measure on
+  the training data) —
+  {% if all_auc %}{{ all_auc | num(3) }} for the full population{% endif %}{% if all_auc and behind_auc %}, {% endif %}{% if behind_auc %}{{ behind_auc | num(3) }} for "behind on gold"{% endif %}.
+  0.5 = no predictive power (equivalent to guessing), 1.0 = perfect. For reference, a much
+  richer dedicated model (damage, level, kills, objectives per role) reaches 0.81 at 15 min on
+  very high level games.</p>
 {% endif %}
-<p class="meta"><strong>Limites</strong> : données solo queue Emerald+, pas scrims/pro — les
-  tendances early (gold, objectifs) transfèrent généralement bien, les choix de champions bien
-  moins. Certains signaux (CS jungle) sont en partie définitionnels du gold lui-même : ce sont des
-  corrélations conditionnelles (chaque facteur isolé des autres), pas des leviers causaux garantis —
-  le gold, les kills et l'exécution en jeu s'influencent mutuellement pendant la partie.</p>
+<p class="meta"><strong>Limitations</strong>: solo queue Emerald+ data, not scrims/pro — early
+  trends (gold, objectives) generally transfer well, champion picks much
+  less so. Some signals (jungle CS) are partly definitional of gold itself: these are
+  conditional correlations (each factor isolated from the others), not guaranteed causal levers —
+  gold, kills, and in-game execution influence each other throughout the game.</p>
 
 {% if not factors %}
-<p class="empty">Pas encore calculé pour cette fenêtre ({{ window }}) — lancer
-  <code>python -m trio_lab.synergy.win_factors --patches {{ window }}</code> pour la matérialiser.</p>
+<p class="empty">Not computed yet for this window ({{ window }}) — run
+  <code>python -m trio_lab.synergy.win_factors --patches {{ window }}</code> to materialize it.</p>
 {% else %}
 <table class="data">
   <thead>
     <tr>
-      <th>Facteur</th>
-      <th>Population complète <span class="meta">({{ all_n }} games)</span></th>
-      <th>Derrière au gold à 15 min <span class="meta">({{ behind_n }} games)</span></th>
+      <th>Factor</th>
+      <th>Full population <span class="meta">({{ all_n }} games)</span></th>
+      <th>Behind on gold at 15 min <span class="meta">({{ behind_n }} games)</span></th>
     </tr>
   </thead>
   <tbody>
@@ -60,58 +60,58 @@
     {% endfor %}
   </tbody>
 </table>
-<p class="meta">Colonne « Derrière au gold » : leviers de comeback, mesurés uniquement sur les
-  games où l'équipe est derrière — les facteurs qui pèsent le plus n'y sont pas forcément les mêmes
-  que face à une partie équilibrée.</p>
+<p class="meta">"Behind on gold" column: comeback levers, measured only on
+  games where the team is behind — the factors that weigh the most there aren't necessarily the same
+  as in a balanced game.</p>
 {% endif %}
 
-<h2>Qu'est-ce qui construit cet avantage au gold ?</h2>
-<p class="meta">Le tableau au-dessus dit « avoir du gold prédit la victoire » — vrai, mais peu utile
-  en soi, un coach le sait déjà : le gold n'est pas un levier, c'est un résumé de tout ce qui s'est
-  déjà passé. Celui-ci répond à la vraie question : d'où vient cet avantage ? Deux temps, dans l'ordre
-  chronologique réel d'une game — le <strong>DRAFT</strong> (avant la partie : force des picks,
-  matchup, synergie du trio) puis le <strong>JEU EN LANE</strong> (0-15 min : CS jungle, premier
-  sang).</p>
-<p class="meta"><strong>Comment lire</strong> : chaque ligne montre l'effet sur le gold à 15 min,
-  toutes choses égales par ailleurs (isolé des autres facteurs). Les facteurs continus (force des
-  picks, matchup, synergie, CS jungle, dragons, wards) sont lus « pour un écart type au-dessus de la
-  moyenne » ; premier sang et héraut sont des effets directs oui/non.</p>
+<h2>What builds this gold advantage?</h2>
+<p class="meta">The table above says "having gold predicts winning" — true, but not very useful
+  on its own, a coach already knows that: gold isn't a lever, it's a summary of everything that has
+  already happened. This one answers the real question: where does this advantage come from? Two stages, in the actual
+  chronological order of a game — the <strong>DRAFT</strong> (before the game: pick strength,
+  matchup, trio synergy) then <strong>LANING PHASE</strong> (0-15 min: jungle CS, first
+  blood).</p>
+<p class="meta"><strong>How to read this</strong>: each row shows the effect on gold at 15 min,
+  all else being equal (isolated from the other factors). Continuous factors (pick
+  strength, matchup, synergy, jungle CS, dragons, wards) are read as "for one standard deviation above the
+  mean"; first blood and herald are direct yes/no effects.</p>
 
 {% if not gold_factors %}
-<p class="empty">Pas encore calculé pour cette fenêtre ({{ window }}) — lancer
-  <code>python -m trio_lab.synergy.gold_factors --patches {{ window }}</code> pour la matérialiser.</p>
+<p class="empty">Not computed yet for this window ({{ window }}) — run
+  <code>python -m trio_lab.synergy.gold_factors --patches {{ window }}</code> to materialize it.</p>
 {% else %}
-<p class="meta">Sur {{ gold_n }} games : le <strong>draft</strong> à lui seul explique
-  {{ r2_draft_only | pct(0) }} de la variance de l'avantage au gold à 15 min. Ajouter le
-  <strong>jeu en lane</strong> monte à {{ r2_full | pct(0) }} — soit {{ (r2_full - r2_draft_only) | pct(0) }}
-  apportés par l'exécution au-delà de ce que le draft explique déjà.</p>
+<p class="meta">Across {{ gold_n }} games: the <strong>draft</strong> alone explains
+  {{ r2_draft_only | pct(0) }} of the variance in the gold advantage at 15 min. Adding
+  the <strong>laning phase</strong> raises it to {{ r2_full | pct(0) }} — i.e. {{ (r2_full - r2_draft_only) | pct(0) }}
+  contributed by execution beyond what the draft already explains.</p>
 <table class="data">
   <thead>
     <tr>
-      <th>Facteur</th>
-      <th>Bloc</th>
-      <th>Effet sur le gold à 15 min</th>
+      <th>Factor</th>
+      <th>Block</th>
+      <th>Effect on gold at 15 min</th>
     </tr>
   </thead>
   <tbody>
     {% for f in gold_factors %}
     <tr>
       <td>{{ f.label }}</td>
-      <td class="meta">{{ 'Draft' if f.block == 'draft' else 'Jeu en lane (0-15 min)' }}</td>
+      <td class="meta">{{ 'Draft' if f.block == 'draft' else 'Laning phase (0-15 min)' }}</td>
       <td class="{{ 'pos' if f.row.coef > 0 else 'neg' if f.row.coef < 0 }}">
         {{ f.row.coef | signed_int }} gold
-        <span class="sub">{{ 'par écart-type' if f.feature in gold_factor_continuous else 'si oui' }}</span>
+        <span class="sub">{{ 'per standard deviation' if f.feature in gold_factor_continuous else 'if yes' }}</span>
       </td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
-<p class="meta"><strong>Limites</strong> : le bloc « jeu en lane » est volontairement réduit à ce qui
-  a une vraie coupure à 15 min dans les données. Vision fait exception : Riot n'expose le score de
-  vision qu'en cumulé fin de partie, à aucun timestamp intermédiaire — « wards posées/détruites avant
-  15 min »
-  est le proxy le plus honnête possible, pas un équivalent exact. Corrélation, pas causalité garantie :
-  le skill des joueurs influence à la fois le jeu en lane et le gold, aucune régression ne sépare
-  parfaitement les deux.</p>
+<p class="meta"><strong>Limitations</strong>: the "laning phase" block is deliberately limited to what
+  has a real cutoff at 15 min in the data. Vision is an exception: Riot only exposes the vision
+  score as an end-of-game cumulative total, at no intermediate timestamp — "wards placed/destroyed
+  before 15 min"
+  is the most honest proxy possible, not an exact equivalent. Correlation, not guaranteed causation:
+  player skill influences both laning phase and gold, no regression perfectly separates
+  the two.</p>
 {% endif %}
 {% endblock %}
