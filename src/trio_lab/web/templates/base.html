@@ -12,8 +12,13 @@
   <script src="/static/draft-variant-tabs.js?v={{ static_version('draft-variant-tabs.js') }}" defer></script>
   <script src="/static/draft-custom-archetype.js?v={{ static_version('draft-custom-archetype.js') }}" defer></script>
 </head>
-<!-- hx-boost : liens et formulaires deviennent des swaps AJAX, URLs canoniques. -->
-<body hx-boost="true">
+<!-- hx-boost : liens et formulaires deviennent des swaps AJAX, URLs canoniques.
+     hx-indicator ciblé sur #page-loading-bar (hérité par tout le body boosté,
+     donc aussi le tri de colonnes qui n'est qu'un lien classique) : un seul
+     indicateur pour toute la navigation du site, retour utilisateur
+     2026-08-11 (pages parfois longues, aucun signal de chargement). -->
+<body hx-boost="true" hx-indicator="#page-loading-bar">
+  <div id="page-loading-bar" class="htmx-indicator" aria-hidden="true"></div>
   <header>
     <a class="brand" href="/">Trio&nbsp;Lab</a>
     <nav>
