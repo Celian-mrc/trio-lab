@@ -1414,6 +1414,29 @@ gagner") avec les données déjà en place.
       français jusqu'au prochain cycle de rafraîchissement du service
       24/24 après déploiement — auto-corrigé, pas d'action manuelle.
 
+- [x] **Matérialisation des profils de ressources /flex (2026-08-12, retour
+      utilisateur : test de charge avant un partage Discord)** : `EXPLAIN
+      ANALYZE` en session a montré que `/flex` scannait intégralement
+      `match_role_stats` (10M lignes, 1,7 Go) à CHAQUE visite —
+      ~17,7s par appel × 2 requêtes par page. Un test de charge (25 requêtes
+      concurrentes, mix de pages réalistes) a confirmé l'impact réel : 44 à
+      47 requêtes sur 50 expiraient après 30s, l'I/O de l'instance Supabase
+      partagée (avec Loyalties v2) saturée par une seule page faisant
+      ramer tout le site. **Fix** : migration 040
+      (`score_role_resource_profile`/`score_role_resource_baseline`, sans
+      colonne `platform` — portée "toutes régions" uniquement, même
+      raisonnement que `score_champion_resilience`/win_factors/gold_factors),
+      nouveau module `synergy/flex.py` (calqué sur `resilience.py`, reprend
+      telle quelle la requête SQL existante) rafraîchi dans le même cycle
+      collecteur que `resilience.refresh`. `web/app.py` (`_flex_picks`) lit
+      désormais le matérialisé quand `platform="all"` (cas par défaut,
+      l'écrasante majorité du trafic) ; les autres régions restent en calcul
+      à la demande (comportement inchangé, cas rare) — même principe que
+      `draft_suggestions` (matérialisé pour "all" seulement). Coût de
+      lecture `/flex` : passé d'un scan de 10M lignes à une lecture d'une
+      table de quelques centaines de lignes (1 par (rôle, champion)
+      réellement joué).
+
 Phase 8 de nouveau en pause (draft, insights, résilience, flex, poke,
 scouting) — prochaine idée à définir.
 

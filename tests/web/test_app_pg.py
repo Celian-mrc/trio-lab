@@ -45,6 +45,7 @@ def pg_sync():
             " agg_trio_duration, agg_duo_duration, agg_matchup,"
             " score_duo, score_trio, score_matchup, score_win_factors, score_gold_factors,"
             " score_champion_resilience, champion_cc_theoretical,"
+            " score_role_resource_profile, score_role_resource_baseline,"
             " draft_suggestion, draft_suggestion_counter CASCADE"
         )
         yield conn
@@ -1753,15 +1754,45 @@ def test_resilience_page_shows_materialization_hint_only_without_any_reliable_da
     assert "No champion matches these filters" not in resp.text
 
 
+def _seed_role_resource(
+    conn, window: str, role: str, profiles: list[tuple[int, int, float, float]]
+) -> None:
+    """Peuple `score_role_resource_profile`/`_baseline` directement (données
+    matérialisées, retour utilisateur 2026-08-12 : /flex ne calcule plus à
+    la demande pour platform="all") — `profiles` : liste de
+    (champion_id, n, avg_gold_15, avg_dmg_per_gold). La ligne baseline est
+    déduite par moyenne pondérée, comme le ferait `synergy.flex.refresh`."""
+    for champ_id, n, gold, dmg in profiles:
+        conn.execute(
+            "INSERT INTO score_role_resource_profile"
+            " (window_label, role, champion_id, n, avg_gold_15, avg_dmg_per_gold)"
+            " VALUES (%s, %s, %s, %s, %s, %s)",
+            (window, role, champ_id, n, gold, dmg),
+        )
+    total_n = sum(n for _, n, _, _ in profiles)
+    avg_gold = sum(n * gold for _, n, gold, _ in profiles) / total_n
+    avg_dmg = sum(n * dmg for _, n, _, dmg in profiles) / total_n
+    conn.execute(
+        "INSERT INTO score_role_resource_baseline"
+        " (window_label, role, n, avg_gold_15, avg_dmg_per_gold)"
+        " VALUES (%s, %s, %s, %s, %s)",
+        (window, role, total_n, avg_gold, avg_dmg),
+    )
+
+
 def test_flex_page_detects_off_role_resource_deviation(pg_sync, client):
     """Champion 1 : Top (300 games, principal) + Support (150 games, 33 % —
     rôle secondaire non anecdotique). Son gold@15 en Support (5200, sur 40
     games récentes) dépasse la moyenne du rôle (mix avec le champion 2, qui
     ne joue QUE support à 4400) — doit remonter dans /flex."""
+    # platform='all' (pas 'euw1') : c'est la seule plateforme résolue par
+    # défaut par `available_platforms` pour laquelle /flex lit les tables
+    # matérialisées (`_seed_role_resource` ci-dessous) — retour utilisateur
+    # 2026-08-12.
     pg_sync.execute(
         "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
         " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
-        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'all', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
         " 0.0, 0.0, 1.0, 'faible')"
     )
     pg_sync.execute(
@@ -1772,21 +1803,14 @@ def test_flex_page_detects_off_role_resource_deviation(pg_sync, client):
         "INSERT INTO agg_champion (patch, platform, role, champion_id, games, wins)"
         " VALUES ('16.13', 'euw1', 'UTILITY', 1, 150, 70)"
     )
-    for champ_id, gold_15, count in ((1, 5200, 40), (2, 4400, 40)):
-        for i in range(count):
-            match_id = f"FLEX_{champ_id}_{i}"
-            pg_sync.execute(
-                "INSERT INTO matches (match_id, platform, patch, game_version, queue_id,"
-                " game_creation, game_duration_s, winning_team)"
-                " VALUES (%s, 'euw1', '16.13', '16.13.1', 420, now(), 1800, 100)",
-                (match_id,),
-            )
-            pg_sync.execute(
-                "INSERT INTO match_role_stats (match_id, team_id, role, champion_id, win,"
-                " gold_15, dmg_per_gold) VALUES (%s, 100, 'UTILITY', %s, true, %s, 1.5)",
-                (match_id, champ_id, gold_15),
-            )
-    resp = client.get("/flex")
+    _seed_role_resource(pg_sync, "16.13", "UTILITY", [(1, 40, 5200, 1.5), (2, 40, 4400, 1.5)])
+    # platform="all" explicite : c'est la vue matérialisée par
+    # `synergy.flex.refresh` que ce test exerce (retour utilisateur
+    # 2026-08-12) — sans ça, le seul score_trio seedé (platform='euw1')
+    # deviendrait la plateforme par défaut résolue et /flex retomberait sur
+    # le calcul à la demande, qui ne trouve rien (on n'a seedé que les
+    # tables matérialisées).
+    resp = client.get("/flex", params={"platform": "all"})
     assert resp.status_code == 200
     assert "Lee Sin" in resp.text  # champion_id=1 dans l'index de test
     assert "Top" in resp.text
@@ -1800,10 +1824,10 @@ def test_flex_page_detects_off_role_resource_deviation(pg_sync, client):
     # Phrase en langage clair, pas juste des chiffres bruts (retour utilisateur).
     assert "Lee Sin plays Support in 33% of their games (150/450)" in resp.text
     # Filtre par rôle : Support seulement.
-    resp_role = client.get("/flex", params={"role": "UTILITY"})
+    resp_role = client.get("/flex", params={"platform": "all", "role": "UTILITY"})
     assert resp_role.status_code == 200
     assert "Lee Sin" in resp_role.text
-    resp_wrong_role = client.get("/flex", params={"role": "TOP"})
+    resp_wrong_role = client.get("/flex", params={"platform": "all", "role": "TOP"})
     assert "Lee Sin" not in resp_wrong_role.text  # son rôle secondaire est Support, pas Top
     assert client.get("/flex", params={"role": "INVALID"}).status_code == 404
 
@@ -1815,7 +1839,7 @@ def test_flex_page_hides_deviation_below_threshold(pg_sync, client):
     pg_sync.execute(
         "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
         " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
-        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'all', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
         " 0.0, 0.0, 1.0, 'faible')"
     )
     pg_sync.execute(
@@ -1828,21 +1852,8 @@ def test_flex_page_hides_deviation_below_threshold(pg_sync, client):
     )
     # Champion 1 en support : gold_15 = 4520, quasi identique à la moyenne
     # du rôle (champion 2 seul, 4500) — écart < 1 %, sous le seuil de 5 %.
-    for champ_id, gold_15, count in ((1, 4520, 40), (2, 4500, 40)):
-        for i in range(count):
-            match_id = f"NOFLEX_{champ_id}_{i}"
-            pg_sync.execute(
-                "INSERT INTO matches (match_id, platform, patch, game_version, queue_id,"
-                " game_creation, game_duration_s, winning_team)"
-                " VALUES (%s, 'euw1', '16.13', '16.13.1', 420, now(), 1800, 100)",
-                (match_id,),
-            )
-            pg_sync.execute(
-                "INSERT INTO match_role_stats (match_id, team_id, role, champion_id, win,"
-                " gold_15, dmg_per_gold) VALUES (%s, 100, 'UTILITY', %s, true, %s, 1.5)",
-                (match_id, champ_id, gold_15),
-            )
-    resp = client.get("/flex")
+    _seed_role_resource(pg_sync, "16.13", "UTILITY", [(1, 40, 4520, 1.5), (2, 40, 4500, 1.5)])
+    resp = client.get("/flex", params={"platform": "all"})
     assert resp.status_code == 200
     assert "0 pick" in resp.text
     assert "Lee Sin" not in resp.text
@@ -1859,7 +1870,7 @@ def test_flex_page_wr_column_and_sortable_headers(pg_sync, client):
     pg_sync.execute(
         "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
         " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
-        " ci_low, ci_high, tier) VALUES ('16.13', 'euw1', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'all', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
         " 0.0, 0.0, 1.0, 'faible')"
     )
     pg_sync.execute(
@@ -1877,26 +1888,13 @@ def test_flex_page_wr_column_and_sortable_headers(pg_sync, client):
     # dev -21 % (EN DESSOUS) — un tri par magnitude (bug initial) classerait
     # Thresh avant Vi en décroissant ; un tri par signe (attendu) le classe
     # dernier.
-    for champ_id, gold_15, dmg_per_gold, count in (
-        (1, 6000, 2.0, 40),
-        (4, 5500, 1.0, 40),
-        (3, 3800, 1.5, 40),
-        (2, 4000, 1.5, 40),
-    ):
-        for i in range(count):
-            match_id = f"SORT_{champ_id}_{i}"
-            pg_sync.execute(
-                "INSERT INTO matches (match_id, platform, patch, game_version, queue_id,"
-                " game_creation, game_duration_s, winning_team)"
-                " VALUES (%s, 'euw1', '16.13', '16.13.1', 420, now(), 1800, 100)",
-                (match_id,),
-            )
-            pg_sync.execute(
-                "INSERT INTO match_role_stats (match_id, team_id, role, champion_id, win,"
-                " gold_15, dmg_per_gold) VALUES (%s, 100, 'UTILITY', %s, true, %s, %s)",
-                (match_id, champ_id, gold_15, dmg_per_gold),
-            )
-    resp = client.get("/flex")
+    _seed_role_resource(
+        pg_sync,
+        "16.13",
+        "UTILITY",
+        [(1, 40, 6000, 2.0), (4, 40, 5500, 1.0), (3, 40, 3800, 1.5), (2, 40, 4000, 1.5)],
+    )
+    resp = client.get("/flex", params={"platform": "all"})
     assert resp.status_code == 200
     # WR rôle secondaire affiché (47 % Lee Sin, 93 % Vi, arrondis) avec
     # l'écart signé vs la moyenne du rôle.
@@ -1911,12 +1909,16 @@ def test_flex_page_wr_column_and_sortable_headers(pg_sync, client):
     idx_lee, idx_vi, idx_thresh = (resp.text.index(n) for n in ("Lee Sin", "Vi", "Thresh"))
     assert idx_lee < idx_vi < idx_thresh
     # Tri croissant : Thresh (le plus négatif) en premier, Lee Sin en dernier.
-    resp_asc = client.get("/flex", params={"sort": "deviation", "dir": "asc"})
+    resp_asc = client.get("/flex", params={"platform": "all", "sort": "deviation", "dir": "asc"})
     idx_lee, idx_vi, idx_thresh = (resp_asc.text.index(n) for n in ("Lee Sin", "Vi", "Thresh"))
     assert idx_thresh < idx_vi < idx_lee
     # Trier par WR croissant : Lee Sin (WR plus faible) doit passer avant Vi.
-    resp_wr_asc = client.get("/flex", params={"sort": "wr_secondary", "dir": "asc"})
+    resp_wr_asc = client.get(
+        "/flex", params={"platform": "all", "sort": "wr_secondary", "dir": "asc"}
+    )
     assert resp_wr_asc.text.index("Lee Sin") < resp_wr_asc.text.index("Vi")
     # Trier par WR décroissant : Vi (WR plus haut) doit passer avant Lee Sin.
-    resp_wr_desc = client.get("/flex", params={"sort": "wr_secondary", "dir": "desc"})
+    resp_wr_desc = client.get(
+        "/flex", params={"platform": "all", "sort": "wr_secondary", "dir": "desc"}
+    )
     assert resp_wr_desc.text.index("Vi") < resp_wr_desc.text.index("Lee Sin")

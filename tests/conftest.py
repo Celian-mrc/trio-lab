@@ -48,6 +48,7 @@ async def pg_conn():
         " agg_trio_duration, agg_duo_duration, agg_matchup,"
         " score_duo, score_trio, score_matchup, score_win_factors, score_gold_factors,"
         " score_champion_resilience, champion_cc_theoretical,"
+        " score_role_resource_profile, score_role_resource_baseline,"
         " champion_range_theoretical CASCADE"
     )
     try:

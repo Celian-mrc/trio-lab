@@ -121,6 +121,9 @@ def test_refresh_scores_chains_and_prunes(monkeypatch):
         service.resilience, "refresh", lambda window, dsn=None: calls.append(("resilience", window))
     )
     monkeypatch.setattr(
+        service.flex, "refresh", lambda window, dsn=None: calls.append(("flex", window))
+    )
+    monkeypatch.setattr(
         service.draft_suggestions,
         "refresh",
         lambda window, platform, dsn=None: calls.append(("draft_suggestions", window, platform)),
@@ -134,6 +137,7 @@ def test_refresh_scores_chains_and_prunes(monkeypatch):
         ("compute", fake_window),
         ("matchups", fake_window),
         ("resilience", fake_window),
+        ("flex", fake_window),
         ("draft_suggestions", fake_window, "all"),
         ("prune_scores",),
     ]

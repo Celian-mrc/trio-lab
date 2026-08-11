@@ -497,6 +497,40 @@ def role_resource_baseline(conn: psycopg.Connection, window: str, platform: str)
     return {r["role"]: r for r in rows}
 
 
+def role_resource_profile_materialized(
+    conn: psycopg.Connection, window: str, *, min_games: int
+) -> list[dict]:
+    """Lecture matérialisée de `role_resource_profile` (retour utilisateur
+    2026-08-12, test de charge avant partage Discord) — `synergy.flex.refresh`
+    matérialise déjà `platform="all"` (cas par défaut, l'écrasante majorité
+    du trafic) dans `score_role_resource_profile` : lecture sur une table de
+    quelques centaines de lignes au lieu d'un scan de `match_role_stats`
+    (10M lignes, ~17,7s par appel, confirmé par EXPLAIN ANALYZE). Les autres
+    régions restent sur `role_resource_profile` (calcul à la demande, cas
+    rare)."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            """
+            SELECT role, champion_id, n, avg_gold_15, avg_dmg_per_gold
+            FROM score_role_resource_profile
+            WHERE window_label = %(window)s AND n >= %(min_games)s
+            """,
+            {"window": window, "min_games": min_games},
+        ).fetchall()
+
+
+def role_resource_baseline_materialized(conn: psycopg.Connection, window: str) -> dict[str, dict]:
+    """Lecture matérialisée de `role_resource_baseline` — cf.
+    `role_resource_profile_materialized`."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        rows = cur.execute(
+            "SELECT role, n, avg_gold_15, avg_dmg_per_gold"
+            " FROM score_role_resource_baseline WHERE window_label = %(window)s",
+            {"window": window},
+        ).fetchall()
+    return {r["role"]: r for r in rows}
+
+
 def win_factors(conn: psycopg.Connection, window: str, population: str) -> list[dict]:
     """Coefficients de la régression logistique multi-variables (Phase 8,
     `synergy.win_factors`) — pas de dimension `platform` : l'analyse porte

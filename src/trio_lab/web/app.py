@@ -1755,13 +1755,27 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
             role_bucket[0] += games
             role_bucket[1] += wins
 
-        profiles = {
-            (r["champion_id"], r["role"]): r
-            for r in queries.role_resource_profile(
-                conn, window, platform, min_games=FLEX_MIN_PROFILE_GAMES
-            )
-        }
-        baseline = queries.role_resource_baseline(conn, window, platform)
+        # Matérialisé pour platform="all" (cas par défaut, retour
+        # utilisateur 2026-08-12 : le calcul à la demande scanne
+        # intégralement match_role_stats, ~17,7s par appel, sature l'I/O
+        # sous quelques requêtes concurrentes) — les autres régions restent
+        # en calcul à la demande, cas rare.
+        if platform == "all":
+            profiles = {
+                (r["champion_id"], r["role"]): r
+                for r in queries.role_resource_profile_materialized(
+                    conn, window, min_games=FLEX_MIN_PROFILE_GAMES
+                )
+            }
+            baseline = queries.role_resource_baseline_materialized(conn, window)
+        else:
+            profiles = {
+                (r["champion_id"], r["role"]): r
+                for r in queries.role_resource_profile(
+                    conn, window, platform, min_games=FLEX_MIN_PROFILE_GAMES
+                )
+            }
+            baseline = queries.role_resource_baseline(conn, window, platform)
 
         picks: list[dict] = []
         for row in distribution:

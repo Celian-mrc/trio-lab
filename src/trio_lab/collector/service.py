@@ -27,7 +27,7 @@ import psycopg
 from trio_lab import db, maintenance
 from trio_lab.collector import collect, patches
 from trio_lab.stats import aggregate
-from trio_lab.synergy import compute, draft_suggestions, matchups, resilience
+from trio_lab.synergy import compute, draft_suggestions, flex, matchups, resilience
 from trio_lab.synergy.windows import PatchWindow, make_window, patch_key
 
 logger = logging.getLogger(__name__)
@@ -83,6 +83,13 @@ def refresh_scores(patch: str, dsn: str | None = None) -> None:
     # manuel à automatique le 20/07/2026, retour utilisateur (cf.
     # docs/ROADMAP.md). `min_rows` en dessous du seuil : no-op silencieux.
     resilience.refresh(window, dsn=dsn)
+    # Profils de ressources par (champion, rôle) pour /flex (retour
+    # utilisateur 2026-08-12, test de charge avant partage Discord) : la
+    # requête à la demande scannait intégralement match_role_stats (10M
+    # lignes, ~17,7s × 2 par page) — sature l'I/O de l'instance Supabase
+    # partagée sous quelques requêtes concurrentes. Coût de refresh mesuré
+    # comparable à resilience.refresh, absorbé dans le même cycle.
+    flex.refresh(window, dsn=dsn)
     # Compositions suggérées + contres précalculées pour "toutes régions"
     # UNIQUEMENT (retour utilisateur 2026-07-25) : la région par défaut à
     # l'arrivée sur /draft (le plus de games) — les autres régions restent en
