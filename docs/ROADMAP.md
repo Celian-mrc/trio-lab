@@ -1297,6 +1297,23 @@ gagner") avec les données déjà en place.
         scouté) ne bloque jamais la complétion — plus 1 test bout-en-bout
         HTTP confirmant le même comportement à travers le formulaire web.
 
+- [x] **Icônes de champion hébergées localement (2026-08-11, retour
+      utilisateur : "je vais vers la page duos et ça met à peu près 5
+      secondes et je ne vois rien qui indique un chargement")** : la vraie
+      cause n'était pas l'indicateur de chargement (bien câblé, vérifié en
+      direct sur le site déployé) mais ~90 requêtes tierces par page vers
+      `ddragon.leagueoflegends.com` (une par icône de champion), CDN Riot
+      sans en-tête `Cache-Control` — confirmé en inspectant le réseau du
+      site en prod. `web/champions.py` pointe désormais `icon_url` vers
+      `/static/champions/` (servi par le mount `StaticFiles` existant, rien
+      à ajouter côté routes) plutôt que vers Data Dragon. Nouveau script
+      `python -m trio_lab.web.sync_champion_icons` (même famille que
+      `ccref.sync_theoretical`/`rangeref.sync`) : incrémental, ne
+      télécharge que les fichiers absents (retour utilisateur : "elles
+      changent très rarement faudra juste ajouter les nouveaux
+      champions") — 233 icônes (7,2 Mo) téléchargées et committées au
+      premier lancement.
+
 Phase 8 de nouveau en pause (draft, insights, résilience, flex, poke,
 scouting) — prochaine idée à définir. Reste à faire si repris : traduction
 anglaise complète de l'interface (retour utilisateur 2026-08-11 : "je pense
