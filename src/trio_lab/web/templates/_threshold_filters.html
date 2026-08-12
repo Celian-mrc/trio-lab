@@ -36,7 +36,7 @@
 ] %}
 {% for key, label, attrs in fields %}
 <label class="threshold-field" data-key="{{ key }}" {% if not min_values[key] and not max_values[key] %}hidden{% endif %}>
-  <span data-tooltip="Only show combos within this {{ label }} range — min and max are independent (setting either one is enough), combinable with other thresholds to find combos that are good on several axes at once." aria-label="Only show combos within this {{ label }} range.">{{ label }}</span>
+  <span data-tooltip="Only show combos within this {{ label }} range. Min and max are independent." aria-label="Only show combos within this {{ label }} range.">{{ label }}</span>
   <span class="threshold-range">
     <input type="number" name="min_{{ key }}" value="{{ min_values[key] }}" placeholder="min"
       {% if 'min' in attrs %}min="{{ attrs.min }}"{% endif %}

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Compositions & counters — Trio Lab{% endblock %}
+{% block title %}Compositions & counters · Trio Lab{% endblock %}
 {% block content %}
 {% macro matchup_block(title, block, verb, color, extra_class) %}
 <div class="draft-counters {{ extra_class }}">
@@ -52,7 +52,7 @@
   {% if d.seed_pairs %}
   <ul class="draft-seed-pairs">
     {% for p in d.seed_pairs %}
-    <li>{{ p.champion_a.name }} + {{ p.champion_b.name }} —
+    <li>{{ p.champion_a.name }} + {{ p.champion_b.name }}:
       {% if p.tier %}{{ p.synergy | signed_pct }}, {{ TIER_LABELS[p.tier] }} ({{ p.games }}){% else %}no data{% endif %}
     </li>
     {% endfor %}
@@ -151,7 +151,7 @@
         {% endfor %}
         <option value="custom" {{ 'selected' if selected_archetype == 'custom' }}>Custom</option>
       </select>
-      <label class="draft-custom-field" data-tooltip="Minimum number of real games for a duo to count as a reliable candidate — lowering this threshold widens the champion pool but with less data per candidate." aria-label="Minimum reliability, in real games">
+      <label class="draft-custom-field" data-tooltip="Lower = more champions, less data per candidate." aria-label="Minimum reliability, in real games">
         Min. reliability (games)
         <input type="number" name="cw_min_games" value="{{ cw_min_games }}" min="0" step="10">
       </label>
@@ -178,7 +178,7 @@
 
 <section class="draft-compose">
   <h2>Counter this team</h2>
-  <p class="meta">Enter the enemy picks you know (partial scouting is fine) — the suggested composition looks for both good 1v1 counters AND good synergy between them, not just 5 isolated counters.</p>
+  <p class="meta">Enter the enemy picks you know. Partial scouting is fine.</p>
   <form method="get" action="/draft" class="draft-compose-form">
     <input type="hidden" name="window" value="{{ window }}">
     <input type="hidden" name="platform" value="{{ platform }}">
@@ -195,7 +195,7 @@
       {% endfor %}
     </div>
     <div class="draft-compose-submit">
-      <label class="draft-custom-field" data-tooltip="Minimum number of real games for a duo to count as a reliable candidate — lowering this threshold widens the champion pool but with less data per candidate." aria-label="Minimum reliability, in real games">
+      <label class="draft-custom-field" data-tooltip="Lower = more champions, less data per candidate." aria-label="Minimum reliability, in real games">
         Min. reliability (games)
         <input type="number" name="enemy_min_games" value="{{ enemy_min_games }}" min="0" step="10">
       </label>
@@ -248,7 +248,7 @@
       {% endfor %}
     </div>
     <div class="draft-custom-submit">
-      <label class="draft-custom-field" data-tooltip="Minimum number of real games for a duo to count as a reliable candidate — lowering this threshold widens the champion pool but with less data per candidate." aria-label="Minimum reliability, in real games">
+      <label class="draft-custom-field" data-tooltip="Lower = more champions, less data per candidate." aria-label="Minimum reliability, in real games">
         Min. reliability (games)
         <input type="number" name="w_min_games" value="{{ w_min_games }}" min="0" step="10">
       </label>

@@ -1437,8 +1437,60 @@ gagner") avec les données déjà en place.
       table de quelques centaines de lignes (1 par (rôle, champion)
       réellement joué).
 
-Phase 8 de nouveau en pause (draft, insights, résilience, flex, poke,
-scouting) — prochaine idée à définir.
+- [x] **Pool DB web 4 → 12 connexions (2026-08-12, même test de charge)** :
+      une fois `/flex` matérialisé, le pool à 4 connexions du service web
+      restait le facteur limitant sous charge concurrente. Marge vérifiée
+      avant d'augmenter (`pg_stat_activity` sur l'instance Supabase
+      partagée) : 90 connexions max, 42 utilisées en tout à ce moment
+      (dont 17 `supabase_admin` + 5 `authenticator`, hors de notre
+      contrôle), 14 pour `trio_lab_app` — +8 dans le pire cas restait large
+      sous la limite. Résultat combiné avec la matérialisation `/flex` :
+      test de charge (25 requêtes concurrentes) passé de 44-47 erreurs sur
+      50 à 0 erreur sur 50.
+
+- [x] **Nettoyage UI avant partage Discord (2026-08-12, retour
+      utilisateur)** : 4 demandes groupées.
+      1. **Page `/insights` supprimée** ("ce qui fait gagner" + "qu'est-ce
+         qui construit l'avantage au gold") : route, template, lien nav,
+         `queries.win_factors`/`gold_factors` (devenus inutilisés côté web)
+         retirés. `synergy/win_factors.py`/`synergy/gold_factors.py` (CLI,
+         "manuels") et leurs tables `score_win_factors`/`score_gold_factors`
+         volontairement conservés — outils d'analyse indépendants de la
+         page, pas de raison de les supprimer avec elle.
+      2. **Texte réduit sur tous les templates** : paragraphes explicatifs
+         longs condensés (`flex.html`/`resilience.html` étaient les plus
+         verbeux), tooltips raccourcis, bloc "Empirique/théorique/mélangé"
+         de `trio.html`/`duo.html` (déjà repéré comme obsolète lors de la
+         traduction anglaise mais raté) enfin supprimé.
+      3. **Tirets cadratins retirés partout côté site** : titres de page
+         (séparateur `·` au lieu de `—`), tooltips, messages d'erreur —
+         reformulés en phrases courtes plutôt qu'un simple remplacement de
+         ponctuation. Le `—` utilisé comme valeur "donnée absente" dans les
+         tableaux (`app._fmt_pct`/`_fmt_signed_int`/etc.) remplacé par `-`.
+         Docstrings/commentaires internes non touchés (convention
+         CLAUDE.md : français OK, jamais visibles côté site).
+      4. **Bug "Contre cette équipe" corrigé** : les poids affichés ne
+         totalisaient jamais 100 % (ex. "Synergy 30 % · Scaling 8 % · CC
+         8 % · Gold@15 8 % · Drakes 8 %" = 60 %) — `matchup_weight` (40 %)
+         était extrait du dict `weights` avant le calcul de score
+         (`propose_counter_draft`) et jamais réinjecté pour l'affichage.
+         Fix : réinjecté dans la copie stockée pour l'affichage uniquement
+         (`propose_for_weights`), label "Matchup" ajouté à
+         `DRAFT_ARCHETYPE_AXIS_LABELS`. Vérifié en session (Viktor mid) :
+         "Synergy 30 % · Scaling 8 % · CC 8 % · Gold@15 8 % · Drakes 8 % ·
+         Matchup 40 %".
+      5. **Menus déroulants restylés façon shadcn/ui** : flèche native du
+         navigateur remplacée par un chevron custom (SVG inline), ring bleu
+         au focus au lieu du contour par défaut, cohérent avec le reste du
+         design déjà inspiré de shadcn (`style.css`, palette zinc). Une
+         seule règle `select` globale plutôt que dupliquée par section — a
+         nécessité de retirer `background: transparent` des règles
+         `.filters`/`.draft-compose-submit` existantes (le raccourci
+         `background` réinitialisait `background-image`, effaçant le
+         chevron).
+
+Phase 8 de nouveau en pause (draft, résilience, flex, poke, scouting) —
+prochaine idée à définir.
 
 **Gap constaté en marge de cette révision (2026-07-19)** : `agg_matchup`/
 `score_matchup` étaient vides en prod alors que le code (`stats/aggregate.py`

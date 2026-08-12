@@ -6,7 +6,7 @@
 {% set missing_role_plural = {'jgl_mid': 'supports', 'jgl_sup': 'mids', 'mid_sup': 'junglers'}.get(roles) %}
 {% set a = champ(score.champ_a) %}
 {% set b = champ(score.champ_b) %}
-{% block title %}{{ a.name }} / {{ b.name }} — Trio Lab{% endblock %}
+{% block title %}{{ a.name }} / {{ b.name }} · Trio Lab{% endblock %}
 {% block content %}
 <h1 class="trio-title">
   {% for c, key, label in ((a, role_a, ROLE_LABELS[role_a]), (b, role_b, ROLE_LABELS[role_b])) %}
@@ -35,7 +35,7 @@
     <p class="big-number {{ 'pos' if score.synergy > 0 else 'neg' if score.synergy < 0 }}"
        data-tooltip="Gap between this duo's actual winrate and the average of the individual winrates of its 2 champions." aria-label="Gap between this duo's actual winrate and the average of the individual winrates of its 2 champions.">{{ score.synergy | signed_pct }}</p>
     <p class="meta">reliability <span class="tier tier-{{ score.tier }}">{{ TIER_LABELS[score.tier] }}</span></p>
-    <p class="meta" data-tooltip="Individual winrate of each champion in their role (all compositions combined, same window) — the average of these 2 values is the baseline subtracted from the duo's winrate to get the synergy." aria-label="Individual winrate of each champion in their role (all compositions combined, same window) — the average of these 2 values is the baseline subtracted from the duo's winrate to get the synergy.">Individual WR: {{ a.name }} {{ member_wr.a | pct }} · {{ b.name }} {{ member_wr.b | pct }}</p>
+    <p class="meta" data-tooltip="Baseline used to compute synergy." aria-label="Baseline used to compute synergy.">Individual WR: {{ a.name }} {{ member_wr.a | pct }} · {{ b.name }} {{ member_wr.b | pct }}</p>
     <p class="meta" data-tooltip="95% confidence interval on the synergy (Newcombe method, same principle as the winrate's Wilson interval but for a difference between 2 proportions): if the interval contains 0, this duo might have no real synergy at all." aria-label="95% confidence interval on the synergy (Newcombe method, same principle as the winrate's Wilson interval but for a difference between 2 proportions): if the interval contains 0, this duo might have no real synergy at all.">synergy CI {{ score.synergy_ci_low | signed_pct }} – {{ score.synergy_ci_high | signed_pct }}</p>
   </div>
   <div class="card"><h3>Tempo</h3>
@@ -64,7 +64,7 @@
         <div class="fill {{ 'pos' if v > 0 else 'neg' }}" style="width: {{ (v | barpct_abs(gold_diff_bar_cap)) / 2 }}%"></div>
         {% endif %}
       </div>
-      <div class="n" data-tooltip="Number of games (out of {{ stats.games }} total) that lasted at least {{ m }} min — the average above only covers this subset." aria-label="Number of games (out of {{ stats.games }} total) that lasted at least {{ m }} min — the average above only covers this subset.">{{ n }} games ({{ sample_pct | round | int }}%)</div>
+      <div class="n" data-tooltip="Games (of {{ stats.games }}) that lasted at least {{ m }} min." aria-label="Games (of {{ stats.games }}) that lasted at least {{ m }} min.">{{ n }} games ({{ sample_pct | round | int }}%)</div>
     </div>
     {% endfor %}
   </div>

@@ -2,7 +2,7 @@
 {% set jgl = champ(score.jgl_champion) %}
 {% set mid = champ(score.mid_champion) %}
 {% set sup = champ(score.sup_champion) %}
-{% block title %}{{ jgl.name }} / {{ mid.name }} / {{ sup.name }} — Trio Lab{% endblock %}
+{% block title %}{{ jgl.name }} / {{ mid.name }} / {{ sup.name }} · Trio Lab{% endblock %}
 {% block content %}
 <h1 class="trio-title">
   {% for c, key, label in ((jgl, 'jgl', 'Jungle'), (mid, 'mid', 'Mid'), (sup, 'sup', 'Support')) %}
@@ -18,14 +18,14 @@
     <p class="meta">{{ score.games }} games · CI {{ score.ci_low | pct(0) }} – {{ score.ci_high | pct(0) }}</p></div>
   <div class="card"><h3>Synergy</h3>
     <p class="big-number {{ 'pos' if score.synergy > 0 else 'neg' if score.synergy < 0 }}"
-       data-tooltip="The number to remember: blends the raw synergy and the duo prediction below, giving more weight to the raw value when this trio has a lot of games." aria-label="The number to remember: blends the raw synergy and the duo prediction below, giving more weight to the raw value when this trio has a lot of games.">{{ score.synergy | signed_pct }}</p>
+       data-tooltip="Blends raw synergy and the duo prediction below." aria-label="Blends raw synergy and the duo prediction below.">{{ score.synergy | signed_pct }}</p>
     <p class="meta">
-      <span data-tooltip="Gap between this trio's actual winrate and the average of the individual winrates of its 3 champions, measured only on this trio's games." aria-label="Gap between this trio's actual winrate and the average of the individual winrates of its 3 champions, measured only on this trio's games.">raw {{ score.synergy_raw | signed_pct }}</span>
-      · <span data-tooltip="What this trio's synergy should be based on its 3 internal duos (jgl+mid, jgl+sup, mid+sup) — the reference used while the full trio still has few games." aria-label="What this trio's synergy should be based on its 3 internal duos (jgl+mid, jgl+sup, mid+sup) — the reference used while the full trio still has few games.">duo prediction {{ score.synergy_pred | signed_pct }}</span>
-      · <span data-tooltip="Score reliability based on this trio's game count: low = mostly relying on the duo prediction, high = raw synergy dominates." aria-label="Score reliability based on this trio's game count: low = mostly relying on the duo prediction, high = raw synergy dominates.">reliability <span class="tier tier-{{ score.tier }}">{{ TIER_LABELS[score.tier] }}</span></span>
+      <span data-tooltip="Trio winrate minus the average of its 3 champions' individual winrates." aria-label="Trio winrate minus the average of its 3 champions' individual winrates.">raw {{ score.synergy_raw | signed_pct }}</span>
+      · <span data-tooltip="Synergy predicted from the 3 internal duos." aria-label="Synergy predicted from the 3 internal duos.">duo prediction {{ score.synergy_pred | signed_pct }}</span>
+      · <span data-tooltip="Based on game count: low relies on the duo prediction, high on raw synergy." aria-label="Based on game count: low relies on the duo prediction, high on raw synergy.">reliability <span class="tier tier-{{ score.tier }}">{{ TIER_LABELS[score.tier] }}</span></span>
     </p>
-    <p class="meta" data-tooltip="95% confidence interval on the raw synergy (Newcombe method, same principle as the winrate's Wilson interval but for a difference between 2 proportions): if the interval contains 0, this trio might have no real synergy at all." aria-label="95% confidence interval on the raw synergy (Newcombe method, same principle as the winrate's Wilson interval but for a difference between 2 proportions): if the interval contains 0, this trio might have no real synergy at all.">raw synergy CI {{ score.synergy_ci_low | signed_pct }} – {{ score.synergy_ci_high | signed_pct }}</p>
-    <p class="meta" data-tooltip="Individual winrate of each champion in their role (all compositions combined, same window) — the average of these 3 values is the baseline subtracted from the trio's winrate to get the raw synergy." aria-label="Individual winrate of each champion in their role (all compositions combined, same window) — the average of these 3 values is the baseline subtracted from the trio's winrate to get the raw synergy.">Individual WR: {{ jgl.name }} {{ member_wr.jgl | pct }} · {{ mid.name }} {{ member_wr.mid | pct }} · {{ sup.name }} {{ member_wr.sup | pct }}</p>
+    <p class="meta" data-tooltip="If this range contains 0, the synergy could be noise." aria-label="If this range contains 0, the synergy could be noise.">raw synergy CI {{ score.synergy_ci_low | signed_pct }} – {{ score.synergy_ci_high | signed_pct }}</p>
+    <p class="meta" data-tooltip="Baseline used to compute raw synergy." aria-label="Baseline used to compute raw synergy.">Individual WR: {{ jgl.name }} {{ member_wr.jgl | pct }} · {{ mid.name }} {{ member_wr.mid | pct }} · {{ sup.name }} {{ member_wr.sup | pct }}</p>
   </div>
   <div class="card"><h3>Tempo</h3>
     <p class="big-number">{{ stats.avg_duration_win_s | duration }} <small>win</small>
@@ -33,9 +33,9 @@
     <p class="meta">average game duration</p></div>
   <div class="card"><h3>Scaling</h3>
     <p class="big-number {{ 'pos' if score.scaling and score.scaling > 0 else 'neg' if score.scaling and score.scaling < 0 }}"
-       data-tooltip="Winrate slope by game duration (5 min buckets), measured only (no prediction with few games): positive = this trio wins more often in long games, negative = it wins more often in short games." aria-label="Winrate slope by game duration (5 min buckets), measured only (no prediction with few games): positive = this trio wins more often in long games, negative = it wins more often in short games.">{{ score.scaling | signed_pct(2) }}</p>
+       data-tooltip="Winrate slope by game duration. Positive: wins more in long games." aria-label="Winrate slope by game duration. Positive: wins more in long games.">{{ score.scaling | signed_pct(2) }}</p>
     <p class="meta">WR points per 5 min bucket</p>
-    <p class="meta" data-tooltip="95% confidence interval on the slope (regression standard error): if the interval contains 0, this trio might have no real trend based on duration." aria-label="95% confidence interval on the slope (regression standard error): if the interval contains 0, this trio might have no real trend based on duration.">CI {{ score.scaling_ci_low | signed_pct(2) }} – {{ score.scaling_ci_high | signed_pct(2) }}</p></div>
+    <p class="meta" data-tooltip="If this range contains 0, the trend could be noise." aria-label="If this range contains 0, the trend could be noise.">CI {{ score.scaling_ci_low | signed_pct(2) }} – {{ score.scaling_ci_high | signed_pct(2) }}</p></div>
 </section>
 
 <section>
@@ -53,7 +53,7 @@
         <div class="fill {{ 'pos' if v > 0 else 'neg' }}" style="width: {{ (v | barpct_abs(gold_diff_bar_cap)) / 2 }}%"></div>
         {% endif %}
       </div>
-      <div class="n" data-tooltip="Number of games (out of {{ stats.games }} total) that lasted at least {{ m }} min — the average above only covers this subset." aria-label="Number of games (out of {{ stats.games }} total) that lasted at least {{ m }} min — the average above only covers this subset.">{{ n }} games ({{ sample_pct | round | int }}%)</div>
+      <div class="n" data-tooltip="Games (of {{ stats.games }}) that lasted at least {{ m }} min." aria-label="Games (of {{ stats.games }}) that lasted at least {{ m }} min.">{{ n }} games ({{ sample_pct | round | int }}%)</div>
     </div>
     {% endfor %}
   </div>
@@ -84,7 +84,7 @@
       <div class="row"><span>Kill participation &lt; 15 min</span><span>{{ stats.kill_participation_pre15 | pct }}</span></div>
       <div class="row"><span>Team damage share</span><span>{{ stats.damage_share | pct }}</span></div>
       <div class="row">
-        <span data-tooltip="Jungler's jungle CS diff vs the enemy jungler at minute 15 (jungleMinionsKilled from the timeline): signal of early jungle dominance (invades, pathing), before macro rotations redistribute farm." aria-label="Jungler's jungle CS diff vs the enemy jungler at minute 15 (jungleMinionsKilled from the timeline): signal of early jungle dominance (invades, pathing), before macro rotations redistribute farm.">Jungle CS vs enemy at 15 min</span>
+        <span data-tooltip="Signal of early jungle dominance (invades, pathing)." aria-label="Signal of early jungle dominance (invades, pathing).">Jungle CS vs enemy at 15 min</span>
         <span class="{{ 'pos' if stats.jgl_cs_diff_15 and stats.jgl_cs_diff_15 > 0 else 'neg' if stats.jgl_cs_diff_15 and stats.jgl_cs_diff_15 < 0 }}">{{ stats.jgl_cs_diff_15 | signed_int }}</span>
       </div>
     </div>
@@ -92,7 +92,7 @@
 
   <div class="card">
     <h3>Damage / gold, per member</h3>
-    <p class="meta" data-tooltip="Damage to champions ÷ gold earned: highlights a champion who returns a lot with few resources, regardless of the priority given to them." aria-label="Damage to champions ÷ gold earned: highlights a champion who returns a lot with few resources, regardless of the priority given to them.">resource efficiency</p>
+    <p class="meta" data-tooltip="Damage to champions ÷ gold earned." aria-label="Damage to champions ÷ gold earned.">resource efficiency</p>
     {% set dpg = [stats.jgl_dmg_per_gold, stats.mid_dmg_per_gold, stats.sup_dmg_per_gold] %}
     <div class="bar-group">
       <div class="bar-row"><span class="bar-label">{{ jgl.name }}</span><div class="bar-track"><div class="bar-fill" style="width: {{ stats.jgl_dmg_per_gold | barpct(dpg) }}%"></div></div><span class="bar-value">{{ stats.jgl_dmg_per_gold | num(2) }}</span></div>

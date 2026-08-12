@@ -1,22 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Champion resilience — Trio Lab{% endblock %}
+{% block title %}Champion resilience · Trio Lab{% endblock %}
 {% block content %}
 <h1>Champion resilience</h1>
-<p class="meta">There is no universal "perfect combination" of metrics that leads to
-  victory: a factor like the gold lead at 15 min has a strong effect ON AVERAGE, but different
-  champions depend on it very differently. This page shows, champion by champion, the
-  winrate gap between "ahead" and "behind" on the chosen factor — to spot who tolerates what
-  rather than applying the same threshold to everyone.</p>
-<p class="meta"><strong>How to read this</strong>: "ahead"/"behind" is about the whole TEAM (not
-  just this champion — for jungle CS, it reflects the team's jungler performance, not
-  necessarily that of the displayed champion if they play another role). Small gap = this champion keeps a
-  good WR even in the unfavorable state (resilient pick); large gap = their WR collapses outside
-  the favorable state (a pick that needs this advantage). Example observed in session: jungle Nasus is
-  behind on gold at 15 min in 60% of his games (34% WR in that state) but his overall WR stays
-  ~52% — his gap here stays large (he makes good use of a lead when he has one), which is offset
-  by a very large volume of playable games even while behind.</p>
-<p class="meta"><strong>Threshold for the "{{ RESILIENCE_FACTOR_LABELS[factor] }}" factor</strong>:
-  {{ RESILIENCE_FACTOR_THRESHOLDS[factor] }}.</p>
+<p class="meta">Gold lead at 15 min helps on average, but champions depend on it very differently. This shows, per champion, the winrate gap between "ahead" and "behind" on the chosen factor.</p>
+<p class="meta"><strong>How to read this</strong>: "ahead"/"behind" is about the whole team. Small gap: this champion keeps a good WR even behind (resilient). Large gap: their WR collapses without the advantage.</p>
+<p class="meta"><strong>Threshold for "{{ RESILIENCE_FACTOR_LABELS[factor] }}"</strong>: {{ RESILIENCE_FACTOR_THRESHOLDS[factor] }}.</p>
 
 <form method="get" action="/resilience" class="filters">
   <label>Window
@@ -63,16 +51,13 @@
   <button type="submit">Filter</button>
 </form>
 
-<p class="meta">{{ rows | length }} champion{{ 's' if rows | length != 1 }} — champions with fewer than
-  {{ resilience_min_games_per_side }} games on either side excluded (gap too noisy to be a
-  signal).</p>
+<p class="meta">{{ rows | length }} champion{{ 's' if rows | length != 1 }}. Champions with fewer than {{ resilience_min_games_per_side }} games on either side are excluded.</p>
 
 {% if not rows and reliable_count == 0 %}
-<p class="empty">Nothing to show — not computed yet for this window ({{ window }}), or not enough
-  games on both sides. Run
+<p class="empty">Nothing to show yet for this window ({{ window }}). Run
   <code>python -m trio_lab.synergy.resilience --patches {{ window }}</code> to materialize it.</p>
 {% elif not rows %}
-<p class="empty">No champion matches these filters ({{ reliable_count }} reliable champion{{ 's' if reliable_count != 1 }} on this window, none in the requested range) — try widening them.</p>
+<p class="empty">No champion matches these filters ({{ reliable_count }} reliable champion{{ 's' if reliable_count != 1 }} on this window). Try widening them.</p>
 {% else %}
 <table class="data">
   <thead>

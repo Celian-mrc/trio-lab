@@ -531,34 +531,6 @@ def role_resource_baseline_materialized(conn: psycopg.Connection, window: str) -
     return {r["role"]: r for r in rows}
 
 
-def win_factors(conn: psycopg.Connection, window: str, population: str) -> list[dict]:
-    """Coefficients de la régression logistique multi-variables (Phase 8,
-    `synergy.win_factors`) — pas de dimension `platform` : l'analyse porte
-    sur toutes les régions combinées (question globale, pas régionale).
-    Liste vide si `synergy.win_factors` n'a jamais tourné pour cette fenêtre
-    (rafraîchissement manuel, pas dans le cycle service)."""
-    with conn.cursor(row_factory=dict_row) as cur:
-        return cur.execute(
-            "SELECT feature, coef, odds_ratio, n FROM score_win_factors"
-            " WHERE window_label = %s AND population = %s",
-            (window, population),
-        ).fetchall()
-
-
-def gold_factors(conn: psycopg.Connection, window: str) -> list[dict]:
-    """Coefficients du modèle "qu'est-ce qui construit l'avantage au gold"
-    (Phase 8, `synergy.gold_factors`) — pas de dimension `platform`, même
-    raisonnement que `win_factors`. Inclut les lignes de diagnostic
-    `_r2_draft_only`/`_r2_full` (feature spéciale, `coef` porte le R²) :
-    l'appelant les sépare des vraies features avant affichage. Liste vide si
-    `synergy.gold_factors` n'a jamais tourné pour cette fenêtre."""
-    with conn.cursor(row_factory=dict_row) as cur:
-        return cur.execute(
-            "SELECT block, feature, coef, n FROM score_gold_factors WHERE window_label = %s",
-            (window,),
-        ).fetchall()
-
-
 def champion_resilience(
     conn: psycopg.Connection, window: str, factor: str, *, role: str | None = None
 ) -> list[dict]:

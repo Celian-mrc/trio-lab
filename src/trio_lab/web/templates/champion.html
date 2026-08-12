@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% set c = champ(champion_id) %}
-{% block title %}{{ c.name }} ({{ ROLE_LABELS[role] }}) — Trio Lab{% endblock %}
+{% block title %}{{ c.name }} ({{ ROLE_LABELS[role] }}) · Trio Lab{% endblock %}
 {% block content %}
 <h1 class="trio-title">
   <span class="champ big">
@@ -8,8 +8,7 @@
     {{ c.name }} <small>{{ ROLE_LABELS[role] }}</small>
   </span>
 </h1>
-<p class="meta">Individual winrate across all compositions (same window) — not the stats
-  of a specific trio or duo.</p>
+<p class="meta">Individual winrate across all compositions, not a specific trio or duo.</p>
 
 <section class="cards">
   <div class="card"><h3>Winrate</h3><p class="big-number">{{ baseline.wr | pct }}</p>
@@ -27,8 +26,7 @@
   {% for partner_role, rows in partners.items() %}
   <div>
     <h2>Best {{ {'jgl': 'junglers', 'mid': 'mids', 'sup': 'supports'}[partner_role] }}</h2>
-    <p class="meta">Medium or high reliability only (≥ 50 weighted games) — a duo with 1-2
-      games doesn't appear here even with an extreme synergy.</p>
+    <p class="meta">Medium or high reliability only (≥ 50 weighted games).</p>
     <table class="narrow">
       <thead><tr><th>Champion</th><th>Games</th><th>WR</th><th>Synergy</th><th>Reliability</th></tr></thead>
       <tbody>

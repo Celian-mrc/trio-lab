@@ -1258,7 +1258,13 @@ def propose_for_weights(
                 "label": label,
                 "suggestion_rank": rank,
                 "selection": selection,
-                "weights": weights,
+                # `matchup_weight` réinjecté ici pour l'AFFICHAGE seulement
+                # (retour utilisateur 2026-08-12 : les poids montrés sur
+                # "Contre cette équipe" ne totalisaient pas 100%, `matchup`
+                # avait été extrait de `weights` par l'appelant avant
+                # d'arriver ici, cf. docstring). `weights` (la variable, pas
+                # cette copie) reste inchangée pour le reste de la fonction.
+                "weights": {**weights, "matchup": matchup_weight} if matchup_weight else weights,
                 "members": placed,
                 "total_synergy": total,
                 "seed_pairs": [

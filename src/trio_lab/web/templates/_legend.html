@@ -1,36 +1,15 @@
 <details class="legend">
   <summary>How to read these numbers</summary>
   <ul>
-    <li><strong>Synergy</strong>: WR of the combo − average of the individual
-      WRs of its members, on the same patch window. Trios with few games are
-      shrunk toward the prediction from their 3 duos (Bayesian shrinkage,
-      k = 200 games-equivalent): an extreme score on 2 games doesn't
-      dominate the ranking.</li>
-    <li><strong>95% CI</strong>: 95% Wilson confidence interval on the
-      winrate — the range within which the "true" WR falls with 95%
-      confidence. More games means a narrower interval; on 10 games, a 70%
-      WR means almost nothing (CI ≈ 39-90%). A CI is also shown on synergy
-      (Newcombe method) and scaling (slope standard error) on the detail
-      pages: if it contains 0, the score could just be statistical noise —
-      common while game volume stays modest.</li>
-    <li><strong>Reliability</strong>: effective game volume (weighted by the
-      1.0/0.6/0.35 multi-patch window weights) —
+    <li><strong>Synergy</strong>: WR of the combo minus the average WR of its members. Trios with few games lean toward their 3 duos' prediction.</li>
+    <li><strong>95% CI</strong>: range where the "true" WR likely falls. Wider on fewer games; also shown on synergy and scaling.</li>
+    <li><strong>Reliability</strong>: effective game volume.
       <span class="tier tier-faible">low</span> &lt; 50 ≤
       <span class="tier tier-moyen">medium</span> &lt; 400 ≤
       <span class="tier tier-eleve">high</span>.</li>
-    <li><strong>Stats (gold, objectives, vision)</strong>: weighted averages
-      over the window; "—" when the data doesn't exist (e.g. gold@15 if all
-      games end before 15 min). <strong>Vision and drakes</strong> are
-      counted per minute of game (not cumulative) so as not to favor trios
-      with longer games.</li>
-    <li><strong>CC</strong>: crowd control inflicted, measured directly
-      in-game (seconds of `timeCCingOthers`), per minute of game — not
-      cumulative, same reason as vision/drakes.</li>
-    <li><strong>Scaling</strong>: winrate slope by game duration (5 min
-      buckets) — positive = wins more often in long games, negative = in
-      short games. Measured only on buckets with enough games; no value if
-      too little data.</li>
-    <li><strong>"All regions"</strong>: exact aggregate of the collected
-      platforms, recomputed — not an average of regional scores.</li>
+    <li><strong>Stats</strong>: weighted averages over the window. Vision and drakes are per minute of game.</li>
+    <li><strong>CC</strong>: crowd control inflicted, measured in-game, per minute.</li>
+    <li><strong>Scaling</strong>: winrate slope by game duration. Positive means it wins more in long games.</li>
+    <li><strong>"All regions"</strong>: exact recomputed aggregate, not an average of regional scores.</li>
   </ul>
 </details>

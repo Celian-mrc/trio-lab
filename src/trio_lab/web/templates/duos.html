@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_threshold_filters.html" import threshold_fields %}
-{% block title %}Duo tier list — Trio Lab{% endblock %}
+{% block title %}Duo tier list · Trio Lab{% endblock %}
 {% block content %}
 <h1>Duo tier list</h1>
 
@@ -16,7 +16,7 @@
     </select>
   </label>
   <label>Roles
-    <select name="roles" data-tooltip="Mixes all 10 pairs: filter by threshold without picking a specific role pair (user feedback 2026-07-20)." aria-label="Mixes all 10 pairs: filter by threshold without picking a specific role pair.">
+    <select name="roles" data-tooltip="Mixes all 10 pairs together" aria-label="Mixes all 10 pairs together">
       <option value="all" {{ 'selected' if roles == 'all' }}>All roles</option>
       <option value="jgl_mid" {{ 'selected' if roles == 'jgl_mid' }}>Jungle + Mid</option>
       <option value="jgl_sup" {{ 'selected' if roles == 'jgl_sup' }}>Jungle + Support</option>
@@ -57,7 +57,7 @@
 </form>
 
 {% set is_trio_duo = roles in ('jgl_mid', 'jgl_sup', 'mid_sup') %}
-<p class="meta">{{ total }} duos — page {{ page }} / {{ ((total - 1) // per_page) + 1 if total else 1 }} — click a header to sort, click again to reverse, Shift-click to add another sort criterion (like Excel/Sheets) — stats = games with this duo{{ ', regardless of the 3rd member' if is_trio_duo else '' }}{{ ' — 10 role pairs mixed together, the Duo column shows which one for each row' if roles == 'all' else '' }}</p>
+<p class="meta">{{ total }} duos · page {{ page }} / {{ ((total - 1) // per_page) + 1 if total else 1 }} · stats = games with this duo{{ ', regardless of the 3rd member' if is_trio_duo else '' }}{{ '. 10 role pairs mixed, see the Duo column' if roles == 'all' else '' }}</p>
 
 {% macro sort_link(key, label) %}
 {% set idx = sorts.index(key) if key in sorts else -1 %}
@@ -78,15 +78,15 @@
           <span class="gold-values">{{ sort_link('gold5', '@5') }}{{ sort_link('gold10', '@10') }}{{ sort_link('gold15', '@15') }}</span>
         </span>
       </th>
-      <th data-tooltip="Gold@15 diff. for the WHOLE TEAM (5 players, not just the duo) — only available on recent patches, source column (match_role_stats) has no deep history" aria-label="Gold@15 diff. for the whole team (5 players) — only available on recent patches">Team Gold@15</th>
-      <th data-tooltip="Trio vision score per minute of game (average) — not cumulative, so as not to favor trios with longer games" aria-label="Trio vision score per minute of game (average) — not cumulative, so as not to favor trios with longer games">{{ sort_link('vision', 'Vision/min') }}</th>
-      <th data-tooltip="Drakes taken by the team, per minute of game (average) — not cumulative" aria-label="Drakes taken by the team, per minute of game (average) — not cumulative">{{ sort_link('drakes', 'Drakes/min') }}</th>
+      <th data-tooltip="Whole team (5 players), recent patches only" aria-label="Whole team (5 players), recent patches only">Team Gold@15</th>
+      <th data-tooltip="Per minute of game, not cumulative" aria-label="Per minute of game, not cumulative">{{ sort_link('vision', 'Vision/min') }}</th>
+      <th data-tooltip="Per minute of game, not cumulative" aria-label="Per minute of game, not cumulative">{{ sort_link('drakes', 'Drakes/min') }}</th>
       <th data-tooltip="Soul acquisition rate" aria-label="Soul acquisition rate">{{ sort_link('soul', 'Soul') }}</th>
       <th data-tooltip="Herald take rate" aria-label="Herald take rate">{{ sort_link('herald', 'Herald') }}</th>
       <th data-tooltip="First tower rate" aria-label="First tower rate">{{ sort_link('tower1', '1st tower') }}</th>
-      <th data-tooltip="CC inflicted, measured in-game, team total (Σ timeCCingOthers), per minute of game." aria-label="CC inflicted, measured in-game, team total (Σ timeCCingOthers), per minute of game.">{{ sort_link('cc', 'CC/min') }}</th>
-      <th data-tooltip="Winrate slope by game duration (5 min buckets): positive = this duo wins more often in long games, negative = it wins more often in short games. Measured only (no prediction with few games)." aria-label="Winrate slope by game duration (5 min buckets): positive = this duo wins more often in long games, negative = it wins more often in short games. Measured only (no prediction with few games).">{{ sort_link('scaling', 'Scaling') }}</th>
-      <th data-tooltip="Theoretical range (auto-attacks + spells) out of 100 — never measured in-game, purely computed from champion characteristics (no Riot stat measures actual poke distance)." aria-label="Theoretical range out of 100 — never measured in-game, purely computed from champion characteristics.">{{ sort_link('range', 'Range') }}</th>
+      <th data-tooltip="Measured in-game, per minute" aria-label="Measured in-game, per minute">{{ sort_link('cc', 'CC/min') }}</th>
+      <th data-tooltip="Winrate slope by game duration. Positive: wins more in long games." aria-label="Winrate slope by game duration. Positive: wins more in long games.">{{ sort_link('scaling', 'Scaling') }}</th>
+      <th data-tooltip="Theoretical, never measured in-game" aria-label="Theoretical, never measured in-game">{{ sort_link('range', 'Range') }}</th>
       <th>Reliability</th>
     </tr>
   </thead>

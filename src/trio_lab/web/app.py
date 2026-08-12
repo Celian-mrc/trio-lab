@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 import logging
-import math
 import secrets
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -29,10 +28,6 @@ from psycopg_pool import ConnectionPool
 from trio_lab import config, db
 from trio_lab.synergy import draft_suggestions
 from trio_lab.synergy.compute import DUO_ROLES
-from trio_lab.synergy.gold_factors import BLOCK_OF as GOLD_FACTOR_BLOCK_OF
-from trio_lab.synergy.gold_factors import CONTINUOUS as GOLD_FACTOR_CONTINUOUS
-from trio_lab.synergy.gold_factors import FEATURES as GOLD_FACTOR_FEATURES
-from trio_lab.synergy.win_factors import FEATURES as WIN_FACTOR_FEATURES
 from trio_lab.synergy.windows import make_window
 from trio_lab.web import champions, queries, summary
 
@@ -60,6 +55,7 @@ DRAFT_ARCHETYPE_AXIS_LABELS = {
     "soul": "Soul",
     "range": "Range",
     "wr": "Winrate",
+    "matchup": "Matchup",
 }
 # Ordre d'affichage des champs du formulaire "Personnalise tes poids"
 # (retour utilisateur 2026-07-28) — mêmes clés que ARCHETYPE_STAT_COLUMNS.
@@ -101,28 +97,6 @@ _DRAFT_ROLES_BY_PAIR = {frozenset(v): k for k, v in DUO_ROLE_KEYS.items()}
 # entièrement dans `synergy.draft_suggestions` — réutilisé tel quel ici en
 # calcul à la demande, et par le service collector 24/24 pour la
 # matérialisation (`platform="all"`, cf. `collector/service.py`).
-# Libellés lisibles pour le dashboard /insights (synergy.win_factors.FEATURES).
-# herald_taken/soul_taken/first_tower retirés le 2026-07-24 (retour
-# utilisateur + audit) : résultats de fin de partie, pas bornés à 15 min —
-# cf. docstring synergy/win_factors.py.
-WIN_FACTOR_LABELS = {
-    "team_gold_diff_15": "TEAM gold advantage at 15 min",
-    "team_cc_per_min": "Team CC / min",
-    "team_vision_per_min": "Team vision / min",
-    "jgl_cs_diff_15": "Jungle CS vs enemy at 15 min",
-}
-# Libellés lisibles pour la section "qu'est-ce qui construit l'avantage au
-# gold" de /insights (synergy.gold_factors.FEATURES).
-GOLD_FACTOR_LABELS = {
-    "team_baseline_wr": "Raw pick strength (baseline WR)",
-    "team_matchup_delta": "Matchup advantage (vs same enemy role)",
-    "team_trio_synergy": "Jungle/mid/support trio synergy",
-    "jgl_cs_diff_15": "Jungle CS vs enemy at 15 min",
-    "first_blood_team": "First blood",
-    "herald_taken_pre15": "Herald taken before 15 min",
-    "dragons_taken_pre15": "Dragons taken before 15 min",
-    "wards_pre15": "Wards placed/destroyed before 15 min",
-}
 # Profil de résilience par champion (Phase 8, /resilience, retour
 # utilisateur 2026-07-20) : mêmes 3 facteurs que synergy.resilience.FACTORS,
 # choisis pour leur signal réel et leur indépendance mutuelle (corrélations
@@ -138,10 +112,9 @@ RESILIENCE_FACTOR_LABELS = {
 # `_is_ahead` (pas de dépendance croisée : ce module web n'importe pas le
 # module de calcul batch, même séparation que les libellés au-dessus).
 RESILIENCE_FACTOR_THRESHOLDS = {
-    "team_gold_diff_15": "ahead = more than 1000 gold difference, behind = less than "
-    "-1000 gold — in between (neutral zone), the game counts for neither",
-    "jgl_cs_diff_15": "ahead = at least 1 jungle CS difference, behind = deficit (no neutral zone)",
-    "first_blood_team": "ahead = team with first blood, behind = the enemy team",
+    "team_gold_diff_15": "ahead: >1000 gold, behind: <-1000 gold",
+    "jgl_cs_diff_15": "ahead: at least 1 jungle CS, behind: any deficit",
+    "first_blood_team": "ahead: first blood, behind: enemy first blood",
 }
 # En dessous de ce nombre de games d'un côté (avance OU retard), l'écart de
 # WR est trop bruité pour être lu comme un signal — exclu, pas juste grisé
@@ -227,29 +200,29 @@ def require_admin(credentials: HTTPBasicCredentials = Depends(_admin_security)) 
 
 
 def _fmt_pct(value: float | None, digits: int = 1) -> str:
-    return "—" if value is None else f"{100 * value:.{digits}f} %"
+    return "-" if value is None else f"{100 * value:.{digits}f} %"
 
 
 def _fmt_pct100(value: float | None, digits: int = 0) -> str:
     """Comme `pct`, mais pour une valeur déjà sur l'échelle 0-100 (pas 0-1)."""
-    return "—" if value is None else f"{value:.{digits}f} %"
+    return "-" if value is None else f"{value:.{digits}f} %"
 
 
 def _fmt_signed_pct(value: float | None, digits: int = 1) -> str:
-    return "—" if value is None else f"{100 * value:+.{digits}f} %"
+    return "-" if value is None else f"{100 * value:+.{digits}f} %"
 
 
 def _fmt_signed_int(value: float | None) -> str:
-    return "—" if value is None else f"{value:+,.0f}".replace(",", " ")
+    return "-" if value is None else f"{value:+,.0f}".replace(",", " ")
 
 
 def _fmt_num(value: float | None, digits: int = 1) -> str:
-    return "—" if value is None else f"{value:.{digits}f}"
+    return "-" if value is None else f"{value:.{digits}f}"
 
 
 def _fmt_duration(value: float | None) -> str:
     if value is None:
-        return "—"
+        return "-"
     minutes, seconds = divmod(int(value), 60)
     return f"{minutes}:{seconds:02d}"
 
@@ -283,7 +256,7 @@ def _pct_of(n: int, total: int) -> float:
 
 def _fmt_bytes(value: int | None) -> str:
     if value is None:
-        return "—"
+        return "-"
     size = float(value)
     for unit in ("o", "Ko", "Mo", "Go"):
         if size < 1024 or unit == "Go":
@@ -382,7 +355,6 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
     templates.env.globals["static_version"] = static_version
     templates.env.globals["gold_diff_bar_cap"] = GOLD_DIFF_BAR_CAP
     templates.env.globals["gold_diff_low_sample_pct"] = GOLD_DIFF_LOW_SAMPLE_PCT
-    templates.env.globals["gold_factor_continuous"] = GOLD_FACTOR_CONTINUOUS
     templates.env.globals["resilience_min_games_per_side"] = RESILIENCE_MIN_GAMES_PER_SIDE
     templates.env.filters.update(
         pct=_fmt_pct,
@@ -1269,7 +1241,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                     )[0]
                 else:
                     custom_error = (
-                        "Not enough reliable data for this weight split — try other values."
+                        "Not enough reliable data for this weight split. Try other values."
                     )
 
             # "Contre cette équipe" (retour utilisateur 2026-08-11) : calcul
@@ -1290,8 +1262,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                     )[0]
                 else:
                     counter_error = (
-                        "Not enough reliable data against these picks —"
-                        " try other champions or lower the reliability threshold."
+                        "Not enough reliable data against these picks."
+                        " Try other champions or lower the reliability threshold."
                     )
 
             # Formulaire soumis dès que 1 champion ou un archétype est fourni
@@ -1342,8 +1314,8 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                             manual_results.append(_build_draft_result(raw))
                     if not manual_results:
                         manual_error = (
-                            "Not enough reliable data to complete this composition —"
-                            " try other champions or a different archetype."
+                            "Not enough reliable data to complete this composition."
+                            " Try other champions or a different archetype."
                         )
 
         def _draft_url(**overrides: str) -> str:
@@ -1393,111 +1365,6 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 },
                 "w_min_games": w_min_games,
                 "cw_min_games": cw_min_games,
-            },
-        )
-
-    # --- Dashboard "ce qui fait gagner" (Phase 8) ---
-
-    def _win_prob_swing(intercept_row: dict | None, feature_row: dict | None) -> tuple | None:
-        """(P0, P1) = probabilité de victoire dans le scénario "moyen" de la
-        population (stats continues à la moyenne, aucun objectif pris) vs le
-        même scénario avec CE facteur activé (+1 écart-type si continu,
-        présent si booléen) — tout le reste inchangé. Les coefficients sont
-        déjà à l'échelle du logit, donc P1 = sigmoid(intercept + coef) sans
-        transformation supplémentaire. Lecture non technique en probabilité
-        absolue plutôt qu'en odds ratio seul (retour utilisateur 2026-07-19 :
-        un odds ratio surestime l'effet perçu quand l'issue est ~50 %, pas
-        rare — cf. Persoskie & Ferrer 2017, *Am J Prev Med* 52(2):224-228)."""
-        if intercept_row is None or feature_row is None:
-            return None
-
-        def sigmoid(x: float) -> float:
-            return 1.0 / (1.0 + math.exp(-x))
-
-        b0 = intercept_row["coef"]
-        return sigmoid(b0), sigmoid(b0 + feature_row["coef"])
-
-    def _combined_win_factors(all_rows: list[dict], behind_rows: list[dict]) -> list[dict]:
-        """Une ligne par feature (ordre fixe WIN_FACTOR_FEATURES, pas l'ordre
-        SQL), avec les 2 populations côte à côte — jamais 2 tableaux séparés :
-        même ligne = même feature, garanti, pas juste par coïncidence d'ordre
-        (retour utilisateur 2026-07-19). `intercept` jamais affiché comme
-        ligne (pas actionnable pour un coach), seulement utilisé en interne
-        pour convertir les odds ratio en probabilité absolue."""
-        all_by_feature = {r["feature"]: r for r in all_rows}
-        behind_by_feature = {r["feature"]: r for r in behind_rows}
-        all_intercept = all_by_feature.get("intercept")
-        behind_intercept = behind_by_feature.get("intercept")
-        return [
-            {
-                "feature": f,
-                "label": WIN_FACTOR_LABELS[f],
-                "all": all_by_feature.get(f),
-                "behind": behind_by_feature.get(f),
-                "all_prob": _win_prob_swing(all_intercept, all_by_feature.get(f)),
-                "behind_prob": _win_prob_swing(behind_intercept, behind_by_feature.get(f)),
-            }
-            for f in WIN_FACTOR_FEATURES
-            if f in all_by_feature or f in behind_by_feature
-        ]
-
-    def _ordered_gold_factors(rows: list[dict]) -> list[dict]:
-        """Une ligne par feature (ordre fixe GOLD_FACTOR_FEATURES), avec son
-        bloc (draft/exécution) pour le regroupement visuel — les lignes de
-        diagnostic `_r2_draft_only`/`_r2_full` sont exclues ici, extraites à
-        part par l'appelant."""
-        by_feature = {r["feature"]: r for r in rows}
-        return [
-            {
-                "feature": f,
-                "label": GOLD_FACTOR_LABELS[f],
-                "block": GOLD_FACTOR_BLOCK_OF[f],
-                "row": by_feature[f],
-            }
-            for f in GOLD_FACTOR_FEATURES
-            if f in by_feature
-        ]
-
-    @app.get("/insights", response_class=HTMLResponse)
-    def insights_page(request: Request, window: str | None = None, platform: str | None = None):
-        with request.app.state.pool.connection() as conn:
-            window, platform, context = resolve_context(conn, window, platform)
-            all_rows = queries.win_factors(conn, window, "all")
-            behind_rows = queries.win_factors(conn, window, "behind_gold15")
-            gold_rows = queries.gold_factors(conn, window)
-        factors = _combined_win_factors(all_rows, behind_rows)
-        # `rows[0]` n'est pas fiable pour lire `n` : pas d'ORDER BY côté SQL,
-        # et depuis l'ajout de la ligne de diagnostic `_auc_test` (2026-07-24)
-        # toutes les lignes n'ont plus le même `n` (le diagnostic porte le
-        # nombre de games du jeu de TEST, pas de l'ajustement complet) — lire
-        # `n`/l'AUC depuis une feature nommée précisément, jamais `[0]`.
-        all_by_feature = {r["feature"]: r for r in all_rows}
-        behind_by_feature = {r["feature"]: r for r in behind_rows}
-        all_n = all_by_feature["intercept"]["n"] if "intercept" in all_by_feature else 0
-        behind_n = behind_by_feature["intercept"]["n"] if "intercept" in behind_by_feature else 0
-        all_auc = all_by_feature.get("_auc_test")
-        behind_auc = behind_by_feature.get("_auc_test")
-
-        gold_by_feature = {r["feature"]: r for r in gold_rows}
-        gold_factors_list = _ordered_gold_factors(gold_rows)
-        gold_n = gold_rows[0]["n"] if gold_rows else 0
-        r2_draft_only = gold_by_feature.get("_r2_draft_only")
-        r2_full = gold_by_feature.get("_r2_full")
-
-        return templates.TemplateResponse(
-            request,
-            "insights.html",
-            {
-                **context,
-                "factors": factors,
-                "all_n": all_n,
-                "behind_n": behind_n,
-                "all_auc": all_auc["coef"] if all_auc else None,
-                "behind_auc": behind_auc["coef"] if behind_auc else None,
-                "gold_factors": gold_factors_list,
-                "gold_n": gold_n,
-                "r2_draft_only": r2_draft_only["coef"] if r2_draft_only else None,
-                "r2_full": r2_full["coef"] if r2_full else None,
             },
         )
 
@@ -1839,7 +1706,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                     "wr_deviation": wr_deviation,
                     "sentence": (
                         f"{name} plays {RIOT_ROLE_LABELS[row_role]} in {100 * share:.0f}%"
-                        f" of their games ({games}/{totals[cid]}) — gold profile"
+                        f" of their games ({games}/{totals[cid]}). Gold profile"
                         f" {100 * abs(gold_deviation):.0f}% {direction} the role average."
                     ),
                 }
