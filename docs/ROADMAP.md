@@ -1489,6 +1489,44 @@ gagner") avec les données déjà en place.
          `background` réinitialisait `background-image`, effaçant le
          chevron).
 
+- [x] **Vrai composant Select custom (2026-08-12, retour utilisateur : "je
+      vois pas de changement pour les menus déroulants comme ceux des
+      archétypes")** : le point 5 ci-dessus ne stylait que l'état FERMÉ —
+      à l'ouverture, la liste d'options d'un `<select>` natif est dessinée
+      par l'OS, pas par le navigateur, donc impossible à styler en CSS pur
+      (confirmé en session : `elementFromPoint`/captures d'écran montraient
+      bien le popup natif, hors de portée de `style.css`). Décision actée
+      avec l'utilisateur (JS complet plutôt que garder l'état actuel) :
+      nouveau `static/select-enhance.js`, seul script du projet à CRÉER des
+      éléments DOM plutôt qu'à écouter des événements sur l'existant — les
+      autres (`sort.js`, `thresholds.js`, etc.) n'en ont pas besoin. Chaque
+      `<select>` est enrichi d'un déclencheur + liste custom (`.ts-select`)
+      au premier rendu et après chaque swap htmx (`htmx:load`, fires aussi
+      au chargement initial) ; le `<select>` d'origine reste dans le DOM
+      (`hidden`) pour que la soumission de formulaire ne change pas côté
+      serveur. Les options affichées sont reconstruites à CHAQUE ouverture
+      (pas mises en cache à l'enrichissement) : le select "+ ajouter une
+      colonne" (`_threshold_filters.html`) voit ses `<option>` cachées/
+      révélées en direct par `thresholds.js`, une liste figée à froid
+      aurait vite divergé. Choisir une option fait `select.value = ...`
+      puis dispatch un vrai `change` natif (`bubbles: true`) :
+      `thresholds.js`/`draft-custom-archetype.js` continuent d'écouter ce
+      `change` sur le `<select>` d'origine sans aucune modification.
+      Accessibilité : `role="combobox"`/`listbox`/`option`,
+      `aria-activedescendant`, navigation clavier (flèches, Entrée,
+      Échap), fermeture au clic extérieur et au `focusout`. Bug évité en
+      session : rendre le focus au déclencheur après sélection aurait pu
+      écraser le focus déjà posé ailleurs par un AUTRE script réagissant
+      au `change` (ex. `draft-custom-archetype.js` qui focus le premier
+      champ de poids sur "Custom") — le focus n'est repris que si rien
+      d'autre ne l'a pris entre-temps (`document.activeElement` vérifié
+      juste après le dispatch). Vérifié en session par exécution JS directe
+      (`select.value`, libellé du déclencheur, section de poids révélée) —
+      les clics simulés par l'outil de capture d'écran du navigateur
+      atterrissaient à des coordonnées incorrectes sur la liste ouverte
+      (écart d'échelle image/CSS non résolu par l'outil, `devicePixelRatio`
+      1.25), sans rapport avec le composant lui-même.
+
 Phase 8 de nouveau en pause (draft, résilience, flex, poke, scouting) —
 prochaine idée à définir.
 

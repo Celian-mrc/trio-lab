@@ -65,8 +65,14 @@ footer { text-align: center; color: var(--muted-fg); font-size: 0.75rem; padding
 h1 { font-size: 1.25rem; letter-spacing: -0.02em; margin: 0.5rem 0 1rem; }
 h2 { font-size: 1rem; letter-spacing: -0.01em; margin-top: 1.75rem; }
 
-/* --- Select (shadcn Select : chevron custom, ring au focus, pas la flèche
-   native du navigateur) --- */
+/* --- Select (shadcn Select). La balise <select> native ne peut pas être
+   stylée à l'ouverture (liste rendue par l'OS, retour utilisateur
+   2026-08-12) : `static/select-enhance.js` la remplace visuellement par un
+   déclencheur + une liste custom (`.ts-select`), le <select> d'origine
+   restant dans le DOM (`hidden`) pour la soumission de formulaire — aucun
+   changement côté serveur. La règle `select` ci-dessous reste un filet de
+   secours si JS est indisponible (chevron custom déjà correct, liste native
+   au clic). */
 select {
   appearance: none; -webkit-appearance: none; -moz-appearance: none;
   background-color: var(--card); color: var(--foreground);
@@ -80,6 +86,41 @@ select {
 select:hover { border-color: #3f3f46; }
 select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25); }
 select option { background: var(--card); color: var(--foreground); }
+
+/* --- .ts-select : déclencheur + liste construits par select-enhance.js --- */
+.ts-select { position: relative; display: inline-flex; min-width: 0; }
+.ts-select-trigger {
+  appearance: none; font-family: inherit; text-align: left; width: 100%;
+  display: inline-flex; align-items: center; justify-content: space-between; gap: 0.4rem;
+  background-color: var(--card); color: var(--foreground);
+  border: 1px solid var(--input); border-radius: 6px;
+  padding: 0.4rem 0.6rem; font-size: 0.85rem; min-height: 2.15rem;
+  cursor: pointer; transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.ts-select-trigger:hover { border-color: #3f3f46; }
+.ts-select-trigger:focus-visible, .ts-select.open .ts-select-trigger {
+  outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25);
+}
+.ts-select-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ts-select-chevron {
+  width: 0.9rem; height: 0.9rem; flex: none; color: var(--muted-fg);
+  transition: transform 120ms ease;
+}
+.ts-select.open .ts-select-chevron { transform: rotate(180deg); }
+.ts-select-listbox {
+  position: absolute; top: calc(100% + 0.3rem); left: 0; z-index: 50;
+  min-width: 100%; max-height: 16rem; overflow-y: auto;
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  list-style: none; margin: 0; padding: 0.25rem;
+}
+.ts-select-listbox[hidden] { display: none; }
+.ts-select-option {
+  padding: 0.4rem 0.6rem; border-radius: 6px; font-size: 0.85rem;
+  color: var(--foreground); white-space: nowrap; cursor: pointer;
+}
+.ts-select-option.highlighted { background: var(--muted); }
+.ts-select-option[aria-selected="true"] { color: var(--accent); font-weight: 600; }
 
 /* --- Filtres (Card + Input/Select/Button shadcn) --- */
 .filters {
@@ -122,7 +163,7 @@ select option { background: var(--card); color: var(--foreground); }
   border-radius: 50%; font-size: 0.6rem; line-height: 1; cursor: pointer;
 }
 .filters .remove-threshold:hover { background: var(--neg); color: var(--background); border-color: var(--neg); }
-.filters .threshold-add select { min-width: 10.5rem; }
+.filters .threshold-add select, .filters .threshold-add .ts-select { min-width: 10.5rem; }
 
 /* --- Tables (Table shadcn : lignes délimitées, header muted, hover) --- */
 table { width: 100%; border-collapse: collapse; }
