@@ -328,8 +328,16 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         # autres requêtes). `psycopg_pool` réinitialise déjà les connexions
         # au retour dans le pool dans le cas normal ; l'autocommit supprime
         # la classe de bug entièrement plutôt que de compter sur ce filet.
+        # max_size 4 → 12 (retour utilisateur 2026-08-12, avant partage
+        # Discord) : sous charge concurrente, une fois /flex matérialisé
+        # (fix principal), le pool à 4 restait le facteur limitant restant
+        # (files d'attente mesurées en test de charge). Marge vérifiée sur
+        # l'instance Supabase partagée avant d'augmenter : 90 connexions
+        # max, 42 utilisées en tout (dont 17 supabase_admin + 5
+        # authenticator, hors de notre contrôle), 14 pour trio_lab_app —
+        # +8 dans le pire cas reste large sous la limite.
         app.state.pool = ConnectionPool(
-            db.require_dsn(dsn), min_size=1, max_size=4, open=True, kwargs={"autocommit": True}
+            db.require_dsn(dsn), min_size=1, max_size=12, open=True, kwargs={"autocommit": True}
         )
         yield
         app.state.pool.close()
