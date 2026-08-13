@@ -1527,6 +1527,31 @@ gagner") avec les données déjà en place.
       (écart d'échelle image/CSS non résolu par l'outil, `devicePixelRatio`
       1.25), sans rapport avec le composant lui-même.
 
+- [x] **Incident : fenêtre de score figée 24h+ sur le rollover 16.16
+      (2026-08-13, retour utilisateur : "toujours plus de 1 jour la
+      dernière maj")** : `stats.aggregate.refresh` (premier appel de
+      `refresh_scores`, avant scores/matchups/résilience/flex/
+      suggestions) timeoutait à CHAQUE cycle collecteur dès que le patch
+      courant était encore petit (peu de lignes → mauvaise estimation de
+      sélectivité sur `team_gold_agg`, filtré par `HAVING count(*) = 5` —
+      une colonne dérivée d'un agrégat, Postgres ne peut pas l'estimer,
+      choisit un Nested Loop catastrophique). Même piège que
+      `postgres-cte-selfjoin-nestloop-trap` (mémoire, déjà rencontré et
+      corrigé le 20/07 dans `resilience.py`/`win_factors.py`/
+      `gold_factors.py`) mais jamais appliqué à `aggregate.py` — resté
+      latent tant que tous les patchs avaient déjà un volume conséquent au
+      moment de leur agrégation. Comme `aggregate.refresh` est le TOUT
+      PREMIER appel de `refresh_scores`, son échec empêchait tout le reste
+      de tourner : la fenêtre de score n'a pas bougé pendant plus de 24h,
+      pas seulement l'affichage "dernière maj". **Fix** : `SET LOCAL
+      enable_nestloop = off` ajouté (même contournement que les 3 autres
+      modules). Vérifié en direct contre la prod : sans le fix, timeout
+      après 10 min ; avec, 449s et 20 903 lignes `agg_trio` écrites pour
+      16.16. Rattrapage manuel du reste du pipeline (compute/matchups/
+      résilience/flex/suggestions/purge) exécuté dans la foulée plutôt que
+      d'attendre le prochain cycle naturel — fenêtre passée à
+      `16.16+16.15+16.14`, confirmé en prod ("updated a few seconds ago").
+
 Phase 8 de nouveau en pause (draft, résilience, flex, poke, scouting) —
 prochaine idée à définir.
 
