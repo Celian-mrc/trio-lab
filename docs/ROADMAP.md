@@ -1552,6 +1552,31 @@ gagner") avec les données déjà en place.
       d'attendre le prochain cycle naturel — fenêtre passée à
       `16.16+16.15+16.14`, confirmé en prod ("updated a few seconds ago").
 
+- [x] **File de découverte priorisée par activité (2026-08-13, retour
+      utilisateur : "je pensais qu'on pouvait en récupérer plus [de
+      games]")** : chiffres mesurés en session avant de coder — 1,3M joueurs
+      connus, ~16K scannés/jour, **54 % jamais scannés une seule fois**, ~1
+      mois pour qu'un joueur déjà vu revienne en tête de la file FIFO
+      (`matches_fetched_at NULLS FIRST`) alors qu'un patch dure ~2 semaines.
+      Recherche complémentaire (limites réelles de la clé API, confirmées
+      via hextechdocs/communauté : 20 req/s et 100 req/2min par région,
+      **jamais d'augmentation possible sur une clé personnelle**) : le vrai
+      levier n'est pas la limite brute (marge théorique existante) mais le
+      RENDEMENT par appel dépensé — la file traitait un joueur qui joue
+      tous les jours exactement comme un joueur inactif depuis 2 mois.
+      **Fix** : migration 041, `players.next_check_at` remplace
+      `matches_fetched_at` comme clé de tri (`storage.next_player`).
+      `storage.mark_player_fetched(conn, puuid, new_match_count)` recalcule
+      l'échéance à chaque scan SANS appel API supplémentaire (`new_match_count`
+      déjà connu de l'appelant, `collect.py` passe `len(todo)`) : matchs
+      neufs trouvés → recheck dans 12h (`ACTIVE_RECHECK_DELAY`), rien de
+      neuf → 14j (`INACTIVE_RECHECK_DELAY`), libère le budget pour les
+      joueurs actifs et le stock de jamais-scannés. Backfill du migration
+      (1,3M lignes, ~74s en prod) : préserve l'ordre relatif existant
+      (`next_check_at = coalesce(matches_fetched_at, now())`) plutôt que de
+      déclencher une ruée — la priorisation adaptative ne s'applique qu'au
+      prochain scan réel de chaque joueur.
+
 Phase 8 de nouveau en pause (draft, résilience, flex, poke, scouting) —
 prochaine idée à définir.
 

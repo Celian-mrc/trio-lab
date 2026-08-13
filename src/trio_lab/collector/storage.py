@@ -17,6 +17,7 @@ from __future__ import annotations
 import gzip
 import json
 import logging
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -66,13 +67,28 @@ async def upsert_players(conn: psycopg.AsyncConnection, rows: list[PlayerRow]) -
     return len(rows)
 
 
+# File de découverte priorisée par activité (retour utilisateur 2026-08-13,
+# migration 041) : 1,3M joueurs connus, ~16K scannés/jour, un FIFO pur sur
+# `matches_fetched_at` faisait revenir un joueur déjà vu en tête de file au
+# bout d'~1 mois — un patch dure ~2 semaines, un joueur qui joue tous les
+# jours et un joueur qui a joué une fois il y a 2 mois avaient exactement la
+# même cadence de recheck. `next_check_at` (calculé par `mark_player_fetched`,
+# sans appel API supplémentaire — `new_match_count` est déjà connu de
+# l'appelant) recheck vite un joueur actif, repousse loin un joueur inactif
+# ce coup-ci : libère du budget pour les joueurs actifs et le stock de
+# jamais-scannés plutôt que de re-vérifier un compte mort au même rythme que
+# tout le monde.
+ACTIVE_RECHECK_DELAY = timedelta(hours=12)
+INACTIVE_RECHECK_DELAY = timedelta(days=14)
+
+
 async def next_player(conn: psycopg.AsyncConnection, *, platform: str) -> str | None:
-    """PUUID suivant dans la file de collecte : jamais scannés d'abord, puis les plus anciens."""
+    """PUUID suivant dans la file de collecte : le plus en retard sur son échéance."""
     cur = await conn.execute(
         """
         SELECT puuid FROM players
         WHERE platform = %s
-        ORDER BY matches_fetched_at ASC NULLS FIRST, discovered_at ASC
+        ORDER BY next_check_at ASC, discovered_at ASC
         LIMIT 1
         """,
         (platform,),
@@ -81,9 +97,19 @@ async def next_player(conn: psycopg.AsyncConnection, *, platform: str) -> str | 
     return row[0] if row else None
 
 
-async def mark_player_fetched(conn: psycopg.AsyncConnection, puuid: str) -> None:
-    """Repousse le joueur en fin de file après le scan de son historique."""
-    await conn.execute("UPDATE players SET matches_fetched_at = now() WHERE puuid = %s", (puuid,))
+async def mark_player_fetched(
+    conn: psycopg.AsyncConnection, puuid: str, new_match_count: int
+) -> None:
+    """Repousse le joueur en file selon le rendement de ce scan.
+
+    `new_match_count` : nombre de matchs NEUFS trouvés (déjà filtré du connu,
+    cf. `filter_new_match_ids` côté appelant) — 0 = rien de neuf ce coup-ci."""
+    delay = ACTIVE_RECHECK_DELAY if new_match_count > 0 else INACTIVE_RECHECK_DELAY
+    await conn.execute(
+        "UPDATE players SET matches_fetched_at = now(), next_check_at = now() + %s"
+        " WHERE puuid = %s",
+        (delay, puuid),
+    )
 
 
 async def unknown_puuids(conn: psycopg.AsyncConnection, puuids: list[str]) -> list[str]:

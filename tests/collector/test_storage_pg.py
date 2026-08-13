@@ -46,24 +46,42 @@ def test_migrations_are_idempotent(pg_conn):
 
 async def test_upsert_players_preserves_fetch_cursor(pg_conn):
     await storage.upsert_players(pg_conn, [_player("p1")])
-    await storage.mark_player_fetched(pg_conn, "p1")
+    await storage.mark_player_fetched(pg_conn, "p1", 0)
     # Redécouverte avec un tier rafraîchi : le curseur de collecte survit.
     await storage.upsert_players(pg_conn, [_player("p1", tier="DIAMOND", division="IV")])
 
-    cur = await pg_conn.execute("SELECT tier, division, matches_fetched_at FROM players")
-    tier, division, fetched_at = await cur.fetchone()
+    cur = await pg_conn.execute(
+        "SELECT tier, division, matches_fetched_at, next_check_at FROM players"
+    )
+    tier, division, fetched_at, next_check_at = await cur.fetchone()
     assert (tier, division) == ("DIAMOND", "IV")
     assert fetched_at is not None
+    assert next_check_at is not None  # pas réinitialisé par la redécouverte
 
 
 async def test_next_player_serves_never_scanned_first(pg_conn):
     await storage.upsert_players(pg_conn, [_player("p1"), _player("p2")])
-    await storage.mark_player_fetched(pg_conn, "p1")
+    # p1 : rien de neuf ce scan -> repoussé loin (INACTIVE_RECHECK_DELAY).
+    await storage.mark_player_fetched(pg_conn, "p1", 0)
+    # p2 : encore jamais scanné -> reste prioritaire sur p1 (déjà repoussé).
     assert await storage.next_player(pg_conn, platform="euw1") == "p2"
-    await storage.mark_player_fetched(pg_conn, "p2")
-    # File recyclée : le plus anciennement scanné revient en tête.
-    assert await storage.next_player(pg_conn, platform="euw1") == "p1"
     assert await storage.next_player(pg_conn, platform="kr") is None
+
+
+async def test_next_player_prioritizes_active_recheck_over_inactive(pg_conn):
+    await storage.upsert_players(pg_conn, [_player("p1"), _player("p2")])
+    # Les deux repoussés (rien de neuf), puis p2 retrouve des matchs neufs :
+    # ACTIVE_RECHECK_DELAY (12h) < INACTIVE_RECHECK_DELAY (14j) -> p2 repasse devant.
+    await storage.mark_player_fetched(pg_conn, "p1", 0)
+    await storage.mark_player_fetched(pg_conn, "p2", 0)
+    await storage.mark_player_fetched(pg_conn, "p2", 3)
+    assert await storage.next_player(pg_conn, platform="euw1") == "p2"
+
+    cur = await pg_conn.execute("SELECT puuid, next_check_at - now() FROM players ORDER BY puuid")
+    rows = await cur.fetchall()
+    (p1, p1_delay), (p2, p2_delay) = rows
+    assert p1_delay > storage.ACTIVE_RECHECK_DELAY  # repoussé loin (inactif)
+    assert p2_delay < storage.INACTIVE_RECHECK_DELAY  # rapproché (actif)
 
 
 # --- matches : idempotence ---

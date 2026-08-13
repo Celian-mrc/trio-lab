@@ -198,7 +198,7 @@ async def _collect_platform(
                                 counts["harvested"],
                                 client.rate.remaining,
                             )
-                    await storage.mark_player_fetched(conn, puuid)
+                    await storage.mark_player_fetched(conn, puuid, len(todo))
                     counts["players_scanned"] += 1
                 except Exception as exc:  # noqa: BLE001 — boucle 24/24 : pause et reprise
                     # Le joueur n'est pas marqué scanné : il sera retenté.

@@ -120,7 +120,7 @@ class _FakeStore:
             None,
         )
 
-    async def mark_player_fetched(self, conn, puuid):
+    async def mark_player_fetched(self, conn, puuid, new_match_count):
         self.players[puuid]["fetched"] = True
 
     async def unknown_puuids(self, conn, puuids):
