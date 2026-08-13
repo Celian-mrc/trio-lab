@@ -322,6 +322,18 @@ def refresh(patch: str, *, dsn: str | None = None) -> dict[str, int]:
         # division par ligne à _DUO_SQL/_TRIO_SQL — au-delà du statement_timeout
         # par défaut du rôle applicatif sur de gros volumes de matchs.
         conn.execute("SET LOCAL statement_timeout = '10min'")
+        # Piège nested-loop déjà rencontré (cf. mémoire
+        # postgres-cte-selfjoin-nestloop-trap, resilience.py/win_factors.py/
+        # gold_factors.py) : `team_gold_agg` (_TEAM_GOLD_CTE_SQL) filtre sur
+        # `count(*) = 5`, une colonne DÉRIVÉE d'un agrégat — Postgres ne peut
+        # pas estimer sa sélectivité, retombe sur une sous-estimation par
+        # défaut et choisit un Nested Loop pour la jointure `tg` dans
+        # _DUO_SQL/_TRIO_SQL. Resté non corrigé ici jusqu'au rollover 16.16
+        # (2026-08-13) : `aggregate.refresh` timeoutait sur CHAQUE cycle
+        # collecteur dès qu'un patch encore petit (peu de lignes, mauvaise
+        # estimation) était agrégé — `agg_trio` restait vide pour ce patch
+        # plus de 24h, la fenêtre de score ne pouvait jamais avancer.
+        conn.execute("SET LOCAL enable_nestloop = off")
         for table, sqls in _TABLES_SQL.items():
             conn.execute(
                 psycopg.sql.SQL("DELETE FROM {} WHERE patch = %(patch)s").format(
