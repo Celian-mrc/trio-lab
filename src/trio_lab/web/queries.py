@@ -27,6 +27,7 @@ TRIO_SORTS = {
     "gold5": "gold_diff_5",
     "gold10": "gold_diff_10",
     "gold15": "gold_diff_15",
+    "teamgold15": "team_gold_diff_15",
     "vision": "vision_score",
     "drakes": "drakes",
     "soul": "soul_rate",
