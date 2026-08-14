@@ -3,7 +3,7 @@
    les combos qui restent bons même en retard), une entrée par colonne
    triable (sauf `games`, qui a son propre champ dédié) — whitelist
    identique côté serveur à `app._THRESHOLD_SPECS`/`queries.TRIO_SORTS`.
-   Partagé entre tierlist.html et duos.html pour ne pas dupliquer les 13
+   Partagé entre tierlist.html et duos.html pour ne pas dupliquer les 15
    champs deux fois.
 
    Un seul champ actif est visible par défaut (repliés, cf. static/thresholds.js
@@ -26,6 +26,7 @@
   ("gold5", "Gold@5", {"step": 1}),
   ("gold10", "Gold@10", {"step": 1}),
   ("gold15", "Gold@15", {"step": 1}),
+  ("teamgold15", "Team Gold@15", {"step": 1}),
   ("vision", "Vision/min", {"min": 0, "step": 0.1}),
   ("drakes", "Drakes/min", {"min": 0, "step": 0.01}),
   ("soul", "Soul rate (%)", {"min": 0, "max": 100, "step": 1}),
@@ -33,6 +34,7 @@
   ("tower1", "1st tower rate (%)", {"min": 0, "max": 100, "step": 1}),
   ("cc", "CC/min", {"min": 0, "step": 0.1}),
   ("scaling", "Scaling (%)", {"step": 0.1}),
+  ("range", "Range (%)", {"min": 0, "max": 100, "step": 1}),
 ] %}
 {% for key, label, attrs in fields %}
 <label class="threshold-field" data-key="{{ key }}" {% if not min_values[key] and not max_values[key] %}hidden{% endif %}>

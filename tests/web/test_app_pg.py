@@ -736,7 +736,7 @@ def test_threshold_filter_tooltip_on_span_not_label(pg_sync, client):
 
 
 def test_threshold_filter_only_active_fields_visible_by_default(pg_sync, client):
-    """Montrer les 13 champs vides d'un coup était illisible (retour
+    """Montrer les 15 champs vides d'un coup était illisible (retour
     utilisateur, 2026-07-14) : seul un filtre actif (valeur dans l'URL) doit
     être visible au chargement, les autres restent masqués (`[hidden]`,
     ajout/retrait ensuite géré côté client par static/thresholds.js — non

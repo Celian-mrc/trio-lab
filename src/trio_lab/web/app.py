@@ -465,6 +465,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         "gold5": (False, None, None),
         "gold10": (False, None, None),
         "gold15": (False, None, None),
+        "teamgold15": (False, None, None),
         "vision": (False, 0, None),
         "drakes": (False, 0, None),
         "soul": (True, 0, 100),
@@ -472,6 +473,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         "tower1": (True, 0, 100),
         "cc": (False, 0, None),
         "scaling": (True, -100, 100),
+        "range": (False, 0, 100),
     }
 
     def threshold_raw(request: Request, *, prefix: str) -> dict[str, str]:

@@ -1,5 +1,5 @@
 // Filtres par seuils : "+ ajouter une colonne" révèle le champ demandé,
-// "✕" le vide et le cache — évite de montrer les 13 champs vides d'un coup
+// "✕" le vide et le cache — évite de montrer les 15 champs vides d'un coup
 // (retour utilisateur, 2026-07-14). Les <label> et <option> existent déjà
 // dans le DOM (rendus par _threshold_filters.html), juste masqués via
 // [hidden] : pas de création d'élément côté JS, aucun risque de divergence
