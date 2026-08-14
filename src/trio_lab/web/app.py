@@ -1621,16 +1621,20 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         totals: dict[int, int] = {}
         primary_role: dict[int, str] = {}
         primary_games: dict[int, int] = {}
-        role_totals: dict[str, list[int]] = {}  # role -> [games, wins], baseline WR du rôle
+        # (champion, role) -> (games, wins) — sert à comparer le WR du pick flex à
+        # SON PROPRE WR au rôle principal, pas à la moyenne du rôle (retour
+        # utilisateur 2026-08-14 : la moyenne d'un rôle sur tous les champions vaut
+        # TOUJOURS exactement 50%, jeu à somme nulle — un gagnant/un perdant par
+        # rôle et par game — donc "vs role" ne comparait en réalité qu'à 50%,
+        # aucun signal réel malgré le libellé).
+        champion_role_wr: dict[tuple[int, str], tuple[int, int]] = {}
         for row in distribution:
             cid, games, wins = row["champion_id"], row["games"], row["wins"]
             totals[cid] = totals.get(cid, 0) + games
             if games > primary_games.get(cid, -1):
                 primary_games[cid] = games
                 primary_role[cid] = row["role"]
-            role_bucket = role_totals.setdefault(row["role"], [0, 0])
-            role_bucket[0] += games
-            role_bucket[1] += wins
+            champion_role_wr[(cid, row["role"])] = (games, wins)
 
         # Matérialisé pour platform="all" (cas par défaut, retour
         # utilisateur 2026-08-12 : le calcul à la demande scanne
@@ -1686,9 +1690,9 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 else None
             )
             wr_secondary = wins / games
-            role_games, role_wins = role_totals[row_role]
-            wr_baseline = role_wins / role_games if role_games else None
-            wr_deviation = wr_secondary - wr_baseline if wr_baseline is not None else None
+            primary_games_n, primary_wins_n = champion_role_wr[(cid, primary_role[cid])]
+            wr_primary = primary_wins_n / primary_games_n if primary_games_n else None
+            wr_deviation = wr_secondary - wr_primary if wr_primary is not None else None
             picks.append(
                 {
                     "champion_id": cid,
@@ -1705,6 +1709,7 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                     "direction": direction,
                     "dmg_deviation": dmg_deviation,
                     "wr_secondary": wr_secondary,
+                    "wr_primary": wr_primary,
                     "wr_deviation": wr_deviation,
                     "sentence": (
                         f"{name} plays {RIOT_ROLE_LABELS[row_role]} in {100 * share:.0f}%"

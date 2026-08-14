@@ -3,7 +3,7 @@
 {% block content %}
 <h1>Flex/hybrid picks</h1>
 <p class="meta">Champions played in a real secondary role with a resource profile that deviates from the role average. Signal of a hybrid meta, not necessarily noise.</p>
-<p class="meta"><strong>How to read this</strong>: gold/WR/damage always compare to the SECONDARY role, not the main one. Only deviations ≥5% are shown.</p>
+<p class="meta"><strong>How to read this</strong>: gold/damage compare to the secondary role average across all champions there. WR compares to this champion's own main role WR instead — the role average is always ~50% (one winner, one loser per role per game), so it carries no signal. Only deviations ≥5% are shown.</p>
 
 <form method="get" action="/flex" class="filters">
   <label>Window
@@ -41,7 +41,7 @@
       <th data-tooltip="Share of games played in this secondary role" aria-label="Share of games played in this secondary role">
         <a href="{{ sort_urls.share }}" class="{{ 'active' if sort == 'share' }}">Games share</a>
       </th>
-      <th data-tooltip="WR in the secondary role vs all champions there" aria-label="WR in the secondary role vs all champions there">
+      <th data-tooltip="WR in the secondary role vs this champion's own main role WR" aria-label="WR in the secondary role vs this champion's own main role WR">
         <a href="{{ sort_urls.wr_secondary }}" class="{{ 'active' if sort == 'wr_secondary' }}">Secondary role WR</a>
       </th>
       <th data-tooltip="Average gold at 15 min vs the secondary role average" aria-label="Average gold at 15 min vs the secondary role average">
@@ -64,7 +64,7 @@
       <td>{{ p.role_label }}</td>
       <td>{{ p.share | pct }} <span class="sub">{{ p.games_role }}/{{ p.games_total }} games</span></td>
       <td class="{{ 'pos' if p.wr_secondary >= 0.5 else 'neg' }}">{{ p.wr_secondary | pct(0) }}
-        <span class="sub">{{ p.wr_deviation | signed_pct(0) }} vs role</span></td>
+        <span class="sub">{{ p.wr_deviation | signed_pct(0) }} vs main role</span></td>
       <td class="{{ 'pos' if p.gold_deviation > 0 else 'neg' if p.gold_deviation < 0 }}">{{ p.gold_deviation | signed_pct(0) }}
         <span class="sub">{{ p.profile_n }} recent games</span></td>
       <td class="{{ 'pos' if p.dmg_deviation and p.dmg_deviation > 0 else 'neg' if p.dmg_deviation and p.dmg_deviation < 0 }}">{{ p.dmg_deviation | signed_pct(0) }}</td>

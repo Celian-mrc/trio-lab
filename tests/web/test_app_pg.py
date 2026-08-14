@@ -1790,3 +1790,34 @@ def test_flex_page_wr_column_and_sortable_headers(pg_sync, client):
         "/flex", params={"platform": "all", "sort": "wr_secondary", "dir": "desc"}
     )
     assert resp_wr_desc.text.index("Vi") < resp_wr_desc.text.index("Lee Sin")
+
+
+def test_flex_page_wr_deviation_compares_to_own_primary_role(pg_sync, client):
+    """`wr_deviation` ("vs main role") doit comparer le WR du pick flex à SON
+    PROPRE WR au rôle principal, pas à la moyenne du rôle tous champions
+    confondus (retour utilisateur 2026-08-14 : cette moyenne vaut TOUJOURS
+    exactement 50 % — jeu à somme nulle, un gagnant/un perdant par rôle et par
+    game — donc ne portait aucun signal malgré le libellé "vs role").
+
+    Champion 1 (Lee Sin) : Top 60 % WR (principal) + Support 40 % WR
+    (secondaire). Champion 2 (Ahri) : Support 50 % WR, présent uniquement
+    pour que la moyenne du rôle (48 %) diffère du WR principal de Lee Sin
+    (60 %) — un ancien calcul par moyenne du rôle donnerait -8 %, le calcul
+    correct (vs propre rôle principal) donne -20 %."""
+    pg_sync.execute(
+        "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
+        " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
+        " ci_low, ci_high, tier) VALUES ('16.13', 'all', 1, 2, 3, 1, 1.0, 1.0, 0.0, 0.0,"
+        " 0.0, 0.0, 1.0, 'faible')"
+    )
+    pg_sync.execute(
+        "INSERT INTO agg_champion (patch, platform, role, champion_id, games, wins) VALUES"
+        " ('16.13', 'euw1', 'TOP', 1, 1000, 600),"  # Lee Sin Top : WR principal 60 %
+        " ('16.13', 'euw1', 'UTILITY', 1, 200, 80),"  # Lee Sin Support : WR secondaire 40 %
+        " ('16.13', 'euw1', 'UTILITY', 2, 800, 400)"  # Ahri Support : WR 50 %, fait dévier la moyenne du rôle
+    )
+    _seed_role_resource(pg_sync, "16.13", "UTILITY", [(1, 40, 5200, 1.5), (2, 40, 4400, 1.5)])
+    resp = client.get("/flex", params={"platform": "all"})
+    assert resp.status_code == 200
+    assert "-20 %" in resp.text  # 40 % (secondaire) − 60 % (propre rôle principal)
+    assert "-8 %" not in resp.text  # ancien calcul (vs moyenne du rôle, 48 %) : ne doit plus apparaître

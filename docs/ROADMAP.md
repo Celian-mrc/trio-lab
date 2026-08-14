@@ -1706,3 +1706,29 @@ config, deux briques indépendantes :
 Les deux nécessitent d'ajouter les variables (`SENTRY_DSN`, `LOKI_URL`,
 `LOKI_USER`, `LOKI_TOKEN`) sur Railway pour s'activer en prod (voir
 `.env.example`).
+
+- [x] **Bug statistique corrigé : "vs role" sur `/flex` ne comparait à rien
+      (2026-08-14, retour utilisateur : "le pourcentage vs rôle correspond
+      toujours à ce qu'il faut soustraire du WR secondaire pour faire 50%,
+      comme si le champion au rôle principal avait 50% de WR")** :
+      `wr_deviation` (`_flex_picks`, `web/app.py`) comparait le WR du pick
+      flex dans son rôle secondaire à `role_totals` — la somme wins/games de
+      TOUS les champions de ce rôle. Vérifié en session par requête directe
+      sur la prod : cette moyenne vaut **exactement** 50.0000% pour chacun
+      des 5 rôles, sans exception — pas un hasard de données mais une
+      propriété mathématique du jeu à somme nulle (un gagnant/un perdant par
+      rôle et par game, donc `sum(wins)/sum(games)` sur la totalité des
+      champions d'un rôle est identiquement 1/2). La colonne "vs role"
+      n'ajoutait donc aucune information au-delà de `wr_secondary − 50%`,
+      malgré un tooltip ("vs all champions there") qui laissait croire à une
+      vraie comparaison de performance. **Fix** : `wr_deviation` compare
+      maintenant le WR secondaire du champion à SON PROPRE WR au rôle
+      PRINCIPAL (`champion_role_wr[(cid, primary_role[cid])]`) — la
+      comparaison que l'utilisateur pensait déjà voir, et la seule qui porte
+      un vrai signal ("ce champion performe-t-il mieux ou moins bien hors de
+      son rôle habituel ?"). Libellés mis à jour (`flex.html`) : "vs role" →
+      "vs main role", tooltip et paragraphe d'explication corrigés en
+      conséquence. Régression couverte par
+      `test_flex_page_wr_deviation_compares_to_own_primary_role` (deux
+      champions construits pour que l'ancien calcul et le nouveau donnent
+      des résultats différents et vérifiables : -8% vs -20%).
