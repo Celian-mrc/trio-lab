@@ -201,6 +201,16 @@
   });
 
   // --- Interaction, déléguée (survit aux swaps sans re-binding) ---
+  // Un <li> d'option n'est pas focusable : le mousedown dessus fait perdre le
+  // focus au trigger AVANT le click (comportement par défaut du navigateur),
+  // ce qui déclenche `focusout` -> closeListbox -> liste masquée -> le click
+  // qui suit n'atteint plus un élément visible (aucune sélection appliquée,
+  // juste une fermeture). preventDefault sur ce mousedown garde le focus sur
+  // le trigger, focusout ne se déclenche pas, le click passe normalement.
+  document.addEventListener("mousedown", function (event) {
+    if (event.target.closest(".ts-select-listbox")) event.preventDefault();
+  });
+
   document.addEventListener("click", function (event) {
     var trigger = event.target.closest(".ts-select-trigger");
     if (trigger) {

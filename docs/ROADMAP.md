@@ -1525,7 +1525,27 @@ gagner") avec les données déjà en place.
       les clics simulés par l'outil de capture d'écran du navigateur
       atterrissaient à des coordonnées incorrectes sur la liste ouverte
       (écart d'échelle image/CSS non résolu par l'outil, `devicePixelRatio`
-      1.25), sans rapport avec le composant lui-même.
+      1.25), diagnostic initial : sans rapport avec le composant lui-même.
+      **Correction (2026-08-14, retour utilisateur : "le bouton min.
+      reliability ne fonctionne pas" sur `/duos` et `/trios`)** : le
+      diagnostic ci-dessus était faux, ou du moins incomplet — il existait
+      un vrai bug du composant, à côté du problème d'outil. Un `<li>`
+      d'option n'est pas focusable ; le `mousedown` dessus fait perdre le
+      focus au déclencheur AVANT le `click` (comportement par défaut du
+      navigateur), ce qui déclenche `focusout` → `closeListbox` → liste
+      masquée → le `click` qui suit n'a plus de cible visible, donc aucune
+      sélection n'est appliquée (la liste se referme, rien ne change).
+      Reproduit en session avec de vrais clics souris (coordonnées, pas de
+      simulation `.click()`) puis confirmé par instrumentation d'événements
+      (`mousedown`/`focusout`/`click` loggés sur `document`). Corrigé par un
+      `preventDefault()` sur le `mousedown` quand la cible est dans
+      `.ts-select-listbox` : le focus reste sur le déclencheur, `focusout`
+      ne se déclenche pas, le `click` s'applique normalement. Leçon : la
+      validation précédente reposait sur `select.value = ...` /
+      `element.click()` direct en JS, qui ne rejoue pas la séquence
+      `mousedown` → perte de focus → `click` d'un vrai clic souris — un
+      composant interactif custom doit être vérifié avec de vrais événements
+      pointeur, pas seulement l'état final via l'API JS.
 
 - [x] **Incident : fenêtre de score figée 24h+ sur le rollover 16.16
       (2026-08-13, retour utilisateur : "toujours plus de 1 jour la
