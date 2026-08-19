@@ -1751,25 +1751,36 @@ Les deux nécessitent d'ajouter les variables (`SENTRY_DSN`, `LOKI_URL`,
       l'échelle actuelle de la table) a dépassé 3 min d'exécution en test ;
       `flex.refresh` (ajoutée le 12/08, tout juste une semaine avant l'alerte)
       mesurée à 37,7s et **194 559 buffers lus depuis le disque** (~1,5 Go,
-      cache hit ratio ~1,5%). Les cycles du collecteur tournent ~10-20
-      fois/jour depuis que `DEFAULT_BATCH_TARGET` a été abaissé le 2026-08-01
-      (pour la fraîcheur du site) — donc ces scans lourds se répètent en
-      continu, sans jamais provoquer d'erreur (juste de la charge silencieuse,
-      invisible jusqu'à cette alerte).
+      cache hit ratio ~1,5%). Les cycles du collecteur se répètent en continu
+      toute la journée — donc ces scans lourds tournent souvent, sans jamais
+      provoquer d'erreur (juste de la charge silencieuse, invisible jusqu'à
+      cette alerte).
 
-      **Fix** : `resilience.refresh`/`flex.refresh` ne tournent plus à CHAQUE
-      cycle mais au maximum une fois par `RESILIENCE_FLEX_THROTTLE_S` (1h,
-      `collector/service.py`) — même mécanique TTL que
+      **Fix, 1ère version puis correction le jour même (retour utilisateur :
+      "une fois par heure c'est plus que 10/20 par jour non ?")** :
+      `resilience.refresh`/`flex.refresh` ne tournent plus à CHAQUE cycle mais
+      au maximum une fois par `RESILIENCE_FLEX_THROTTLE_S` (`collector/
+      service.py`) — même mécanique TTL que
       `collect.APEX_DISCOVERY_TTL_S`/`ENTRIES_DISCOVERY_TTL_S` (état muté en
       place entre cycles par `run_service`, `refresh_state` optionnel côté
       `refresh_scores` pour ne pas changer le comportement des appels
-      manuels/CLI/tests). `compute.refresh`/`matchups.refresh` (les scores
-      principaux du site, `score_trio`/`score_duo`) restent à chaque cycle —
-      décision volontaire de l'utilisateur (option "espacer resilience+flex"
-      choisie plutôt que "tout espacer" ou "upgrader le tier Supabase") :
-      `/flex` et `/resilience` sont des pages secondaires qui n'ont pas
-      besoin d'une fraîcheur à la minute, contrairement à la tier list
-      principale. Régression couverte par
+      manuels/CLI/tests). Committé une 1re fois avec un throttle à **1h**, en
+      supposant à tort (sans mesure) une cadence de cycles "~5-10 min" —
+      l'utilisateur a fait remarquer que ça ne réduisait rien si les cycles
+      étaient déjà plus espacés qu'1h. Vérifié après coup en comptant les
+      trous d'insertion dans `matches` sur 24h de prod : cycles complets
+      toutes les **~96-110 min** (~14/jour), un throttle à 1h ne sautait donc
+      JAMAIS un seul appel (quasi no-op). Corrigé à **6h** : fait tomber
+      resilience/flex à ~4 fois/jour au lieu de ~14, une vraie réduction.
+      Leçon : ne jamais fixer un intervalle de throttle sans avoir mesuré la
+      cadence réelle qu'il est censé espacer. `compute.refresh`/
+      `matchups.refresh` (les scores principaux du site, `score_trio`/
+      `score_duo`) restent à chaque cycle — décision volontaire de
+      l'utilisateur (option "espacer resilience+flex" choisie plutôt que
+      "tout espacer" ou "upgrader le tier Supabase") : `/flex` et
+      `/resilience` sont des pages secondaires qui n'ont pas besoin d'une
+      fraîcheur à la minute, contrairement à la tier list principale.
+      Régression couverte par
       `test_refresh_scores_throttles_resilience_and_flex`.
 
       À surveiller : si le budget I/O continue de se vider malgré ce fix,

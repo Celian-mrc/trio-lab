@@ -56,12 +56,18 @@ MAX_WINDOW_PATCHES = 3
 # deux scannent/self-join `match_role_stats` (2 Go) à CHAQUE cycle, alors que
 # `shared_buffers` de l'instance ne fait que 512 Mo — rien ne tient en
 # cache, chaque cycle relit le disque à froid. Mesuré en session :
-# resilience.refresh >3 min (self-join), flex.refresh 37,7s/~1,5 Go lus. Avec
-# des cycles toutes les ~5-10 min (DEFAULT_BATCH_TARGET abaissé le 2026-08-01),
-# ça fait tourner ces deux requêtes lourdes 10-20+ fois/jour pour un gain de
-# fraîcheur que /flex et /resilience n'ont pas besoin d'avoir à la minute.
-# Même mécanique TTL que `collect.APEX_DISCOVERY_TTL_S`/`ENTRIES_DISCOVERY_TTL_S`.
-RESILIENCE_FLEX_THROTTLE_S = 3600
+# resilience.refresh >3 min (self-join), flex.refresh 37,7s/~1,5 Go lus.
+# Cadence réelle des cycles mesurée sur la prod (gaps sans insertion de
+# matchs dans `matches`, 24h de données) : ~14 cycles/jour, un toutes les
+# ~96-110 min — PAS "5-10 min" comme supposé initialement (le batch abaissé
+# le 2026-08-01 accélère la COLLECTE, pas la fréquence des cycles complets,
+# qui reste bornée par le rate limit Riot). Un throttle de 1h aurait donc été
+# un quasi no-op (toujours dépassé entre deux cycles) — retour utilisateur qui
+# a fait recalculer : 6h fait tomber resilience/flex à ~4 fois/jour au lieu
+# de ~14, une vraie réduction, sans que /flex ou /resilience n'aient besoin
+# d'une fraîcheur à la minute. Même mécanique TTL que
+# `collect.APEX_DISCOVERY_TTL_S`/`ENTRIES_DISCOVERY_TTL_S`.
+RESILIENCE_FLEX_THROTTLE_S = 6 * 3600
 
 
 def scoring_window(dsn: str | None = None) -> PatchWindow | None:
