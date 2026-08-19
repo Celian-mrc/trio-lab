@@ -1732,3 +1732,46 @@ Les deux nécessitent d'ajouter les variables (`SENTRY_DSN`, `LOKI_URL`,
       `test_flex_page_wr_deviation_compares_to_own_primary_role` (deux
       champions construits pour que l'ancien calcul et le nouveau donnent
       des résultats différents et vérifiables : -8% vs -20%).
+
+- [x] **Incident : alerte Supabase "Disk IO Budget" (2026-08-19, retour
+      utilisateur : mail Supabase reçu avant le partage Discord)** : le
+      projet Supabase partagé (Loyalties v2, cf. [[railway-deployment]])
+      dépasse son budget d'I/O disque — distinct de l'espace disque (déjà
+      vécu 2×, cf. `docs/ROADMAP.md` plus haut), ici c'est un débit de
+      lectures/écritures physiques par seconde, plafonné par le tier de
+      calcul (Small, 2 Go RAM).
+
+      **Diagnostic** (mesuré en session, EXPLAIN ANALYZE BUFFERS en direct
+      sur la prod) : `shared_buffers` de l'instance ne fait que **512 Mo**,
+      alors que l'ensemble des tables relues à CHAQUE cycle du collecteur
+      (`match_role_stats` 2 Go + `agg_trio`/`agg_duo`/durations/`agg_matchup`
+      ~3 Go + `match_trio_stats`/`matches`) pèse **~6 Go** — 12× trop gros
+      pour tenir en cache. Concrètement : `resilience.refresh` (self-join sur
+      `match_role_stats`, en place depuis le 20/07 mais jamais remesurée à
+      l'échelle actuelle de la table) a dépassé 3 min d'exécution en test ;
+      `flex.refresh` (ajoutée le 12/08, tout juste une semaine avant l'alerte)
+      mesurée à 37,7s et **194 559 buffers lus depuis le disque** (~1,5 Go,
+      cache hit ratio ~1,5%). Les cycles du collecteur tournent ~10-20
+      fois/jour depuis que `DEFAULT_BATCH_TARGET` a été abaissé le 2026-08-01
+      (pour la fraîcheur du site) — donc ces scans lourds se répètent en
+      continu, sans jamais provoquer d'erreur (juste de la charge silencieuse,
+      invisible jusqu'à cette alerte).
+
+      **Fix** : `resilience.refresh`/`flex.refresh` ne tournent plus à CHAQUE
+      cycle mais au maximum une fois par `RESILIENCE_FLEX_THROTTLE_S` (1h,
+      `collector/service.py`) — même mécanique TTL que
+      `collect.APEX_DISCOVERY_TTL_S`/`ENTRIES_DISCOVERY_TTL_S` (état muté en
+      place entre cycles par `run_service`, `refresh_state` optionnel côté
+      `refresh_scores` pour ne pas changer le comportement des appels
+      manuels/CLI/tests). `compute.refresh`/`matchups.refresh` (les scores
+      principaux du site, `score_trio`/`score_duo`) restent à chaque cycle —
+      décision volontaire de l'utilisateur (option "espacer resilience+flex"
+      choisie plutôt que "tout espacer" ou "upgrader le tier Supabase") :
+      `/flex` et `/resilience` sont des pages secondaires qui n'ont pas
+      besoin d'une fraîcheur à la minute, contrairement à la tier list
+      principale. Régression couverte par
+      `test_refresh_scores_throttles_resilience_and_flex`.
+
+      À surveiller : si le budget I/O continue de se vider malgré ce fix,
+      candidats suivants (non retenus cette fois) : espacer aussi
+      compute/matchups, ou upgrader le tier Supabase (Small → Medium).

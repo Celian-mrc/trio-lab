@@ -56,7 +56,9 @@ class _Recorder:
         monkeypatch.setattr(service.patches, "current_patch", fake_current_patch)
         monkeypatch.setattr(service.collect, "run", fake_collect_run)
         monkeypatch.setattr(
-            service, "refresh_scores", lambda patch, dsn=None: self.calls.append(("refresh", patch))
+            service,
+            "refresh_scores",
+            lambda patch, dsn=None, refresh_state=None: self.calls.append(("refresh", patch)),
         )
         monkeypatch.setattr(
             service.maintenance,
@@ -141,6 +143,44 @@ def test_refresh_scores_chains_and_prunes(monkeypatch):
         ("draft_suggestions", fake_window, "all"),
         ("prune_scores",),
     ]
+
+
+def test_refresh_scores_throttles_resilience_and_flex(monkeypatch):
+    """Retour utilisateur 2026-08-19 (alerte Supabase Disk IO Budget) :
+    resilience/flex ne doivent plus tourner à CHAQUE appel de `refresh_scores`
+    si un `refresh_state` partagé est fourni (comme le fait `run_service`
+    d'un cycle à l'autre), seulement au premier appel puis après
+    `RESILIENCE_FLEX_THROTTLE_S` écoulées."""
+    calls: list[tuple] = []
+    fake_window = object()
+    monkeypatch.setattr(service.aggregate, "refresh", lambda patch, dsn=None: None)
+    monkeypatch.setattr(service, "scoring_window", lambda dsn=None: fake_window)
+    monkeypatch.setattr(service.compute, "refresh", lambda window, dsn=None: None)
+    monkeypatch.setattr(service.matchups, "refresh", lambda window, dsn=None: None)
+    monkeypatch.setattr(
+        service.resilience, "refresh", lambda window, dsn=None: calls.append("resilience")
+    )
+    monkeypatch.setattr(service.flex, "refresh", lambda window, dsn=None: calls.append("flex"))
+    monkeypatch.setattr(
+        service.draft_suggestions, "refresh", lambda window, platform, dsn=None: None
+    )
+    monkeypatch.setattr(service.maintenance, "purge_stale_scores", lambda dsn=None: None)
+
+    fake_now = [1000.0]
+    monkeypatch.setattr(service.time, "monotonic", lambda: fake_now[0])
+
+    refresh_state: dict[str, float] = {}
+    service.refresh_scores("16.13", refresh_state=refresh_state)
+    assert calls == ["resilience", "flex"]  # 1er appel : jamais refresh -> toujours déclenché
+
+    calls.clear()
+    fake_now[0] += 60  # 1 min plus tard, sous le seuil (1h)
+    service.refresh_scores("16.13", refresh_state=refresh_state)
+    assert calls == []  # throttlé : rien depuis le dernier refresh
+
+    fake_now[0] += service.RESILIENCE_FLEX_THROTTLE_S + 1  # seuil dépassé
+    service.refresh_scores("16.13", refresh_state=refresh_state)
+    assert calls == ["resilience", "flex"]  # re-déclenché
 
 
 def test_refresh_scores_skips_compute_when_window_empty(monkeypatch):

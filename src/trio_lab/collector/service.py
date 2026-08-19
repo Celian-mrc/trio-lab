@@ -51,6 +51,17 @@ PURGE_INTERVAL_S = 24 * 3600
 # intégralement en dicts Python), remonté à 3 le 2026-08-02 une fois la
 # lecture paginée (`compute._iter_agg_groups`) validée en prod sans crash.
 MAX_WINDOW_PATCHES = 3
+# Espacement de resilience.refresh/flex.refresh (retour utilisateur
+# 2026-08-19, alerte Supabase "Disk IO Budget" sur le projet partagé) : les
+# deux scannent/self-join `match_role_stats` (2 Go) à CHAQUE cycle, alors que
+# `shared_buffers` de l'instance ne fait que 512 Mo — rien ne tient en
+# cache, chaque cycle relit le disque à froid. Mesuré en session :
+# resilience.refresh >3 min (self-join), flex.refresh 37,7s/~1,5 Go lus. Avec
+# des cycles toutes les ~5-10 min (DEFAULT_BATCH_TARGET abaissé le 2026-08-01),
+# ça fait tourner ces deux requêtes lourdes 10-20+ fois/jour pour un gain de
+# fraîcheur que /flex et /resilience n'ont pas besoin d'avoir à la minute.
+# Même mécanique TTL que `collect.APEX_DISCOVERY_TTL_S`/`ENTRIES_DISCOVERY_TTL_S`.
+RESILIENCE_FLEX_THROTTLE_S = 3600
 
 
 def scoring_window(dsn: str | None = None) -> PatchWindow | None:
@@ -66,36 +77,45 @@ def scoring_window(dsn: str | None = None) -> PatchWindow | None:
     return make_window(known) if known else None
 
 
-def refresh_scores(patch: str, dsn: str | None = None) -> None:
+def refresh_scores(
+    patch: str, dsn: str | None = None, *, refresh_state: dict[str, float] | None = None
+) -> None:
     """Agrégats du patch courant + scores de synergie de la fenêtre glissante.
 
     Purge aussi les scores hors fenêtre courante : bon marché (DELETE simple)
     et empêche `score_*` d'accumuler un nouveau doublon à chaque rollover.
+
+    `refresh_state` : horodatage de dernier refresh resilience/flex, MUTÉ EN
+    PLACE et réutilisé entre cycles par `run_service` (même mécanique que
+    `discovery_state` côté collecte) — throttlé à `RESILIENCE_FLEX_THROTTLE_S`
+    plutôt qu'à chaque cycle (retour utilisateur 2026-08-19, cf. commentaire
+    de la constante). `None` (défaut, ex. appel manuel/CLI/tests) : dict
+    éphémère créé à chaque appel → toujours rafraîchi, comportement inchangé
+    pour ces usages.
     """
+    state = refresh_state if refresh_state is not None else {}
     aggregate.refresh(patch, dsn=dsn)
     window = scoring_window(dsn)
     if window is None:
         return
     compute.refresh(window, dsn=dsn)
     matchups.refresh(window, dsn=dsn)
-    # Coût mesuré négligeable (~13s pour ~2500 lignes) face à un cycle de
-    # collecte qui dure déjà plusieurs minutes (rate limit Riot) — passé de
-    # manuel à automatique le 20/07/2026, retour utilisateur (cf.
-    # docs/ROADMAP.md). `min_rows` en dessous du seuil : no-op silencieux.
-    resilience.refresh(window, dsn=dsn)
-    # Profils de ressources par (champion, rôle) pour /flex (retour
-    # utilisateur 2026-08-12, test de charge avant partage Discord) : la
-    # requête à la demande scannait intégralement match_role_stats (10M
-    # lignes, ~17,7s × 2 par page) — sature l'I/O de l'instance Supabase
-    # partagée sous quelques requêtes concurrentes. Coût de refresh mesuré
-    # comparable à resilience.refresh, absorbé dans le même cycle.
-    flex.refresh(window, dsn=dsn)
+    last_resilience_flex = state.get("resilience_flex", float("-inf"))
+    if time.monotonic() - last_resilience_flex > RESILIENCE_FLEX_THROTTLE_S:
+        # `min_rows` en dessous du seuil : no-op silencieux (résilience).
+        resilience.refresh(window, dsn=dsn)
+        # Profils de ressources par (champion, rôle) pour /flex (retour
+        # utilisateur 2026-08-12, test de charge avant partage Discord) : la
+        # requête à la demande scannait intégralement match_role_stats (10M
+        # lignes, ~17,7s × 2 par page) — sature l'I/O de l'instance Supabase
+        # partagée sous quelques requêtes concurrentes.
+        flex.refresh(window, dsn=dsn)
+        state["resilience_flex"] = time.monotonic()
     # Compositions suggérées + contres précalculées pour "toutes régions"
     # UNIQUEMENT (retour utilisateur 2026-07-25) : la région par défaut à
     # l'arrivée sur /draft (le plus de games) — les autres régions restent en
     # calcul à la demande (bouton), coût mesuré ~30-47s par région, pas
-    # justifié pour un usage bien plus rare. Coût ici absorbé dans le même
-    # cycle que score_duo/score_matchup/résilience, déjà plusieurs minutes.
+    # justifié pour un usage bien plus rare.
     draft_suggestions.refresh(window, "all", dsn=dsn)
     maintenance.purge_stale_scores(dsn=dsn)
 
@@ -118,6 +138,9 @@ def run_service(
     # `ENTRIES_DISCOVERY_TTL_S` — cause de l'OOM vu en prod une fois les
     # cycles raccourcis par `DEFAULT_BATCH_TARGET`.
     discovery_state: dict[str, dict[str, float]] = {}
+    # Même principe : créé UNE FOIS, muté en place par `refresh_scores` d'un
+    # cycle à l'autre pour throttler resilience/flex (cf. `RESILIENCE_FLEX_THROTTLE_S`).
+    refresh_state: dict[str, float] = {}
     while max_cycles is None or cycles < max_cycles:
         cycles += 1
         try:
@@ -133,7 +156,7 @@ def run_service(
                     discovery_state=discovery_state,
                 )
             )
-            refresh_scores(patch, dsn=dsn)
+            refresh_scores(patch, dsn=dsn, refresh_state=refresh_state)
             # events : jamais relus après l'ingestion, purge à chaque cycle
             # (cadence courte, indépendante de la purge quotidienne).
             maintenance.purge_stale_objective_events(dsn=dsn)
