@@ -109,6 +109,24 @@ def refresh_scores(
     last_refresh = state.get("scores", float("-inf"))
     if time.monotonic() - last_refresh <= SCORE_REFRESH_THROTTLE_S:
         return
+    # Horodatage posé AVANT de lancer le pipeline, pas après (retour
+    # utilisateur 2026-08-21, vérification en session du déploiement de ce
+    # même fix) : `resilience.refresh` a dépassé son propre timeout de 5min
+    # en prod (self-join sur `match_role_stats`, coût qui grandit avec la
+    # taille du patch — cf. mémoire postgres-cte-selfjoin-nestloop-trap) et
+    # l'exception s'est propagée hors de `refresh_scores` jusqu'à
+    # `run_service`. Avec l'horodatage posé APRÈS (comme dans une 1re
+    # version), cet échec aurait empêché `state["scores"]` de se mettre à
+    # jour : le cycle suivant (~90-110 min plus tard, pas 12h) aurait
+    # retenté le pipeline complet en croyant qu'aucun refresh n'avait
+    # encore réussi — un échec systématique (ex. resilience.refresh trop
+    # lente sur ce patch) aurait donc fait marteler la base à chaque cycle
+    # au lieu d'être borné à 1 tentative par `SCORE_REFRESH_THROTTLE_S`,
+    # recréant exactement le problème que ce throttle doit éviter. Poser
+    # l'horodatage avant garantit au plus 1 tentative par fenêtre, succès ou
+    # échec — un échec reste visible (Sentry, `logger.exception` dans
+    # `run_service`), juste plus jamais en boucle serrée.
+    state["scores"] = time.monotonic()
     aggregate.refresh(patch, dsn=dsn)
     window = scoring_window(dsn)
     if window is not None:
@@ -124,7 +142,6 @@ def refresh_scores(
         # région, pas justifié pour un usage bien plus rare.
         draft_suggestions.refresh(window, "all", dsn=dsn)
         maintenance.purge_stale_scores(dsn=dsn)
-    state["scores"] = time.monotonic()
 
 
 def run_service(

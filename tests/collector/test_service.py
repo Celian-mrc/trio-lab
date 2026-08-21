@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from trio_lab.collector import patches, service
 
 # --- patches : résolution du patch courant et bornes de repli ---
@@ -201,6 +203,44 @@ def test_refresh_scores_throttles_whole_pipeline(monkeypatch):
     fake_now[0] += service.SCORE_REFRESH_THROTTLE_S + 1  # seuil dépassé
     service.refresh_scores("16.13", refresh_state=refresh_state)
     assert calls == expected_full_run  # re-déclenché
+
+
+def test_refresh_scores_marks_throttle_even_on_failure(monkeypatch):
+    """Retour utilisateur 2026-08-21 (vérification en session du déploiement
+    du throttle) : `resilience.refresh` a dépassé son propre timeout en prod
+    et l'exception s'est propagée hors de `refresh_scores`. Si l'horodatage
+    du throttle n'était posé qu'APRÈS un pipeline réussi, un échec
+    systématique (ex. une étape trop lente sur un patch donné) ferait
+    retenter le pipeline complet à CHAQUE cycle suivant (~90-110 min) au
+    lieu d'attendre `SCORE_REFRESH_THROTTLE_S` (12h) — recréant le problème
+    que ce throttle doit éviter. L'horodatage doit donc être posé AVANT,
+    pour garantir au plus 1 tentative par fenêtre, succès ou échec."""
+    fake_window = object()
+    monkeypatch.setattr(service.aggregate, "refresh", lambda patch, dsn=None: None)
+    monkeypatch.setattr(service, "scoring_window", lambda dsn=None: fake_window)
+    monkeypatch.setattr(service.compute, "refresh", lambda window, dsn=None: None)
+    monkeypatch.setattr(service.matchups, "refresh", lambda window, dsn=None: None)
+
+    def _boom(window, dsn=None):
+        raise TimeoutError("resilience.refresh trop lente sur ce patch")
+
+    monkeypatch.setattr(service.resilience, "refresh", _boom)
+
+    fake_now = [1000.0]
+    monkeypatch.setattr(service.time, "monotonic", lambda: fake_now[0])
+
+    refresh_state: dict[str, float] = {}
+    with pytest.raises(TimeoutError):
+        service.refresh_scores("16.13", refresh_state=refresh_state)
+    assert refresh_state["scores"] == 1000.0  # posé malgré l'échec
+
+    # Un 2e appel peu après (simule le cycle suivant, ~90 min plus tard,
+    # bien avant les 12h du throttle) ne doit RIEN retenter.
+    fake_now[0] += 3600
+    calls: list[str] = []
+    monkeypatch.setattr(service.aggregate, "refresh", lambda patch, dsn=None: calls.append("agg"))
+    service.refresh_scores("16.13", refresh_state=refresh_state)
+    assert calls == []
 
 
 def test_refresh_scores_skips_compute_when_window_empty(monkeypatch):

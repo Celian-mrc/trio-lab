@@ -1890,3 +1890,38 @@ Les deux nécessitent d'ajouter les variables (`SENTRY_DSN`, `LOKI_URL`,
       quel, gain déjà largement suffisant). 83 tests web + 387 tests
       complets passent sans changement de comportement (mêmes valeurs,
       juste moins de travail redondant).
+
+- [x] **Bug trouvé en vérifiant le déploiement du throttle : l'horodatage
+      n'était posé qu'APRÈS un pipeline réussi (2026-08-21)** : en
+      surveillant le déploiement de `SCORE_REFRESH_THROTTLE_S` en prod
+      (MCP Supabase, `query_logs` sur `postgres_logs`), confirmé que le fix
+      `team_gold_agg` marche (`agg_trio` 90,9s → **30,0s** en prod réelle,
+      `Seq Scan on team_gold_agg` visible dans les plans au lieu du
+      self-join recalculé) — mais la suite du pipeline a fini par
+      **timeout** (`canceling statement due to statement timeout` à
+      15:55:56 UTC, très probablement `resilience.refresh` : son self-join
+      sur `match_role_stats` dépassait déjà mon propre timeout de test de
+      3 min en session, cf. entrée précédente, et grandit avec la taille du
+      patch). L'exception s'est propagée hors de `refresh_scores` jusqu'à
+      `run_service`, qui l'a loggée et relancé un nouveau cycle — mais
+      **`state["scores"]` n'avait jamais été posé** puisque cette ligne
+      était à la FIN de `refresh_scores`, après tout le pipeline. Un échec
+      systématique à cette étape (probable tant que `resilience.refresh`
+      reste aussi lente sur ce patch) aurait donc fait retenter le pipeline
+      complet à CHAQUE cycle suivant (~90-110 min), pas après 12h —
+      recréant exactement le problème que le throttle devait éviter.
+
+      **Fix** : l'horodatage est maintenant posé AVANT de lancer
+      `aggregate.refresh` (pas après le pipeline complet) — garantit au
+      plus 1 tentative par `SCORE_REFRESH_THROTTLE_S`, succès ou échec. Un
+      échec reste visible (Sentry via `logger.exception` dans
+      `run_service`), juste plus jamais en boucle serrée. Régression
+      couverte par `test_refresh_scores_marks_throttle_even_on_failure`
+      (simule un `resilience.refresh` qui lève, vérifie que l'horodatage
+      est posé quand même et qu'un appel proche dans le temps ne retente
+      rien). Trouvé uniquement parce que la vérification post-déploiement
+      a été faite en conditions réelles plutôt que supposée à partir des
+      tests unitaires seuls — leçon déjà notée dans ce fichier
+      (`postgres-cte-selfjoin-nestloop-trap`), reconfirmée ici : un throttle
+      ou un garde-fou doit être vérifié EN PROD sous charge réelle, pas
+      seulement en tests avec des mocks qui ne lèvent jamais d'exception.
