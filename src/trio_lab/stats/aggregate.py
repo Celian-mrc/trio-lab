@@ -127,13 +127,36 @@ _DUO_STAT_SUMS_SQL = """
 # des 2 côtés (sinon comparaison biaisée). LEFT JOIN (comme _DUO_SQL
 # ci-dessous, jamais INNER) : une CTE, jointe une fois par requête plutôt que
 # recalculée par ligne.
-_TEAM_GOLD_CTE_SQL = """
-    team_gold_agg AS (
+#
+# Filtre `JOIN matches pm ON pm.patch = %(patch)s` ajouté (retour utilisateur
+# 2026-08-21, incident Disk IO Budget/instance figée) : ce calcul n'avait
+# JAMAIS été borné par patch — il recalculait le gold d'équipe sur les 3
+# patchs entiers retenus dans `match_role_stats` (12,2M lignes) à CHAQUE appel
+# de `refresh(patch)`, alors qu'un seul patch (~2M lignes) est réellement
+# utilisé (jointure `tg.match_id = t.match_id` où `t` est déjà filtré au
+# patch courant plus loin). `idx_matches_patch_platform` rend ce filtre bon
+# marché (`match_role_stats` lui-même n'a pas de colonne patch indexée — le
+# scan de la table reste complet, mais ne calcule plus le résultat pour 2
+# patchs jetés ensuite).
+#
+# Matérialisé en TEMP TABLE (`_TEAM_GOLD_TEMP_TABLE_SQL`, créée une fois par
+# `refresh()`) plutôt qu'en CTE répétée dans chaque requête qui la
+# consomme : `_DUO_SQL`/`_DUO_EXT_SQL`/`_TRIO_SQL` la réutilisaient chacune
+# indépendamment via `WITH ...` — un CTE n'est pas partagé entre requêtes
+# SQL séparées, donc ce self-join coûteux (mesuré 65-90s, spill disque
+# 556 Mo, sur les 12,2M lignes non filtrées par patch) était refait 3 FOIS
+# par cycle. La cause dominante de l'incident Disk IO Budget/instance figée
+# du 20/08/2026. `ON COMMIT DROP` : nettoyée automatiquement à la fin de la
+# transaction de `refresh()`, pas de risque de collision entre appels
+# (chaque `refresh()` ouvre sa propre connexion).
+_TEAM_GOLD_TEMP_TABLE_SQL = """
+    CREATE TEMP TABLE team_gold_agg ON COMMIT DROP AS
         SELECT picks.match_id, picks.team_id,
                sum(picks.gold_15) - sum(picks.enemy_gold_15) AS team_gold_diff_15
         FROM (
             SELECT mrs.match_id, mrs.team_id, mrs.gold_15, enemy.gold_15 AS enemy_gold_15
             FROM match_role_stats mrs
+            JOIN matches pm ON pm.match_id = mrs.match_id AND pm.patch = %(patch)s
             JOIN match_role_stats enemy
                 ON enemy.match_id = mrs.match_id AND enemy.role = mrs.role
                AND enemy.team_id <> mrs.team_id
@@ -141,13 +164,12 @@ _TEAM_GOLD_CTE_SQL = """
         ) picks
         GROUP BY picks.match_id, picks.team_id
         HAVING count(*) = 5
-    )
 """
+_TEAM_GOLD_INDEX_SQL = "CREATE INDEX ON team_gold_agg (match_id, team_id)"
 _TEAM_GOLD_COLUMNS = "team_gold15_sum, team_gold15_n"
 _TEAM_GOLD_SQL = "sum(tg.team_gold_diff_15), count(tg.team_gold_diff_15)"
 
 _DUO_SQL = f"""
-    WITH {_TEAM_GOLD_CTE_SQL}
     INSERT INTO agg_duo (patch, platform, roles, champ_a, champ_b, games, wins,
                          {_STAT_SUMS_COLUMNS}, {_DUO_CC_POSITION_COLUMNS}, {_TEAM_GOLD_COLUMNS})
     SELECT m.patch, m.platform, d.roles, d.champ_a, d.champ_b,
@@ -185,7 +207,6 @@ _DUO_SQL = f"""
 # sur match_id/team_id) — stats d'équipe déjà calculées là, identiques quelle
 # que soit la paire de rôles, pas dupliquées ici.
 _DUO_EXT_SQL = f"""
-    WITH {_TEAM_GOLD_CTE_SQL}
     INSERT INTO agg_duo (patch, platform, roles, champ_a, champ_b, games, wins,
                          {_STAT_SUMS_COLUMNS}, {_DUO_CC_POSITION_COLUMNS}, {_TEAM_GOLD_COLUMNS})
     SELECT m.patch, m.platform, pair.roles, ra.champion_id, rb.champion_id,
@@ -227,7 +248,6 @@ _DUO_EXT_SQL = f"""
 """
 
 _TRIO_SQL = f"""
-    WITH {_TEAM_GOLD_CTE_SQL}
     INSERT INTO agg_trio (patch, platform, jgl_champion, mid_champion, sup_champion,
                           games, wins,
                           {_STAT_SUMS_COLUMNS}, {_TRIO_CC_POSITION_COLUMNS}, {_TEAM_GOLD_COLUMNS})
@@ -324,16 +344,26 @@ def refresh(patch: str, *, dsn: str | None = None) -> dict[str, int]:
         conn.execute("SET LOCAL statement_timeout = '10min'")
         # Piège nested-loop déjà rencontré (cf. mémoire
         # postgres-cte-selfjoin-nestloop-trap, resilience.py/win_factors.py/
-        # gold_factors.py) : `team_gold_agg` (_TEAM_GOLD_CTE_SQL) filtre sur
-        # `count(*) = 5`, une colonne DÉRIVÉE d'un agrégat — Postgres ne peut
-        # pas estimer sa sélectivité, retombe sur une sous-estimation par
-        # défaut et choisit un Nested Loop pour la jointure `tg` dans
+        # gold_factors.py) : `team_gold_agg` filtrait (quand c'était encore une
+        # CTE) sur `count(*) = 5`, une colonne DÉRIVÉE d'un agrégat — Postgres
+        # ne peut pas estimer sa sélectivité, retombe sur une sous-estimation
+        # par défaut et choisit un Nested Loop pour la jointure `tg` dans
         # _DUO_SQL/_TRIO_SQL. Resté non corrigé ici jusqu'au rollover 16.16
         # (2026-08-13) : `aggregate.refresh` timeoutait sur CHAQUE cycle
         # collecteur dès qu'un patch encore petit (peu de lignes, mauvaise
         # estimation) était agrégé — `agg_trio` restait vide pour ce patch
         # plus de 24h, la fenêtre de score ne pouvait jamais avancer.
         conn.execute("SET LOCAL enable_nestloop = off")
+        # `team_gold_agg` matérialisée UNE FOIS ici (cf. commentaire de
+        # `_TEAM_GOLD_TEMP_TABLE_SQL`) plutôt que recalculée dans chaque
+        # requête qui la consomme. `ANALYZE` explicite : Postgres ne
+        # statistique jamais automatiquement une table temporaire, la
+        # jointure `tg` dans _DUO_SQL/_DUO_EXT_SQL/_TRIO_SQL se planifierait
+        # à l'aveugle sinon (retombe sur des defaults, pas la vraie
+        # cardinalité ~470K lignes).
+        conn.execute(_TEAM_GOLD_TEMP_TABLE_SQL, {"patch": patch})
+        conn.execute(_TEAM_GOLD_INDEX_SQL)
+        conn.execute("ANALYZE team_gold_agg")
         for table, sqls in _TABLES_SQL.items():
             conn.execute(
                 psycopg.sql.SQL("DELETE FROM {} WHERE patch = %(patch)s").format(

@@ -1786,3 +1786,70 @@ Les deux nécessitent d'ajouter les variables (`SENTRY_DSN`, `LOKI_URL`,
       À surveiller : si le budget I/O continue de se vider malgré ce fix,
       candidats suivants (non retenus cette fois) : espacer aussi
       compute/matchups, ou upgrader le tier Supabase (Small → Medium).
+
+- [x] **Suite de l'incident : instance Supabase complètement figée
+      (2026-08-20/21, Sentry "QueryCanceled" sur `resilience.refresh` +
+      "Internal Server Error" sur le site)** : le throttle resilience/flex
+      seul (entrée précédente) n'a pas suffi. Le pooler Supabase a fini par
+      refuser toute NOUVELLE connexion (`ECIRCUITBREAKER`, "failed to
+      retrieve database credentials") — même l'accès `execute_sql` du MCP
+      Supabase (ajouté en session pour investiguer, `.mcp.json`) timeoutait.
+      Logs `postgres_logs` (via `query_logs`) : plus aucune activité après
+      19h22 UTC, checkpoints de 270s d'écriture sur un cycle de 300s, un
+      simple upsert `players` bloqué 10s par un verrou. **Résolu par
+      redémarrage + upgrade Small → Medium** (0,0206$/h → 0,0822$/h,
+      facturé à l'heure sans engagement) fait par l'utilisateur sur le
+      dashboard — confirmé (précision utilisateur) que Loyalties v2, l'autre
+      appli du projet partagé, n'est en réalité pas utilisée, donc son
+      indisponibilité pendant l'incident n'avait pas d'enjeu réel (cf.
+      [[railway-deployment]]).
+
+      **Vraie cause racine trouvée après coup** : `stats.aggregate.refresh`
+      (le TOUT PREMIER appel du pipeline de scores, jamais throttlé même
+      après le fix resilience/flex) est en réalité la plus grosse dépense,
+      mesurée à **~11 minutes** de bout en bout sur la prod (DELETE+INSERT
+      complet du patch courant sur 6 tables). Deux causes combinées :
+      1. La CTE `team_gold_agg` (diff de gold d'équipe, migration 032)
+         n'était **jamais filtrée par patch** — elle recalculait le gold
+         d'équipe sur les 3 patchs ENTIERS retenus dans `match_role_stats`
+         (12,2M lignes) à chaque appel, alors qu'un seul patch (~2M lignes)
+         est réellement utilisé en aval. Pire : réutilisée comme `WITH ...`
+         dans 3 requêtes séparées (`_DUO_SQL`, `_DUO_EXT_SQL`, `_TRIO_SQL`),
+         une CTE n'étant pas partagée entre requêtes, ce self-join coûteux
+         (65-90s, spill disque 556 Mo) était refait 3 FOIS par cycle.
+      2. `agg_duo` (376s à elle seule, mesurée) fait 4 jointures séparées
+         vers `match_role_stats` — probablement pénalisées par
+         `enable_nestloop = off` (nécessaire par ailleurs pour un AUTRE
+         piège, cf. mémoire postgres-cte-selfjoin-nestloop-trap), non
+         creusé plus en profondeur cette fois (retour utilisateur : trop
+         risqué à toucher sans test approfondi, pas nécessaire vu le point
+         suivant).
+
+      **Fix appliqué** :
+      - `team_gold_agg` filtrée par patch (`JOIN matches pm ON pm.patch =
+        %(patch)s`) et matérialisée UNE FOIS en `TEMP TABLE ... ON COMMIT
+        DROP` (+ `ANALYZE` explicite, une table temporaire n'a jamais de
+        statistiques automatiques) au lieu d'une CTE répétée 3×
+        (`stats/aggregate.py`). Gain mesuré sur `_TRIO_SQL` seule :
+        90,9s → 28,8s (-68%). Vérifié par tests (`test_aggregate_pg.py`,
+        10/10 passent, valeurs identiques) — aucun changement de résultat,
+        juste moins de travail redondant.
+      - **`compute.refresh`/`matchups.refresh` rejoignent le throttle**
+        (retour utilisateur explicite : "on n'a pas besoin de fraîcheur
+        extrême, 2 fois par jour ça va") — `RESILIENCE_FLEX_THROTTLE_S` (6h,
+        partiel) remplacé par `SCORE_REFRESH_THROTTLE_S` (12h, TOUT le
+        pipeline : `aggregate.refresh` → `compute` → `matchups` →
+        `resilience` → `flex` → `draft_suggestions` → `purge_stale_scores`,
+        un seul throttle en tout ou rien). Logique : `compute`/`matchups`
+        ne font que relire `agg_trio`/`agg_duo`, les faire à chaque cycle
+        sans `aggregate.refresh` (elle, throttlée) ne produit aucune donnée
+        nouvelle — juste du travail perdu. Simplifie le code au passage
+        (un seul throttle au lieu de deux mécanismes imbriqués).
+
+      Leçon combinée avec l'entrée précédente : investiguer AVANT
+      d'optimiser (`EXPLAIN ANALYZE BUFFERS` en direct sur la prod, dans une
+      transaction annulée pour zéro effet de bord) a évité de perdre du
+      temps sur `enable_nestloop`/`agg_duo` — le vrai levier était ailleurs
+      (filtre patch manquant + redondance ×3), et la contrainte de fraîcheur
+      assouplie par l'utilisateur a rendu inutile un fix plus risqué.
+      Régression couverte par `test_refresh_scores_throttles_whole_pipeline`.
