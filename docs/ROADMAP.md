@@ -1853,3 +1853,40 @@ Les deux nécessitent d'ajouter les variables (`SENTRY_DSN`, `LOKI_URL`,
       (filtre patch manquant + redondance ×3), et la contrainte de fraîcheur
       assouplie par l'utilisateur a rendu inutile un fix plus risqué.
       Régression couverte par `test_refresh_scores_throttles_whole_pipeline`.
+
+- [x] **Navigation lente sur toutes les pages (2026-08-21, retour
+      utilisateur : "j'aimerais que la navigation soit un peu plus
+      rapide")** : deux causes distinctes trouvées par mesure directe
+      (`EXPLAIN ANALYZE BUFFERS` sur la prod), aucun rapport avec l'incident
+      Disk IO du jour précédent.
+      1. **`trio_tierlist`/`duo_tierlist`** (`web/queries.py`) utilisaient
+         `count(*) OVER ()` pour le total de pagination DANS la même requête
+         que les 50 lignes affichées — Postgres doit matérialiser TOUTES
+         les lignes correspondantes (353K pour `/`) avant de pouvoir
+         appliquer `LIMIT`, impossible de s'arrêter tôt sur l'index de tri.
+         Mesuré : 843,8ms pour 50 lignes affichées, contre **0,26ms** sans
+         la fenêtre (l'index `idx_score_trio_rank` permet alors un vrai
+         arrêt anticipé). Séparé en 2 requêtes : un `COUNT(*)` à part
+         (328,6ms, scanne quand même les lignes correspondantes mais sans
+         trier/sur-sélectionner) + la requête de données sans fenêtre —
+         le rendu (bloquant pour l'utilisateur) n'attend plus que la 2e.
+      2. **`resolve_context`** (`web/app.py`, appelée par CHAQUE page) fait
+         3 requêtes à chaque hit : `available_windows` (724ms — `SELECT
+         DISTINCT window_label`, un scan complet de `score_trio` pour
+         trouver 1 SEULE valeur distincte, pas de skip-scan Postgres),
+         `available_platforms` (480ms), `window_freshness` (594ms) — un
+         plancher de ~1,8s commun à `/draft`/`/resilience`/`/flex`, qui
+         n'ont pourtant presque rien d'autre à faire. Aucune des 3 n'a
+         besoin d'exactitude à la seconde (le pipeline de scores tourne au
+         plus 1x/12h, cf. entrée précédente) : cache mémoire par processus,
+         60s de TTL (`_cached`, même esprit que `champ_index` déjà
+         existant) — élimine ce coût pour l'écrasante majorité des
+         requêtes (trafic réel = cache quasi toujours chaud).
+
+      **Résultat mesuré en local (cache chaud, ce que vivent les vrais
+      visiteurs)** : `/` 2,6s → ~0,9s, `/duos`/`/draft`/`/resilience`/`/flex`
+      1,4-2,9s → **~0,3s** chacune. `/` reste plus lente que les autres
+      (le `COUNT(*)` séparé, ~330ms, n'est pas mis en cache — accepté tel
+      quel, gain déjà largement suffisant). 83 tests web + 387 tests
+      complets passent sans changement de comportement (mêmes valeurs,
+      juste moins de travail redondant).

@@ -162,23 +162,33 @@ def trio_tierlist(
         if champion_id is not None:
             params[f"{role}_champ"] = champion_id
             where.append(f"{role}_champion = %({role}_champ)s")
+    where_sql = " AND ".join(where)
     with conn.cursor(row_factory=dict_row) as cur:
+        # Compte à part de la page de données (retour utilisateur 2026-08-21,
+        # navigation lente) : `count(*) OVER ()` dans la même requête forçait
+        # Postgres à matérialiser TOUTES les lignes correspondantes avant de
+        # pouvoir appliquer LIMIT (impossible de s'arrêter tôt sur l'index de
+        # tri) — mesuré 843,8ms pour 50 lignes affichées (index scan complet,
+        # 353K lignes, 2,8 Go lus) contre 0,26ms sans la fenêtre. Un COUNT(*)
+        # séparé scanne aussi les lignes correspondantes mais sans le coût du
+        # tri/des colonnes en trop : 328,6ms mesurés, largement compensé par
+        # le gain sur la requête de données (celle qui bloque l'affichage).
+        total = cur.execute(
+            f"SELECT count(*) FROM score_trio WHERE {where_sql}",
+            params,  # noqa: S608
+        ).fetchone()["count"]
         rows = cur.execute(
             f"""
             SELECT jgl_champion, mid_champion, sup_champion, games, games_eff, wr,
                    synergy_raw, synergy_pred, synergy, ci_low, ci_high, tier,
-                   {_STAT_COLUMNS_SQL},
-                   count(*) OVER () AS total
+                   {_STAT_COLUMNS_SQL}
             FROM score_trio
-            WHERE {" AND ".join(where)}
+            WHERE {where_sql}
             ORDER BY {order_clause}, games DESC, jgl_champion, mid_champion, sup_champion
             OFFSET %(offset)s LIMIT %(per_page)s
             """,
             params,
         ).fetchall()
-    total = rows[0]["total"] if rows else 0
-    for row in rows:
-        row.pop("total", None)
     return {"rows": rows, "total": total, "page": max(page, 1), "per_page": PER_PAGE}
 
 
@@ -240,22 +250,26 @@ def duo_tierlist(
         if champion_id is not None:
             params[col] = champion_id
             where.append(f"{col} = %({col})s")
+    where_sql = " AND ".join(where)
     with conn.cursor(row_factory=dict_row) as cur:
+        # Compte à part de la page de données : même correctif que
+        # `trio_tierlist` (cf. son commentaire) — `count(*) OVER ()`
+        # empêchait Postgres de s'arrêter tôt sur l'index de tri.
+        total = cur.execute(
+            f"SELECT count(*) FROM score_duo WHERE {where_sql}",
+            params,  # noqa: S608
+        ).fetchone()["count"]
         rows = cur.execute(
             f"""
             SELECT roles, champ_a, champ_b, games, games_eff, wr, synergy,
-                   ci_low, ci_high, tier, {_STAT_COLUMNS_SQL},
-                   count(*) OVER () AS total
+                   ci_low, ci_high, tier, {_STAT_COLUMNS_SQL}
             FROM score_duo
-            WHERE {" AND ".join(where)}
+            WHERE {where_sql}
             ORDER BY {order_clause}, games DESC, champ_a, champ_b
             OFFSET %(offset)s LIMIT %(per_page)s
             """,
             params,
         ).fetchall()
-    total = rows[0].pop("total") if rows else 0
-    for row in rows:
-        row.pop("total", None)
     return {"rows": rows, "total": total, "page": max(page, 1), "per_page": per_page}
 
 

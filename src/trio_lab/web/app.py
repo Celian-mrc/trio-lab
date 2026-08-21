@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import secrets
+import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -370,6 +371,30 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         pctof=_pct_of,
     )
     state = {"champions": champion_index}
+    _context_cache: dict[str, tuple[float, object]] = {}
+    # TTL de `resolve_context` (retour utilisateur 2026-08-21, navigation
+    # lente) : `available_windows`/`available_platforms`/`window_freshness`
+    # tournaient sur CHAQUE page (appelées depuis `resolve_context`) — mesuré
+    # en session : 724ms + 480ms + 594ms = ~1,8s, la majorité du temps de
+    # chargement d'une page qui n'a par ailleurs presque rien à faire (ex.
+    # /resilience, /flex). Aucune des 3 n'a besoin d'être exacte à la
+    # seconde : le rollover de fenêtre prend des heures (le pipeline de
+    # scores tourne au plus 1x/12h, cf. `SCORE_REFRESH_THROTTLE_S`), un
+    # compteur de matchs vieux de quelques dizaines de secondes est
+    # invisible pour un visiteur. 60s de cache mémoire par processus (même
+    # esprit que `champ_index` ci-dessus) élimine ce coût pour l'écrasante
+    # majorité des requêtes, sans jamais montrer une fenêtre/plateforme
+    # perimée de plus d'1 minute.
+    _CONTEXT_CACHE_TTL_S = 60
+
+    def _cached(key: str, compute):
+        now = time.monotonic()
+        cached = _context_cache.get(key)
+        if cached is not None and now - cached[0] < _CONTEXT_CACHE_TTL_S:
+            return cached[1]
+        value = compute()
+        _context_cache[key] = (now, value)
+        return value
 
     def champ_index() -> dict[int, champions.Champion]:
         # Fetch paresseux et mémorisé : l'app démarre même si Data Dragon est
@@ -507,19 +532,21 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
 
     def resolve_context(conn, window: str | None, platform: str | None) -> tuple[str, str, dict]:
         """(fenêtre, plateforme) validées + le contexte commun des templates."""
-        known = queries.available_windows(conn)
+        known = _cached("windows", lambda: queries.available_windows(conn))
         if not known:
             raise HTTPException(503, "no materialized scores (run python -m trio_lab.synergy)")
         if window is None:
             window = known[0]
         elif window not in known:
             raise HTTPException(404, f"window not materialized: {window}")
-        platforms = queries.available_platforms(conn, window)
+        platforms = _cached(
+            f"platforms:{window}", lambda: queries.available_platforms(conn, window)
+        )
         if platform is None:
             platform = platforms[0]
         elif platform not in platforms:
             raise HTTPException(404, f"platform not present in window: {platform}")
-        freshness = queries.window_freshness(conn, window)
+        freshness = _cached(f"freshness:{window}", lambda: queries.window_freshness(conn, window))
         context = {
             "window": window,
             "platform": platform,
