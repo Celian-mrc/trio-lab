@@ -1700,10 +1700,14 @@ def test_flex_page_detects_off_role_resource_deviation(pg_sync, client):
     assert client.get("/flex", params={"role": "INVALID"}).status_code == 404
 
 
-def test_flex_page_hides_deviation_below_threshold(pg_sync, client):
-    """Un profil quasi identique à la moyenne du rôle (<5 % d'écart) n'est
-    pas un vrai signal hybride — ne doit pas apparaître (retour utilisateur :
-    la liste se noyait dans du bruit proche de 0 sans ce plancher)."""
+def test_flex_page_shows_picks_with_small_gold_deviation(pg_sync, client):
+    """Retour utilisateur 2026-08-22 : un pick établi (games/share OK) ne doit
+    plus disparaître de la page juste parce que son profil de ressources est
+    proche de la moyenne du rôle — l'ancien plancher `FLEX_MIN_DEVIATION`
+    servait de portail d'entrée pour TOUTE la ligne (WR compris), pas
+    seulement la colonne gold, et pouvait cacher un pick à bon WR pour la
+    mauvaise raison. Retiré : un profil quasi identique à la moyenne du rôle
+    (<1 % d'écart ici) doit maintenant apparaître normalement."""
     pg_sync.execute(
         "INSERT INTO score_trio (window_label, platform, jgl_champion, mid_champion,"
         " sup_champion, games, games_eff, wr, synergy_raw, synergy_pred, synergy,"
@@ -1719,12 +1723,13 @@ def test_flex_page_hides_deviation_below_threshold(pg_sync, client):
         " VALUES ('16.13', 'euw1', 'UTILITY', 1, 150, 70)"
     )
     # Champion 1 en support : gold_15 = 4520, quasi identique à la moyenne
-    # du rôle (champion 2 seul, 4500) — écart < 1 %, sous le seuil de 5 %.
+    # du rôle (champion 2 seul, 4500) — écart < 1 %, autrefois sous le seuil.
     _seed_role_resource(pg_sync, "16.13", "UTILITY", [(1, 40, 4520, 1.5), (2, 40, 4500, 1.5)])
     resp = client.get("/flex", params={"platform": "all"})
     assert resp.status_code == 200
-    assert "0 pick" in resp.text
-    assert "Lee Sin" not in resp.text
+    assert "1 pick" in resp.text
+    assert "Lee Sin" in resp.text
+    assert "+0 %" in resp.text  # écart de gold arrondi, affiché mais pas filtrant
 
 
 def test_flex_page_wr_column_and_sortable_headers(pg_sync, client):
@@ -1814,10 +1819,12 @@ def test_flex_page_wr_deviation_compares_to_own_primary_role(pg_sync, client):
         "INSERT INTO agg_champion (patch, platform, role, champion_id, games, wins) VALUES"
         " ('16.13', 'euw1', 'TOP', 1, 1000, 600),"  # Lee Sin Top : WR principal 60 %
         " ('16.13', 'euw1', 'UTILITY', 1, 200, 80),"  # Lee Sin Support : WR secondaire 40 %
-        " ('16.13', 'euw1', 'UTILITY', 2, 800, 400)"  # Ahri Support : WR 50 %, fait dévier la moyenne du rôle
+        " ('16.13', 'euw1', 'UTILITY', 2, 800, 400)"  # Ahri Support : WR 50 %, dévie la moyenne
     )
     _seed_role_resource(pg_sync, "16.13", "UTILITY", [(1, 40, 5200, 1.5), (2, 40, 4400, 1.5)])
     resp = client.get("/flex", params={"platform": "all"})
     assert resp.status_code == 200
     assert "-20 %" in resp.text  # 40 % (secondaire) − 60 % (propre rôle principal)
-    assert "-8 %" not in resp.text  # ancien calcul (vs moyenne du rôle, 48 %) : ne doit plus apparaître
+    assert (
+        "-8 %" not in resp.text
+    )  # ancien calcul (vs moyenne du rôle, 48 %) : ne doit plus apparaître

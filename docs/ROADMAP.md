@@ -1925,3 +1925,22 @@ Les deux nécessitent d'ajouter les variables (`SENTRY_DSN`, `LOKI_URL`,
       (`postgres-cte-selfjoin-nestloop-trap`), reconfirmée ici : un throttle
       ou un garde-fou doit être vérifié EN PROD sous charge réelle, pas
       seulement en tests avec des mocks qui ne lèvent jamais d'exception.
+
+- [x] **`/flex` cachait des picks établis à bon WR pour la mauvaise raison
+      (2026-08-22, retour utilisateur)** : `FLEX_MIN_DEVIATION` (0.05)
+      excluait toute ligne dont l'écart de gold@15 était entre -5 % et +5 %
+      — mais ce test arrivait APRÈS les filtres games/share (le vrai critère
+      de "pick établi") et AVANT même le calcul du WR. Un champion joué 200
+      games en rôle secondaire avec 53 % de WR pouvait donc disparaître
+      entièrement de la page si son profil de ressources était proche de la
+      moyenne du rôle — le portail d'entrée de toute la ligne reposait sur
+      la mauvaise colonne. Retiré : `FLEX_ROLE_SHARE_THRESHOLD`/
+      `FLEX_MIN_ROLE_GAMES` restent les seuls filtres d'inclusion, l'écart de
+      gold reste affiché (colonne + tri) mais n'exclut plus rien. Vérifié en
+      prod : 170 picks affichés après le fix (contre une liste tronquée par
+      le plancher avant), avec des écarts de ±1-4 % maintenant visibles.
+      Textes `flex.html` mis à jour en conséquence (ne prétendent plus
+      qu'un plancher de 5 % s'applique). Régression : ancien test
+      `test_flex_page_hides_deviation_below_threshold` remplacé par
+      `test_flex_page_shows_picks_with_small_gold_deviation` (vérifie
+      l'inverse — un profil <1 % d'écart doit maintenant apparaître).

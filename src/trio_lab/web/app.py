@@ -137,17 +137,18 @@ RIOT_ROLE_LABELS = {
 # FLEX_MIN_ROLE_GAMES games bruts. Le ratio ressources n'est calculé que s'il
 # y a au moins FLEX_MIN_PROFILE_GAMES lignes `match_role_stats` pour ce rôle
 # (table jeune, déployée le 19/07/2026 — le seuil est bas exprès).
-# FLEX_MIN_DEVIATION : sous ce seuil le profil ressources est ~celui du rôle
-# (constaté sur prod : la moitié des candidats bruts sont à <3 % d'écart,
-# aucun signal réel — sans plancher la liste se noie dans du bruit proche de
-# 0, retour utilisateur 2026-07-19). Pas de plafond arbitraire sur le nombre
-# de lignes affichées : le plancher de déviation borne déjà la liste aux cas
-# qui veulent dire quelque chose (~50 sur la fenêtre courante, pas 20 tronqués
-# sur 157 candidats bruts sans que ce soit visible).
+#
+# Pas de plancher sur l'écart de gold (`FLEX_MIN_DEVIATION`, retiré le
+# 2026-08-22, retour utilisateur) : il servait de portail d'entrée pour
+# TOUTE la ligne, pas juste la colonne gold — un pick établi (games/share OK)
+# avec un WR excellent mais un profil de ressources proche de la moyenne du
+# rôle disparaissait entièrement de la page avant même que son WR ne soit
+# regardé. Le vrai filtre "pick établi" reste FLEX_ROLE_SHARE_THRESHOLD/
+# FLEX_MIN_ROLE_GAMES ; l'écart de gold reste affiché, juste plus comme
+# condition d'exclusion.
 FLEX_ROLE_SHARE_THRESHOLD = 0.05
 FLEX_MIN_ROLE_GAMES = 100
 FLEX_MIN_PROFILE_GAMES = 30
-FLEX_MIN_DEVIATION = 0.05
 # `DUO_ROLES` (compute.py) donne les 2 rôles d'un duo en noms Riot (JUNGLE/
 # MIDDLE/UTILITY) ; ce mapping retrouve la colonne CC par membre (migration
 # 020) correspondante pour choisir laquelle des 3 valeurs trio concerne
@@ -1706,8 +1707,6 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
                 continue  # pas (encore) assez de match_role_stats pour ce rôle
             gold_ratio = profile["avg_gold_15"] / base["avg_gold_15"]
             gold_deviation = gold_ratio - 1  # signé : + au-dessus, - en dessous de la moyenne
-            if abs(gold_deviation) < FLEX_MIN_DEVIATION:
-                continue  # profil ~= la moyenne du rôle : pas un vrai signal hybride
             name = champ(cid).name
             direction = "above" if gold_deviation > 0 else "below"
             base_dmg_per_gold = base["avg_dmg_per_gold"]
