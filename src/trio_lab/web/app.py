@@ -324,13 +324,43 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         # remettre une connexion à une requête — une connexion morte est
         # remplacée de manière transparente, avant d'atteindre le code de
         # la route plutôt qu'en plein milieu.
+        #
+        # Suite (même jour) : `check` seul ne suffisait pas — toujours 8 à
+        # 20s de délai constatés après une pause. Cause probable : une
+        # coupure réseau "silencieuse" (l'intermédiaire arrête de router les
+        # paquets sans envoyer de RST) laisse une connexion "zombie" -
+        # ouverte du point de vue de l'OS, mais morte côté réseau -, et
+        # `check_connection` doit attendre le timeout de retransmission TCP
+        # par défaut du noyau avant de s'apercevoir qu'elle ne répond
+        # jamais. Deux mesures complémentaires :
+        # - `min_size=0` (au lieu de 1) : plus AUCUNE connexion n'est
+        #   maintenue ouverte quand le site est inactif, donc plus rien à
+        #   laisser devenir zombie entre deux visites. La prochaine requête
+        #   ouvre une connexion neuve (coût borné : poignée de main TLS +
+        #   authentification, quelques centaines de ms, pas un timeout TCP
+        #   incertain). Trafic de ce site = visites isolées, pas de rafales
+        #   concurrentes à amortir — le bénéfice d'une connexion "chaude"
+        #   en permanence ne compense pas le risque.
+        # - `keepalives` : pour les connexions qui restent quand même dans
+        #   le pool en usage normal (`min_size=0` n'empêche pas max_size
+        #   connexions actives en même temps), force l'OS à sonder la
+        #   liaison activement plutôt que d'attendre passivement — borne la
+        #   détection d'une coupure à ~25s dans le pire cas au lieu de
+        #   dépendre des réglages par défaut du noyau (des heures sous
+        #   Linux sans configuration explicite).
         app.state.pool = ConnectionPool(
             db.require_dsn(dsn),
-            min_size=1,
+            min_size=0,
             max_size=12,
             open=True,
             check=ConnectionPool.check_connection,
-            kwargs={"autocommit": True},
+            kwargs={
+                "autocommit": True,
+                "keepalives": 1,
+                "keepalives_idle": 10,
+                "keepalives_interval": 5,
+                "keepalives_count": 3,
+            },
         )
         yield
         app.state.pool.close()

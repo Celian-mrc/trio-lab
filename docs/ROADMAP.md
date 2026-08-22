@@ -1971,3 +1971,24 @@ Les deux nécessitent d'ajouter les variables (`SENTRY_DSN`, `LOKI_URL`,
       à l'aveugle, ambigu sur une instance partagée) — fix basé sur le
       mécanisme documenté officiellement pour ce symptôme, pas sur une
       mesure empirique du délai avant/après.
+
+      **`check` seul insuffisant, correctif complémentaire le jour même**
+      (retour utilisateur : toujours 8-20s après une pause, une fois
+      `check` déployé) : `check_connection` détecte bien la connexion
+      morte, mais AVANT de la détecter, elle doit d'abord attendre — une
+      coupure réseau "silencieuse" (l'intermédiaire arrête de router les
+      paquets sans envoyer de RST) laisse une connexion "zombie", ouverte
+      du point de vue de l'OS mais morte côté réseau, et la détection
+      dépend alors du timeout de retransmission TCP par défaut du noyau
+      (potentiellement bien plus long que ce qui a été observé). Deux
+      mesures complémentaires : `min_size` 1→0 (plus aucune connexion
+      maintenue ouverte quand le site est inactif — rien à laisser devenir
+      zombie entre deux visites ; le trafic de ce site, des visites
+      isolées sans rafales concurrentes, ne justifie pas le bénéfice d'une
+      connexion "chaude" permanente face à ce risque) et `keepalives`
+      (`keepalives_idle=10, interval=5, count=3`, ~25s de pire cas) pour
+      les connexions qui restent quand même actives en usage normal
+      (`min_size=0` n'empêche pas jusqu'à `max_size` connexions
+      simultanées) — force l'OS à sonder activement plutôt que d'attendre
+      passivement un timeout par défaut potentiellement bien plus long
+      (des heures sous Linux sans configuration explicite).
