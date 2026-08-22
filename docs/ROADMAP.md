@@ -1944,3 +1944,30 @@ Les deux nécessitent d'ajouter les variables (`SENTRY_DSN`, `LOKI_URL`,
       `test_flex_page_hides_deviation_below_threshold` remplacé par
       `test_flex_page_shows_picks_with_small_gold_deviation` (vérifie
       l'inverse — un profil <1 % d'écart doit maintenant apparaître).
+
+- [x] **Site lent après une pause (2026-08-22, retour utilisateur : "après
+      un moment d'inactivité ça met plus de 5 secondes")** : `ConnectionPool`
+      (`web/app.py`) ne recycle une connexion inactive qu'après `max_idle`
+      (défaut `psycopg_pool` : 10 min) — trop long face à un timeout
+      d'inactivité côté réseau (pooler Supabase ou intermédiaire cloud entre
+      Railway et Supabase, souvent de l'ordre de 1-6 min), qui coupe la
+      connexion sans que le pool ne le sache. La requête suivante hérite
+      d'une connexion morte : détecter l'échec puis en rouvrir une avant de
+      pouvoir répondre explique le délai après une pause (le site tourne
+      normalement sous trafic continu, le pool ne reste jamais assez
+      longtemps sans être sollicité pour que le problème apparaisse — d'où
+      "seulement après un moment d'inactivité").
+
+      **Fix** : `check=ConnectionPool.check_connection` ajouté à la
+      construction du pool — mécanisme officiel `psycopg_pool` pour
+      exactement ce cas (un `SELECT` à vide exécuté avant de remettre une
+      connexion à une requête ; une connexion morte est remplacée de
+      manière transparente, avant d'atteindre le code de la route). Pas de
+      changement de comportement en trafic continu (le check est bon
+      marché), corrige spécifiquement le cas "premier hit après une pause".
+      83 tests web + 388 tests complets passent, serveur local vérifié sans
+      erreur au démarrage et sur requête. Pas de reproduction en direct
+      d'une connexion coupée (aurait nécessité de tuer un backend Postgres
+      à l'aveugle, ambigu sur une instance partagée) — fix basé sur le
+      mécanisme documenté officiellement pour ce symptôme, pas sur une
+      mesure empirique du délai avant/après.

@@ -311,8 +311,26 @@ def create_app(*, dsn: str | None = None, champion_index=None) -> FastAPI:
         # max, 42 utilisées en tout (dont 17 supabase_admin + 5
         # authenticator, hors de notre contrôle), 14 pour trio_lab_app —
         # +8 dans le pire cas reste large sous la limite.
+        # `check` (retour utilisateur 2026-08-22, "après un moment
+        # d'inactivité ça met plus de 5s") : sans lui, `psycopg_pool` ne
+        # recycle une connexion inactive qu'après `max_idle` (10 min par
+        # défaut) — trop long face à un timeout d'inactivité côté réseau
+        # (pooler Supabase ou intermédiaire cloud, souvent 1-6 min), qui
+        # coupe la connexion sans que le pool ne le sache. La requête
+        # suivante hérite alors d'une connexion morte : il faut d'abord
+        # détecter l'échec puis en rouvrir une avant de pouvoir répondre,
+        # d'où le délai après une pause. `check_connection` (fourni par
+        # `psycopg_pool`, un simple `SELECT` à vide) est exécuté avant de
+        # remettre une connexion à une requête — une connexion morte est
+        # remplacée de manière transparente, avant d'atteindre le code de
+        # la route plutôt qu'en plein milieu.
         app.state.pool = ConnectionPool(
-            db.require_dsn(dsn), min_size=1, max_size=12, open=True, kwargs={"autocommit": True}
+            db.require_dsn(dsn),
+            min_size=1,
+            max_size=12,
+            open=True,
+            check=ConnectionPool.check_connection,
+            kwargs={"autocommit": True},
         )
         yield
         app.state.pool.close()
