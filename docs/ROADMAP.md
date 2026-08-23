@@ -1992,3 +1992,44 @@ Les deux nécessitent d'ajouter les variables (`SENTRY_DSN`, `LOKI_URL`,
       simultanées) — force l'OS à sonder activement plutôt que d'attendre
       passivement un timeout par défaut potentiellement bien plus long
       (des heures sous Linux sans configuration explicite).
+
+- [x] **OOM du collecteur (2026-08-22/23, retour utilisateur : mail Railway
+      "Deploy Ran Out of Memory")** : `resilience._fetch_rows` chargeait en
+      mémoire Python, en un seul `fetchall()`, TOUTES les lignes
+      correspondantes de `match_role_stats` pour la fenêtre — une ligne par
+      apparition (rôle/match/équipe), pas agrégée. Coût mesuré négligeable
+      le 20/07/2026 (~13s pour ~2500 lignes, table tout juste créée) ;
+      `match_role_stats` pèse maintenant 12M+ lignes (2 Go) mi-août — un
+      `fetchall()` sur une fraction significative de cette table a fini par
+      dépasser la mémoire disponible du conteneur Railway du collecteur.
+      Exactement le même piège que `compute.refresh` (`agg_duo`/`agg_trio`
+      chargés en dicts Python) avait déjà provoqué le 2026-08-01, corrigé à
+      l'époque par une lecture paginée par clé (`_iter_agg_groups`) —
+      jamais appliqué à `resilience.py`, qui gardait son ancien `fetchall()`.
+
+      **Fix** : même mécanique, adaptée à `resilience.py`. `_iter_rows`
+      pagine `match_role_stats` par sa PK (`match_id, team_id, role`,
+      `_STREAM_PAGE_SIZE = 20 000`) plutôt que de tout charger d'un coup ;
+      `_aggregate` séparée en `_accumulate` (mute un dict de compteurs en
+      place, appelable page par page) + `_aggregate` (garde son ancienne
+      signature liste-complète pour les tests unitaires existants, qui
+      appelle `_accumulate` une seule fois en interne). Connexion passée en
+      `autocommit=True` (comme `compute.refresh` depuis le 2026-08-01, même
+      raison : une transaction unique ouverte sur des dizaines de pages
+      risque une coupure Supabase en cours de route) — `SET LOCAL` remplacé
+      par `SET` (`statement_timeout`/`enable_nestloop`) puisqu'un `SET
+      LOCAL` ne durerait que la page suivante en autocommit. Au passage,
+      `first_blood_agg` (une des 3 CTE) filtrée par patch : elle scannait
+      TOUTE `match_role_stats` (pas seulement la fenêtre courante) — même
+      piège que `team_gold_agg` dans `stats/aggregate.py`, corrigé le même
+      jour un peu plus tôt dans la session (entrée plus haut).
+
+      Régression couverte par `test_refresh_accumulates_correctly_across_pages`
+      (page artificiellement réduite à 3 lignes via monkeypatch, même
+      dataset que le test existant — vérifie qu'aucune ligne n'est perdue
+      ni comptée deux fois à une frontière de page). 389 tests complets
+      passent. Pas de reproduction de l'OOM en local (dépend de la mémoire
+      contrainte du conteneur Railway, pas reproductible sur un poste de
+      dev) — fix basé sur le même mécanisme déjà validé en prod pour
+      `compute.refresh` depuis 3 semaines, pas sur une mesure mémoire
+      avant/après.

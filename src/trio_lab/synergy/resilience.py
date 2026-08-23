@@ -31,11 +31,22 @@ Calcul PAR APPARITION (une ligne par match/équipe/rôle, comme
 `gold_factors`), pas par match : chaque ligne porte les 3 facteurs
 TEAM-LEVEL (déjà calculés une fois par équipe) + le champion de CE rôle —
 un seul aller-retour SQL pour les 3 facteurs plutôt que 3 requêtes
-séparées. Rafraîchi automatiquement à chaque cycle du service 24/24
-(`collector/service.py`, depuis le 20/07/2026, retour utilisateur) : coût
-mesuré négligeable (~13s pour ~2500 lignes) face à un cycle qui dure déjà
-plusieurs minutes (rate limit Riot). `win_factors`/`gold_factors` restent
-manuels, eux.
+séparées (mais paginé par clé depuis le 2026-08-22, cf. `refresh` : plus un
+seul aller-retour au sens strict, un flux de pages). Rafraîchi
+automatiquement (`collector/service.py`, depuis le 20/07/2026, retour
+utilisateur ; throttlé à `SCORE_REFRESH_THROTTLE_S` — 12h — depuis le
+21/08/2026). `win_factors`/`gold_factors` restent manuels, eux.
+
+Coût mesuré ~13s pour ~2500 lignes le 20/07/2026, quand `match_role_stats`
+venait d'être créée — obsolète : la table a grossi (12M+ lignes mi-août),
+`_fetch_rows` chargeait alors TOUTES les lignes correspondantes en mémoire
+Python d'un coup (`fetchall()`), sans pagination — a fini par faire planter
+le service collecteur (Railway "ran out of memory", 2026-08-22, retour
+utilisateur) plutôt que de simplement ralentir. Corrigé par pagination par
+clé (`match_id, team_id, role`, PK de `match_role_stats`), même mécanique
+que `stats.compute._iter_agg_groups` (déjà utilisée pour `agg_duo`/`agg_trio`
+suite à un OOM similaire le 2026-08-01) — mémoire bornée par
+`_STREAM_PAGE_SIZE`, plus par le volume total de la fenêtre.
 """
 
 from __future__ import annotations
@@ -53,7 +64,21 @@ logger = logging.getLogger(__name__)
 FACTORS = ("team_gold_diff_15", "jgl_cs_diff_15", "first_blood_team")
 DEFAULT_MIN_ROWS = 200  # sous ce seuil, la fenêtre est ignorée (même esprit que win/gold_factors)
 
-_FETCH_SQL = """
+# Pagination par clé (`match_id, team_id, role` — PK de `match_role_stats`,
+# retour utilisateur 2026-08-22, OOM collecteur) : `_fetch_rows` chargeait
+# TOUTES les lignes correspondantes en mémoire Python d'un coup, sans borne
+# — même mécanique que `stats.compute._iter_agg_groups`, page complète lue
+# par une requête ordonnée, reprise exactement là où la page précédente
+# s'est arrêtée. `mrs.match_id`/`mrs.team_id` ajoutés au SELECT uniquement
+# pour ce curseur (pas utilisés par `_accumulate`).
+#
+# `first_blood_agg` filtrée par patch (comme `picks`) : elle scannait TOUTE
+# `match_role_stats` (3 patchs retenus, 12M+ lignes) pour chaque appel,
+# même piège que `team_gold_agg` dans `stats/aggregate.py` avant son fix du
+# même jour — un simple `bool_or` par équipe n'a besoin que des matchs de la
+# fenêtre courante.
+_STREAM_PAGE_SIZE = 20_000
+_FETCH_SQL_BASE = """
     WITH picks AS (
         SELECT mrs.match_id, mrs.team_id, mrs.role, mrs.gold_15,
                enemy.gold_15 AS enemy_gold_15
@@ -73,11 +98,14 @@ _FETCH_SQL = """
         GROUP BY match_id, team_id
     ),
     first_blood_agg AS (
-        SELECT match_id, team_id, coalesce(bool_or(first_blood), false) AS first_blood_team
-        FROM match_role_stats
-        GROUP BY match_id, team_id
+        SELECT mrs.match_id, mrs.team_id,
+               coalesce(bool_or(mrs.first_blood), false) AS first_blood_team
+        FROM match_role_stats mrs
+        JOIN matches m ON m.match_id = mrs.match_id
+        WHERE m.patch = ANY(%(patches)s)
+        GROUP BY mrs.match_id, mrs.team_id
     )
-    SELECT mrs.role, mrs.champion_id, mrs.win,
+    SELECT mrs.match_id, mrs.team_id, mrs.role, mrs.champion_id, mrs.win,
            ta.team_gold_diff_15, mt.jgl_cs_diff_15, fb.first_blood_team
     FROM match_role_stats mrs
     JOIN matches m ON m.match_id = mrs.match_id
@@ -86,12 +114,45 @@ _FETCH_SQL = """
     JOIN first_blood_agg fb ON fb.match_id = mrs.match_id AND fb.team_id = mrs.team_id
     WHERE m.patch = ANY(%(patches)s) AND ta.n_roles = 5 AND mt.jgl_cs_diff_15 IS NOT NULL
 """
+_FETCH_SQL_FIRST = (
+    _FETCH_SQL_BASE + " ORDER BY mrs.match_id, mrs.team_id, mrs.role LIMIT %(page_size)s"
+)
+_FETCH_SQL_NEXT = (
+    _FETCH_SQL_BASE
+    + """
+      AND (mrs.match_id, mrs.team_id, mrs.role)
+        > (%(after_match_id)s, %(after_team_id)s, %(after_role)s)
+    ORDER BY mrs.match_id, mrs.team_id, mrs.role LIMIT %(page_size)s
+"""
+)
 
 
-def _fetch_rows(conn: psycopg.Connection, patches: list[str]) -> list[dict]:
-    with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
-        cur.execute(_FETCH_SQL, {"patches": patches})
-        return cur.fetchall()
+def _iter_rows(conn: psycopg.Connection, patches: list[str]):
+    """Flux de lignes paginé par clé — jamais plus de `_STREAM_PAGE_SIZE`
+    lignes en mémoire à la fois, quel que soit le volume total de la fenêtre."""
+    params: dict[str, object] = {"patches": patches, "page_size": _STREAM_PAGE_SIZE}
+    after: tuple[str, int, str] | None = None
+    while True:
+        with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
+            if after is None:
+                cur.execute(_FETCH_SQL_FIRST, params)
+            else:
+                cur.execute(
+                    _FETCH_SQL_NEXT,
+                    {
+                        **params,
+                        "after_match_id": after[0],
+                        "after_team_id": after[1],
+                        "after_role": after[2],
+                    },
+                )
+            page = cur.fetchall()
+        if not page:
+            return
+        yield page
+        after = (page[-1]["match_id"], page[-1]["team_id"], page[-1]["role"])
+        if len(page) < _STREAM_PAGE_SIZE:
+            return
 
 
 # Zone neutre : sous ce seuil (valeur absolue), l'écart est trop faible pour
@@ -112,9 +173,10 @@ def _is_ahead(value: object) -> bool:
     return bool(value) if isinstance(value, bool) else value >= 0
 
 
-def _aggregate(rows: list[dict]) -> list[dict]:
-    """(role, champion_id, factor) → games/wins des 2 côtés (avance/retard)."""
-    buckets: dict[tuple[str, int, str], dict[str, int]] = {}
+def _accumulate(buckets: dict[tuple[str, int, str], dict[str, int]], rows: list[dict]) -> None:
+    """Ajoute une page de lignes aux compteurs `buckets` (muté en place) —
+    extrait de `_aggregate` pour pouvoir traiter le flux paginé de `refresh`
+    sans jamais matérialiser la fenêtre entière en mémoire."""
     for r in rows:
         key_base = (r["role"], r["champion_id"])
         for factor in FACTORS:
@@ -130,6 +192,16 @@ def _aggregate(rows: list[dict]) -> list[dict]:
             bucket[f"games_{side}"] += 1
             if r["win"]:
                 bucket[f"wins_{side}"] += 1
+
+
+def _aggregate(rows: list[dict]) -> list[dict]:
+    """(role, champion_id, factor) → games/wins des 2 côtés (avance/retard).
+
+    Utilisé par les tests unitaires (liste en mémoire, petits volumes) —
+    `refresh` utilise `_accumulate` directement sur le flux paginé plutôt
+    que d'appeler cette fonction sur une liste complète."""
+    buckets: dict[tuple[str, int, str], dict[str, int]] = {}
+    _accumulate(buckets, rows)
     return [
         {"role": role, "champion_id": champ, "factor": factor, **counts}
         for (role, champ, factor), counts in buckets.items()
@@ -154,22 +226,45 @@ def refresh(
 
     DELETE + INSERT (pas UPSERT), même raisonnement que win_factors/gold_factors.
     """
-    with psycopg.connect(db.require_dsn(dsn)) as conn:
+    # Autocommit (retour utilisateur 2026-08-22, OOM collecteur — cf.
+    # `compute.refresh`, même piège déjà documenté là le 2026-08-01) :
+    # indispensable depuis le passage en lecture paginée (`_iter_rows`) —
+    # sans lui, une connexion garde UNE SEULE transaction ouverte sur toute
+    # la durée de `refresh` (dizaines de pages), et Supabase peut couper la
+    # connexion en cours de route. `SET` (pas `SET LOCAL`, qui ne durerait
+    # que la prochaine instruction en autocommit) pour que
+    # `statement_timeout`/`enable_nestloop` s'appliquent à toutes les pages.
+    with psycopg.connect(db.require_dsn(dsn), autocommit=True) as conn:
         # cf. win_factors.refresh / gold_factors.refresh : même piège de
         # planification Postgres (filtre sur n_roles = 5, colonne dérivée
         # d'un agrégat dans une CTE) et même timeout par défaut trop court.
-        conn.execute("SET LOCAL statement_timeout = '5min'")
-        conn.execute("SET LOCAL enable_nestloop = off")
-        rows = _fetch_rows(conn, list(window.patches))
-        if len(rows) < min_rows:
+        conn.execute("SET statement_timeout = '5min'")
+        conn.execute("SET enable_nestloop = off")
+        buckets: dict[tuple[str, int, str], dict[str, int]] = {}
+        total_rows = 0
+        for page in _iter_rows(conn, list(window.patches)):
+            total_rows += len(page)
+            _accumulate(buckets, page)
+        if total_rows < min_rows:
             logger.info(
-                "resilience %s : %d lignes < seuil %d, ignoré", window.label, len(rows), min_rows
+                "resilience %s : %d lignes < seuil %d, ignoré",
+                window.label,
+                total_rows,
+                min_rows,
             )
             count = 0
             rows_to_write: list[dict] = []
         else:
-            aggregated = _aggregate(rows)
-            rows_to_write = [{"window_label": window.label, **a} for a in aggregated]
+            rows_to_write = [
+                {
+                    "window_label": window.label,
+                    "role": role,
+                    "champion_id": champ,
+                    "factor": factor,
+                    **counts,
+                }
+                for (role, champ, factor), counts in buckets.items()
+            ]
             count = len(rows_to_write)
         with conn.transaction(), conn.cursor() as cur:
             cur.execute(

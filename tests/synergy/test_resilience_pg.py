@@ -77,3 +77,29 @@ async def test_refresh_captures_champion_specific_ahead_behind_gap(pg_conn):
     )
     row = await cur.fetchone()
     assert row == (10, 10, 10, 0)  # gagne toujours en avance, jamais en retard
+
+
+async def test_refresh_accumulates_correctly_across_pages(pg_conn, monkeypatch):
+    """Retour utilisateur 2026-08-22 (OOM collecteur) : `refresh` lit
+    maintenant `match_role_stats` par pages (`_iter_rows`) plutôt qu'en un
+    seul `fetchall()`. Page artificiellement minuscule pour forcer PLUSIEURS
+    pages sur un jeu de données par ailleurs identique au test précédent —
+    le résultat agrégé doit être rigoureusement le même (aucune ligne
+    perdue ni comptée deux fois à une frontière de page)."""
+    monkeypatch.setattr(resilience, "_STREAM_PAGE_SIZE", 3)
+    for i in range(10):
+        await _seed_match(pg_conn, f"16.13_ahead_{i}", "16.13", gold_diff=1500, win=True)
+    for i in range(10):
+        await _seed_match(pg_conn, f"16.13_behind_{i}", "16.13", gold_diff=-1500, win=False)
+
+    count = resilience.refresh(windows.make_window(["16.13"]), dsn=TEST_DSN, min_rows=50)
+    assert count == 10 * len(resilience.FACTORS)
+
+    cur = await pg_conn.execute(
+        "SELECT games_ahead, wins_ahead, games_behind, wins_behind"
+        " FROM score_champion_resilience"
+        " WHERE window_label = '16.13' AND role = 'JUNGLE' AND champion_id = 75"
+        " AND factor = 'team_gold_diff_15'"
+    )
+    row = await cur.fetchone()
+    assert row == (10, 10, 10, 0)
