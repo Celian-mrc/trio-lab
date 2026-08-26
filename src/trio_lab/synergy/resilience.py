@@ -65,53 +65,84 @@ FACTORS = ("team_gold_diff_15", "jgl_cs_diff_15", "first_blood_team")
 DEFAULT_MIN_ROWS = 200  # sous ce seuil, la fenêtre est ignorée (même esprit que win/gold_factors)
 
 # Pagination par clé (`match_id, team_id, role` — PK de `match_role_stats`,
-# retour utilisateur 2026-08-22, OOM collecteur) : `_fetch_rows` chargeait
-# TOUTES les lignes correspondantes en mémoire Python d'un coup, sans borne
-# — même mécanique que `stats.compute._iter_agg_groups`, page complète lue
-# par une requête ordonnée, reprise exactement là où la page précédente
-# s'est arrêtée. `mrs.match_id`/`mrs.team_id` ajoutés au SELECT uniquement
-# pour ce curseur (pas utilisés par `_accumulate`).
+# retour utilisateur 2026-08-22, OOM collecteur) : l'ancien `_fetch_rows`
+# chargeait TOUTES les lignes correspondantes en mémoire Python d'un coup,
+# sans borne. Un 1er correctif paginait directement la requête complète
+# (CTEs `picks`/`team_agg`/`first_blood_agg` incluses) — a réglé la mémoire
+# mais pas le temps : ces CTEs coûteuses (self-join sur `match_role_stats`)
+# étaient RECALCULÉES DEPUIS ZÉRO à CHAQUE PAGE (Postgres ne les partage pas
+# entre requêtes séparées), donc potentiellement plus de travail total
+# qu'avant plutôt que moins — a fini par retimeout dès la 1re page (retour
+# utilisateur, Sentry, 2026-08-24). Corrigé comme `team_gold_agg` dans
+# `stats/aggregate.py` la veille : les CTEs sont matérialisées UNE SEULE
+# FOIS en tables temporaires (`_materialize_aggregates`), puis chaque page
+# ne fait plus qu'une jointure bon marché dessus — coût des CTEs payé une
+# fois, pas une fois par page.
 #
 # `first_blood_agg` filtrée par patch (comme `picks`) : elle scannait TOUTE
-# `match_role_stats` (3 patchs retenus, 12M+ lignes) pour chaque appel,
-# même piège que `team_gold_agg` dans `stats/aggregate.py` avant son fix du
-# même jour — un simple `bool_or` par équipe n'a besoin que des matchs de la
-# fenêtre courante.
+# `match_role_stats` (3 patchs retenus, 12M+ lignes), même piège que
+# `team_gold_agg` avant son propre fix — un simple `bool_or` par équipe n'a
+# besoin que des matchs de la fenêtre courante.
+#
+# Pas de `ON COMMIT DROP` (contrairement à `aggregate.py`) : la connexion
+# ici est `autocommit=True` (cf. `refresh`), chaque instruction est déjà sa
+# propre transaction — `ON COMMIT DROP` supprimerait la table dès la fin de
+# sa propre instruction de création. Une table temp SANS clause `ON COMMIT`
+# vit pour toute la durée de la SESSION (jusqu'à la fermeture de la
+# connexion), ce qui est justement la durée voulue ici (créée une fois,
+# lue par toutes les pages, connexion fermée à la fin de `refresh`).
 _STREAM_PAGE_SIZE = 20_000
-_FETCH_SQL_BASE = """
-    WITH picks AS (
-        SELECT mrs.match_id, mrs.team_id, mrs.role, mrs.gold_15,
-               enemy.gold_15 AS enemy_gold_15
-        FROM match_role_stats mrs
-        JOIN matches m ON m.match_id = mrs.match_id
-        JOIN match_role_stats enemy
-            ON enemy.match_id = mrs.match_id AND enemy.role = mrs.role
-           AND enemy.team_id <> mrs.team_id
-        WHERE m.patch = ANY(%(patches)s)
-          AND mrs.gold_15 IS NOT NULL AND enemy.gold_15 IS NOT NULL
-    ),
-    team_agg AS (
+_TEAM_AGG_SQL = """
+    CREATE TEMP TABLE resilience_team_agg AS
+        WITH picks AS (
+            SELECT mrs.match_id, mrs.team_id, mrs.gold_15,
+                   enemy.gold_15 AS enemy_gold_15
+            FROM match_role_stats mrs
+            JOIN matches m ON m.match_id = mrs.match_id AND m.patch = ANY(%(patches)s)
+            JOIN match_role_stats enemy
+                ON enemy.match_id = mrs.match_id AND enemy.role = mrs.role
+               AND enemy.team_id <> mrs.team_id
+            WHERE mrs.gold_15 IS NOT NULL AND enemy.gold_15 IS NOT NULL
+        )
         SELECT match_id, team_id,
                sum(gold_15) - sum(enemy_gold_15) AS team_gold_diff_15,
                count(*) AS n_roles
         FROM picks
         GROUP BY match_id, team_id
-    ),
-    first_blood_agg AS (
+"""
+_FIRST_BLOOD_AGG_SQL = """
+    CREATE TEMP TABLE resilience_first_blood_agg AS
         SELECT mrs.match_id, mrs.team_id,
                coalesce(bool_or(mrs.first_blood), false) AS first_blood_team
         FROM match_role_stats mrs
-        JOIN matches m ON m.match_id = mrs.match_id
-        WHERE m.patch = ANY(%(patches)s)
+        JOIN matches m ON m.match_id = mrs.match_id AND m.patch = ANY(%(patches)s)
         GROUP BY mrs.match_id, mrs.team_id
-    )
+"""
+
+
+def _materialize_aggregates(conn: psycopg.Connection, patches: list[str]) -> None:
+    """Matérialise `team_agg`/`first_blood_agg` une seule fois par fenêtre —
+    cf. commentaire ci-dessus. Index + `ANALYZE` : une table temp n'a jamais
+    de statistiques automatiques, la jointure de chaque page se planifierait
+    à l'aveugle sinon."""
+    params = {"patches": patches}
+    conn.execute(_TEAM_AGG_SQL, params)
+    conn.execute("CREATE INDEX ON resilience_team_agg (match_id, team_id)")
+    conn.execute("ANALYZE resilience_team_agg")
+    conn.execute(_FIRST_BLOOD_AGG_SQL, params)
+    conn.execute("CREATE INDEX ON resilience_first_blood_agg (match_id, team_id)")
+    conn.execute("ANALYZE resilience_first_blood_agg")
+
+
+_FETCH_SQL_BASE = """
     SELECT mrs.match_id, mrs.team_id, mrs.role, mrs.champion_id, mrs.win,
            ta.team_gold_diff_15, mt.jgl_cs_diff_15, fb.first_blood_team
     FROM match_role_stats mrs
     JOIN matches m ON m.match_id = mrs.match_id
-    JOIN team_agg ta ON ta.match_id = mrs.match_id AND ta.team_id = mrs.team_id
+    JOIN resilience_team_agg ta ON ta.match_id = mrs.match_id AND ta.team_id = mrs.team_id
     JOIN match_trio_stats mt ON mt.match_id = mrs.match_id AND mt.team_id = mrs.team_id
-    JOIN first_blood_agg fb ON fb.match_id = mrs.match_id AND fb.team_id = mrs.team_id
+    JOIN resilience_first_blood_agg fb
+        ON fb.match_id = mrs.match_id AND fb.team_id = mrs.team_id
     WHERE m.patch = ANY(%(patches)s) AND ta.n_roles = 5 AND mt.jgl_cs_diff_15 IS NOT NULL
 """
 _FETCH_SQL_FIRST = (
@@ -129,7 +160,8 @@ _FETCH_SQL_NEXT = (
 
 def _iter_rows(conn: psycopg.Connection, patches: list[str]):
     """Flux de lignes paginé par clé — jamais plus de `_STREAM_PAGE_SIZE`
-    lignes en mémoire à la fois, quel que soit le volume total de la fenêtre."""
+    lignes en mémoire à la fois, quel que soit le volume total de la fenêtre.
+    `_materialize_aggregates` doit avoir tourné avant sur la même connexion."""
     params: dict[str, object] = {"patches": patches, "page_size": _STREAM_PAGE_SIZE}
     after: tuple[str, int, str] | None = None
     while True:
@@ -240,6 +272,7 @@ def refresh(
         # d'un agrégat dans une CTE) et même timeout par défaut trop court.
         conn.execute("SET statement_timeout = '5min'")
         conn.execute("SET enable_nestloop = off")
+        _materialize_aggregates(conn, list(window.patches))
         buckets: dict[tuple[str, int, str], dict[str, int]] = {}
         total_rows = 0
         for page in _iter_rows(conn, list(window.patches)):

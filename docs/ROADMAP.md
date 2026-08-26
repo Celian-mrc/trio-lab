@@ -2033,3 +2033,29 @@ Les deux nécessitent d'ajouter les variables (`SENTRY_DSN`, `LOKI_URL`,
       dev) — fix basé sur le même mécanisme déjà validé en prod pour
       `compute.refresh` depuis 3 semaines, pas sur une mesure mémoire
       avant/après.
+
+      **Correctif n°2 (2026-08-27, même jour, alerte Sentry `QueryCanceled`
+      après le premier push)** : la pagination seule ne suffisait pas — les
+      3 CTE (`picks`, `team_agg`, `first_blood_agg`) étaient réécrites dans
+      chaque requête `_FETCH_SQL_NEXT`, donc **recalculées intégralement à
+      chaque page** (Postgres ne partage jamais le calcul d'une CTE entre
+      deux instructions SQL distinctes, même identiques). Sur une fenêtre à
+      12M+ lignes, ça coûtait potentiellement plus cher au total que
+      l'ancienne requête non paginée — d'où le nouveau timeout observé en
+      prod juste après le déploiement du correctif n°1.
+
+      **Fix** : `_materialize_aggregates` construit `team_agg` et
+      `first_blood_agg` une seule fois via `CREATE TEMP TABLE ... AS`
+      (+ index + `ANALYZE`, une table temporaire n'a aucune statistique
+      automatique), puis `_FETCH_SQL_BASE` les référence comme des tables
+      normales au lieu de CTE. Pas de `ON COMMIT DROP` : la connexion est en
+      `autocommit=True`, donc chaque instruction committe immédiatement —
+      `ON COMMIT DROP` supprimerait la table juste après sa propre création.
+      Une table temporaire simple suffit : elle vit pour toute la durée de
+      la connexion/session, exactement ce qu'il faut (créée une fois, lue
+      par toutes les pages, connexion fermée en fin de `refresh()`).
+
+      Mesuré en prod (script one-off, lecture seule, aucun effet de bord) :
+      matérialisation ~145s, puis pages à 6-14s chacune — largement sous le
+      timeout de 5 min de prod. 389 tests passent toujours après
+      réécriture.
