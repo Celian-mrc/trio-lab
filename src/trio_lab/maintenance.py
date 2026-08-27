@@ -137,19 +137,41 @@ def purge_stale_participants(
     return {"purged_patches": old, "participants_deleted": deleted}
 
 
+# Matchs par lot (retour utilisateur 2026-08-27, alerte Sentry) : même piège
+# que `purge_stale_participants` ci-dessus (2026-08-02), mais sur `matches`
+# cette fois — le DELETE cascade vers `match_role_stats`/`match_trio_stats`,
+# qui pesaient quelques milliers de lignes à l'origine et pèsent maintenant
+# plusieurs millions de lignes par patch. Un seul DELETE sur un patch entier
+# dépasse `statement_timeout`. Même boucle de petits DELETE en autocommit.
+_MATCHES_DELETE_BATCH = 2000
+
+
 def purge_old_patches(
     *, keep: int = RAW_KEEP, dry_run: bool = False, dsn: str | None = None
 ) -> dict:
-    """Supprime les `matches` (cascade `match_trio_stats` + résidus) au-delà de `keep` patchs."""
+    """Supprime les `matches` (cascade `match_role_stats`/`match_trio_stats`) au-delà de
+    `keep` patchs."""
     if keep < 1:
         raise ValueError(f"keep doit être ≥ 1, reçu {keep}")
-    with psycopg.connect(db.require_dsn(dsn)) as conn, conn.transaction():
+    with psycopg.connect(db.require_dsn(dsn), autocommit=True) as conn:
         known = _known_patches(conn, "matches")
         old = known[keep:]
         deleted = 0
         if old and not dry_run:
-            cur = conn.execute("DELETE FROM matches WHERE patch = ANY(%s)", (old,))
-            deleted = cur.rowcount
+            while True:
+                with conn.transaction():
+                    cur = conn.execute(
+                        "DELETE FROM matches"
+                        " WHERE match_id IN ("
+                        "   SELECT match_id FROM matches"
+                        "   WHERE patch = ANY(%s)"
+                        "   LIMIT %s"
+                        " )",
+                        (old, _MATCHES_DELETE_BATCH),
+                    )
+                    deleted += cur.rowcount
+                if cur.rowcount == 0:
+                    break
     logger.info(
         "rétention matchs (keep=%d%s) : patchs purgés %s, %d matchs supprimés",
         keep,

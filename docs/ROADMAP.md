@@ -2059,3 +2059,34 @@ Les deux nécessitent d'ajouter les variables (`SENTRY_DSN`, `LOKI_URL`,
       matérialisation ~145s, puis pages à 6-14s chacune — largement sous le
       timeout de 5 min de prod. 389 tests passent toujours après
       réécriture.
+
+      **Suivi 2026-08-28** : mesure complète relancée (749 pages sur la
+      fenêtre 15M+ lignes). Aucune page ne retimeout, mais le total est de
+      l'ordre de 2h30-3h — bien plus long qu'un cycle collecteur normal
+      (90-110 min). Piste identifiée : `SET enable_nestloop = off` (posé une
+      fois en tête de `refresh()` pour la matérialisation, cf.
+      `postgres-cte-selfjoin-nestloop-trap`) reste actif pour TOUTE la
+      connexion, y compris `_iter_rows` — alors que pour la requête de page
+      (clé bornée par `_STREAM_PAGE_SIZE`, jointures sur PK/index), un
+      nested loop serait probablement optimal. Suspicion : `enable_nestloop
+      = off` force un hash join reconstruit à chaque page sur les tables
+      jointes (~1,5M lignes chacune), ce qui expliquerait un coût par page
+      stable mais élevé. Diagnostic (`EXPLAIN ANALYZE` avec/sans
+      `enable_nestloop`) en cours de vérification avant correctif.
+
+- [ ] **Purge `matches` par lot (2026-08-27, alerte Sentry `QueryCanceled`
+      sur `maintenance.purge_old_patches`)** : même piège que
+      `purge_stale_participants` (2026-08-02) mais sur `matches` — le
+      `DELETE FROM matches WHERE patch = ANY(...)` cascade vers
+      `match_role_stats`/`match_trio_stats`, qui pesaient quelques milliers
+      de lignes à la création de la purge et pèsent maintenant plusieurs
+      millions de lignes par patch. Un patch entier supprimé d'un coup
+      dépasse `statement_timeout`. Déclenché par la sortie du patch 16.17,
+      qui a fait sortir 16.14 de la fenêtre des 3 patchs conservés
+      (`RAW_KEEP = 3`).
+
+      **Fix** : même mécanique que `purge_stale_participants` — boucle de
+      petits `DELETE FROM matches WHERE match_id IN (SELECT ... LIMIT
+      _MATCHES_DELETE_BATCH)` (2000 matchs/lot) en autocommit, au lieu d'un
+      seul DELETE massif sur le patch entier. 389 tests passent (dont 12 sur
+      `test_maintenance_pg.py`, comportement/retour inchangés).
