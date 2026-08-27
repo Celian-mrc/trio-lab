@@ -2074,6 +2074,28 @@ Les deux nécessitent d'ajouter les variables (`SENTRY_DSN`, `LOKI_URL`,
       stable mais élevé. Diagnostic (`EXPLAIN ANALYZE` avec/sans
       `enable_nestloop`) en cours de vérification avant correctif.
 
+      **Suite et conclusion (2026-08-28, plus tard le même jour)** : le
+      backlog de 810 617 matchs du patch 16.14 (cf. entrée "Purge `matches`
+      par lot" ci-dessous) faussait la mesure précédente — purgé
+      manuellement en prod (`purge_old_patches()`, 354,79s, aucune erreur),
+      ramenant la fenêtre de 15M à 8,86M lignes. Remesure sur base propre :
+      **4682,26s (78 min)**, toujours élevé mais loin des 2h30-3h estimées.
+
+      Fix `enable_nestloop` scopé appliqué (réactivé juste après
+      `_materialize_aggregates`, avant `_iter_rows`) et remesuré : **3410,84s
+      (56,8 min)**, soit **~27% plus rapide**. Le gain a été bruité en cours
+      de mesure (page 1-190 : ~5s/page, spectaculairement rapide — effet de
+      cache OS/Postgres du test précédent qui venait de lire les mêmes
+      données ; page 190-321 : remonté à ~11,5s/page, proche du baseline)
+      mais le total final confirme un gain réel et reproductible, pas
+      qu'un artefact de cache. Fix conservé.
+
+      Bilan complet de la saga resilience.py : OOM (fetchall non paginé) →
+      timeout par page (CTE recalculées à chaque page) → durée totale
+      excessive (backlog non purgé + `enable_nestloop` mal scopé). Les 3
+      causes étaient indépendantes, corrigées une par une avec vérification
+      en prod à chaque étape plutôt que supposées résolues ensemble.
+
 - [x] **Purge `matches` par lot (2026-08-27, alerte Sentry `QueryCanceled`
       sur `maintenance.purge_old_patches`)** : même piège que
       `purge_stale_participants` (2026-08-02) mais sur `matches` — le

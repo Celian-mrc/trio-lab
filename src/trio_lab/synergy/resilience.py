@@ -273,6 +273,12 @@ def refresh(
         conn.execute("SET statement_timeout = '5min'")
         conn.execute("SET enable_nestloop = off")
         _materialize_aggregates(conn, list(window.patches))
+        # `enable_nestloop = off` scopé à la seule matérialisation (cf.
+        # postgres-cte-selfjoin-nestloop-trap) : la lecture paginée qui suit
+        # joint sur des clés indexées (PK match_id/team_id/role) où un
+        # nested loop est ~2x plus rapide qu'un hash/merge join reconstruit
+        # à chaque page (mesuré en prod le 2026-08-28 : 18s vs 35s/page).
+        conn.execute("SET enable_nestloop = on")
         buckets: dict[tuple[str, int, str], dict[str, int]] = {}
         total_rows = 0
         for page in _iter_rows(conn, list(window.patches)):
