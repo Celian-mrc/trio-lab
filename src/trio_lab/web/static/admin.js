@@ -59,6 +59,18 @@ document.addEventListener("DOMContentLoaded", function () {
         responsive: true,
         maintainAspectRatio: false,
         interaction: { mode: "index", intersect: false },
+        plugins: {
+          tooltip: {
+            callbacks: {
+              footer: function (items) {
+                var total = items.reduce(function (sum, item) {
+                  return sum + item.parsed.y;
+                }, 0);
+                return "Total (all platforms): " + total.toLocaleString();
+              },
+            },
+          },
+        },
         scales: {
           x: { grid: { color: border } },
           y: { grid: { color: border }, beginAtZero: true },

@@ -610,7 +610,7 @@ def collection_status(conn: psycopg.Connection) -> dict:
             SELECT to_char(collected_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day,
                    platform, count(*) AS matches
             FROM matches
-            WHERE collected_at > now() - interval '7 days'
+            WHERE collected_at > now() - interval '48 days'
             GROUP BY 1, 2 ORDER BY 1 DESC, 2
             """
         ).fetchall()

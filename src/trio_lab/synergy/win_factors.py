@@ -107,14 +107,15 @@ def _fetch_rows(conn: psycopg.Connection, patches: list[str], *, behind_only: bo
         cur.execute(
             f"""
             WITH team_agg AS (
-                SELECT match_id, team_id,
-                       sum(gold_15) AS gold_15,
-                       sum(cc_time_s) AS cc_time_s,
-                       sum(vision_score) AS vision_score,
+                SELECT mrs.match_id, mrs.team_id,
+                       sum(mrs.gold_15) AS gold_15,
+                       sum(mrs.cc_time_s) AS cc_time_s,
+                       sum(mrs.vision_score) AS vision_score,
                        count(*) AS n_roles
-                FROM match_role_stats
-                WHERE gold_15 IS NOT NULL
-                GROUP BY match_id, team_id
+                FROM match_role_stats mrs
+                JOIN matches pm ON pm.match_id = mrs.match_id AND pm.patch = ANY(%(patches)s)
+                WHERE mrs.gold_15 IS NOT NULL
+                GROUP BY mrs.match_id, mrs.team_id
             )
             SELECT ta.match_id, m.patch, mt.win,
                    ta.gold_15 - ea.gold_15 AS team_gold_diff_15,

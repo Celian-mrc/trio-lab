@@ -138,9 +138,11 @@ _FETCH_SQL = """
         -- first_blood NULL (colonne ajoutée par la migration 025, pas
         -- rétro-remplie sur tout l'historique) — coalesce à false, pas
         -- d'autre signal disponible pour ces games.
-        SELECT match_id, team_id, coalesce(bool_or(first_blood), false) AS first_blood_team
-        FROM match_role_stats
-        GROUP BY match_id, team_id
+        SELECT mrs.match_id, mrs.team_id,
+               coalesce(bool_or(mrs.first_blood), false) AS first_blood_team
+        FROM match_role_stats mrs
+        JOIN matches pm ON pm.match_id = mrs.match_id AND pm.patch = ANY(%(patches)s)
+        GROUP BY mrs.match_id, mrs.team_id
     )
     SELECT ta.patch,
            ta.team_gold_diff_15,

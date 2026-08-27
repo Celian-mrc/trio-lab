@@ -2074,7 +2074,7 @@ Les deux nécessitent d'ajouter les variables (`SENTRY_DSN`, `LOKI_URL`,
       stable mais élevé. Diagnostic (`EXPLAIN ANALYZE` avec/sans
       `enable_nestloop`) en cours de vérification avant correctif.
 
-- [ ] **Purge `matches` par lot (2026-08-27, alerte Sentry `QueryCanceled`
+- [x] **Purge `matches` par lot (2026-08-27, alerte Sentry `QueryCanceled`
       sur `maintenance.purge_old_patches`)** : même piège que
       `purge_stale_participants` (2026-08-02) mais sur `matches` — le
       `DELETE FROM matches WHERE patch = ANY(...)` cascade vers
@@ -2090,3 +2090,37 @@ Les deux nécessitent d'ajouter les variables (`SENTRY_DSN`, `LOKI_URL`,
       _MATCHES_DELETE_BATCH)` (2000 matchs/lot) en autocommit, au lieu d'un
       seul DELETE massif sur le patch entier. 389 tests passent (dont 12 sur
       `test_maintenance_pg.py`, comportement/retour inchangés).
+
+- [x] **Audit ciblé des autres modules à risque (2026-08-28)**, suite aux
+      deux incidents ci-dessus — même famille de bug (CTE non filtrée par
+      patch scannant `match_role_stats` en entier, 15M+ lignes). RAS pour
+      tout ce qui tourne dans le service 24/24 (`flex.py`,
+      `draft_suggestions.py`, `web/queries.py`, `collector/storage.py`).
+      Deux bugs trouvés, mêmes symptômes mais **pas** appelés par
+      `collector/service.py` (déclenchement manuel seulement, donc pas de
+      risque de crash automatisé — coûteux seulement si relancés) :
+      - `win_factors._fetch_rows` : CTE `team_agg` scannait tout
+        `match_role_stats` sans filtre patch avant le filtre en aval — fix :
+        `JOIN matches pm ON pm.match_id = mrs.match_id AND pm.patch =
+        ANY(%(patches)s)` ajouté dans la CTE.
+      - `gold_factors._FETCH_SQL` : CTE `first_blood_agg` avait le même trou
+        (les CTE `picks`/`baseline_wr` étaient déjà filtrées correctement).
+        Même fix.
+
+      13 tests (`test_win_factors*`, `test_gold_factors*`) passent toujours.
+
+- [x] **Page admin : fenêtre élargie + tooltip total (2026-08-28)** —
+      retour utilisateur. `collection_status` (`web/queries.py`) limitait le
+      graphique "Games collected per day" à 7 jours ; passé à 48 jours
+      (cohérent avec le commentaire déjà présent dans `admin.js` qui
+      anticipait "jusqu'à 48 jours × 5 plateformes"). Tooltip Chart.js du
+      graphique (`admin.js`) : ajout d'un callback `footer` qui somme les
+      valeurs de toutes les plateformes affichées et affiche
+      `Total (all platforms): N`.
+
+      Vérifié dans Chrome (page `/admin` réelle servie en local, données
+      prod réelles injectées, HTML statique re-servi via un serveur local
+      pour contourner l'auth Basic de `/admin` en automatisation) : la
+      fenêtre remonte bien à mi-juillet, et le survol d'un point affiche
+      bien le détail par plateforme + le total (`70 833` pour le 23/07,
+      somme exacte des 5 plateformes).
