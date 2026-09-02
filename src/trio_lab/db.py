@@ -52,6 +52,34 @@ def applied_versions(conn: psycopg.Connection) -> set[int]:
     return {row[0] for row in conn.execute("SELECT version FROM schema_migrations")}
 
 
+def _strip_line_comments(sql: str) -> str:
+    """Retire les `-- commentaire` fin de ligne, guillemets simples respectés.
+
+    Trouvé en CI le 2026-09-02 (migration 001, jamais rejouée sur une base
+    vierge depuis son application initiale en prod, donc jamais testée) :
+    un commentaire français utilisait `;` comme ponctuation de phrase
+    ("...calculées à l'ingestion ; le détail ordonné..."), pas seulement
+    comme séparateur SQL. Le split naïf sur `;` coupait le commentaire en
+    deux, laissant sa seconde moitié sans son préfixe `--` — Postgres tente
+    alors de la parser comme du SQL. 13 autres occurrences trouvées dans les
+    migrations existantes au même audit."""
+    lines = []
+    for line in sql.splitlines():
+        in_string = False
+        cut = len(line)
+        i = 0
+        while i < len(line):
+            ch = line[i]
+            if ch == "'":
+                in_string = not in_string
+            elif not in_string and line[i : i + 2] == "--":
+                cut = i
+                break
+            i += 1
+        lines.append(line[:cut])
+    return "\n".join(lines)
+
+
 def _split_statements(sql: str) -> list[str]:
     """Découpe un fichier de migration en instructions séparées (sur `;`).
 
@@ -64,8 +92,11 @@ def _split_statements(sql: str) -> list[str]:
     BEGIN/COMMIT existantes (l'état de transaction Postgres est au niveau
     de la session, pas du message réseau — `BEGIN` puis `COMMIT` dans deux
     appels `execute()` séparés délimitent la même transaction que dans un
-    seul). Split naïf sûr ici : aucune migration n'utilise de corps
+    seul). Commentaires retirés avant le split (cf. `_strip_line_comments`)
+    pour qu'un `;` dans un commentaire ne coupe pas une instruction en deux.
+    Split naïf sûr sinon : aucune migration n'utilise de corps
     dollar-quoté (`$$`) ni de point-virgule dans un littéral (vérifié)."""
+    sql = _strip_line_comments(sql)
     return [stmt.strip() for stmt in sql.split(";") if stmt.strip()]
 
 
