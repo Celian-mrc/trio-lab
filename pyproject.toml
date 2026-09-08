@@ -31,6 +31,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Phase ML (draft win probability, 2026-09-09) : jamais dans l'image Docker
+# de prod (Dockerfile fait `pip install .`, sans extra) — entraînement manuel
+# hors service, cf. `src/trio_lab/ml/__init__.py`.
+ml = [
+    "scikit-learn>=1.5",
+    "mlflow>=2.15",
+]
 dev = [
     "ruff>=0.6",
     "pytest>=8.0",

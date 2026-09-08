@@ -2146,3 +2146,50 @@ Les deux nécessitent d'ajouter les variables (`SENTRY_DSN`, `LOKI_URL`,
       fenêtre remonte bien à mi-juillet, et le survol d'un point affiche
       bien le détail par plateforme + le total (`70 833` pour le 23/07,
       somme exacte des 5 plateformes).
+
+- [x] **ML — win probability au draft, v1 (2026-09-09)** : premier module ML
+      du projet (`src/trio_lab/ml/`), délibérément séparé de `synergy/` (qui
+      reste sans numpy/scipy par choix) — dépendances `scikit-learn`/`mlflow`
+      regroupées dans un extra optionnel (`pip install -e ".[ml]"`), jamais
+      dans l'image Docker de prod (entraînement manuel, pas un service).
+
+      `ml/features.py` construit les features UNIQUEMENT disponibles au
+      draft (winrate champion, synergie duo/trio, delta de matchup par rôle
+      — `agg_champion`/`agg_duo`/`agg_trio`/`agg_matchup`), contrairement à
+      `win_factors`/`gold_factors` (état de la game à 15 min). Anti-fuite
+      « leave-one-patch-out » : les baselines d'un match sont calculées en
+      excluant le patch de CE match — sinon un combo à faible volume (1-2
+      games) verrait en partie son propre résultat dans sa feature. 405 410
+      lignes sur 2 829 394 (~14,3 %) exclues faute de baseline disponible sur
+      les patchs restants (combos exotiques à un seul patch).
+
+      `ml/train.py` compare 3 modèles sur les mêmes 9 features (régression
+      logistique, Random Forest, `HistGradientBoostingClassifier` — préféré à
+      LightGBM/XGBoost pour ne pas ajouter un 2e paquet ML lourd), chacun
+      loggé comme un run MLflow (tracking local `mlruns/`, jamais versionné).
+      Split train/test déterministe par hash du `match_id` (même mécanique
+      que `win_factors._is_test_match`) : 1 940 460 lignes train (80,1 %),
+      483 524 lignes test (19,9 %), sur la fenêtre 16.17+16.16+16.15.
+
+      **Résultat (honnête, pas un échec de code)** : signal très faible sur
+      les 3 modèles — AUC 0,538-0,539, accuracy ~52,7 %, log loss/Brier à
+      peine sous ceux d'une prédiction constante à 50 %. Les 3 architectures
+      convergent vers le même résultat (exclut un bug propre à un seul
+      modèle). Comparé à `win_factors` (état de la game à 15 min) : AUC
+      0,82-0,85 sur les MÊMES matchs — le draft seul explique très peu du
+      résultat en solo queue (pas de coordination d'équipe pré-établie,
+      équilibrage des champions qui vise justement le 50 % de winrate),
+      cohérent avec la littérature publiée (les modèles qui prédisent bien
+      depuis le draft seul le font sur des données de jeu PRO, ou ajoutent un
+      signal de maîtrise de champion PAR JOUEUR — deux choses absentes ici).
+
+      Limites connues : pas de lissage bayésien sur les features (contraire
+      à `score_trio`/`score_duo`, pensés pour l'affichage humain) — un combo
+      à 5 games est aussi bruyant qu'un combo à 500 dans le calcul actuel ;
+      léger effet look-ahead pour les patchs les plus anciens de la fenêtre
+      (leur baseline peut inclure un patch plus récent qu'eux). 10 tests
+      unitaires sur `ml/features.py` (logique pure, sans dépendance
+      scikit-learn/mlflow — ces tests tournent dans la CI standard ;
+      `ml/train.py` n'est PAS couvert par la CI, choix délibéré pour ne pas
+      alourdir le pipeline automatisé avec des dépendances ML lourdes pour
+      un script d'entraînement manuel). 402 tests passent.

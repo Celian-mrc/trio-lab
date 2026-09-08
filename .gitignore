@@ -19,6 +19,13 @@ data/*
 .idea/
 Thumbs.db
 
+# MLflow : artefacts/métadonnées d'expérimentation locaux (src/trio_lab/ml/),
+# jamais versionnés — mlflow.db (SQLite) depuis MLflow 3.x, mlruns/ avant et
+# pour les artefacts encore aujourd'hui.
+mlruns/
+mlartifacts/
+mlflow.db
+
 # Captures d'écran déposées à la racine pour relecture (jamais du contenu projet)
 /*.png
 /*.jpg
