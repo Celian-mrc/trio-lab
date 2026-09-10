@@ -84,9 +84,47 @@ def _evaluate(model, X_test: np.ndarray, y_test: np.ndarray) -> dict[str, float]
     }
 
 
-def run(patches: list[str], *, dsn: str | None = None) -> dict[str, dict[str, float]]:
+def _feature_importance(model, feature_names: tuple[str, ...]) -> list[tuple[str, float]] | None:
+    """Classement des features par importance, ou `None` si le modèle n'en
+    expose pas nativement. `logistic_regression` : |coefficient| (données
+    standardisées, donc directement comparables entre features).
+    `random_forest` : `feature_importances_` natif. `gradient_boosting`
+    (`HistGradientBoostingClassifier`) n'expose PAS `feature_importances_`
+    (implémentation par histogrammes) — une importance par permutation
+    serait possible mais coûteuse sur ~500k lignes de test ; retour utilisateur
+    2026-09-09, pas fait dans un premier temps, les 2 autres modèles suffisent
+    à identifier les features à garder."""
+    if hasattr(model, "coef_"):
+        values = np.abs(model.coef_[0])
+    elif hasattr(model, "feature_importances_"):
+        values = model.feature_importances_
+    else:
+        return None
+    return sorted(zip(feature_names, values, strict=True), key=lambda p: -p[1])
+
+
+_FEATURE_SETS = {
+    "full": (features.FEATURE_NAMES, features.build_feature_table),
+    "reduced": (features.REDUCED_FEATURE_NAMES, features.build_reduced_feature_table),
+    "five_role": (features.FIVE_ROLE_FEATURE_NAMES, features.build_five_role_feature_table),
+}
+
+
+def run(
+    patches: list[str], *, dsn: str | None = None, feature_set: str = "full"
+) -> dict[str, dict[str, float]]:
+    """`feature_set` :
+    - `"full"` : les 39 features de `FEATURE_NAMES`.
+    - `"reduced"` (retour utilisateur 2026-09-09, après classement
+      d'importance sur le feature set complet) : seulement les 9 features
+      qui dominaient le classement (winrate champion/duo/trio + deltas de
+      matchup jgl/mid/sup).
+    - `"five_role"` (retour utilisateur 2026-09-10) : `"reduced"` + les 2
+      lanes ignorées jusque-là (top/adc) — cf. `ml/features.py` pour le
+      détail de chaque variante."""
+    feature_names, build = _FEATURE_SETS[feature_set]
     with psycopg.connect(db.require_dsn(dsn)) as conn:
-        X_raw, y_raw, match_ids = features.build_feature_table(conn, patches)
+        X_raw, y_raw, match_ids = build(conn, patches)
 
     X = np.array(X_raw, dtype=float)
     y = np.array(y_raw, dtype=int)
@@ -113,7 +151,8 @@ def run(patches: list[str], *, dsn: str | None = None) -> dict[str, dict[str, fl
     mlflow.set_experiment(EXPERIMENT_NAME)
     results: dict[str, dict[str, float]] = {}
     for name, make_model in MODEL_FACTORIES.items():
-        with mlflow.start_run(run_name=name):
+        run_name = f"{name}_{feature_set}" if feature_set != "full" else name
+        with mlflow.start_run(run_name=run_name):
             model = make_model()
             model.fit(X_train_scaled, y_train)
             metrics = _evaluate(model, X_test_scaled, y_test)
@@ -122,9 +161,21 @@ def run(patches: list[str], *, dsn: str | None = None) -> dict[str, dict[str, fl
             mlflow.log_param("n_train", n_train)
             mlflow.log_param("n_test", n_test)
             mlflow.log_param("n_features", X.shape[1])
+            mlflow.log_param("feature_set", feature_set)
             mlflow.log_params({f"model__{k}": v for k, v in model.get_params().items()})
             mlflow.log_metrics(metrics)
             mlflow.sklearn.log_model(model, name)
+
+            importance = _feature_importance(model, feature_names)
+            if importance is not None:
+                mlflow.log_metrics(
+                    {f"importance__{n}": v for n, v in importance}, synchronous=False
+                )
+                logger.info(
+                    "modèle %s : top 10 features par importance : %s",
+                    name,
+                    [(n, round(float(v), 4)) for n, v in importance[:10]],
+                )
 
             results[name] = metrics
             logger.info("modèle %s : %s", name, metrics)
@@ -139,12 +190,19 @@ def main() -> None:
         required=True,
         help="fenêtre, du plus récent au plus ancien, ex. 16.17,16.16,16.15",
     )
+    parser.add_argument(
+        "--feature-set",
+        choices=("full", "reduced", "five_role"),
+        default="full",
+        help="full (39, défaut) / reduced (9, winrate+matchups jgl/mid/sup) / "
+        "five_role (15, reduced + top/adc)",
+    )
     args = parser.parse_args()
     logging.basicConfig(
         level=config.LOG_LEVEL, format="%(asctime)s %(levelname)s %(name)s %(message)s"
     )
     patches = [p.strip() for p in args.patches.split(",") if p.strip()]
-    results = run(patches)
+    results = run(patches, feature_set=args.feature_set)
     print(f"\n{'modèle':<20} {'accuracy':>10} {'AUC':>10} {'log loss':>10} {'brier':>10}")
     for name, metrics in results.items():
         print(

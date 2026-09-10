@@ -2193,3 +2193,82 @@ Les deux nécessitent d'ajouter les variables (`SENTRY_DSN`, `LOKI_URL`,
       `ml/train.py` n'est PAS couvert par la CI, choix délibéré pour ne pas
       alourdir le pipeline automatisé avec des dépendances ML lourdes pour
       un script d'entraînement manuel). 402 tests passent.
+
+      **Suite (2026-09-09/10, même retour utilisateur, série de questions
+      successives)** — plusieurs pistes testées pour comprendre/dépasser le
+      plafond ~0,54 d'AUC du v1 :
+
+      - **v2 (élargissement à 39 features)** : ajout de tous les axes déjà
+        matérialisés dans `agg_trio` pour `draft_suggestions.py` — gold@5/10/
+        15 du trio, gold@15 d'ÉQUIPE, vision, objectifs (drakes/âme/héraut/
+        1re tour), CC par rôle, portée théorique (`champion_range_theoretical`,
+        statique, aucun risque de fuite), scaling (pente WR~durée, réutilise
+        `scores.weighted_wr`/`weighted_slope_ci` en leave-one-patch-out,
+        imputée à 0.0 si sous le seuil minimum — seule exception à la
+        politique "cas complets uniquement"). **Résultat : aucun gain**
+        (AUC 0,538-0,540, quasi identique au v1) — confirme que ce n'est pas
+        un axe précis qui manquait.
+
+      - **Régression sur le `team_gold_diff_15` RÉEL** (`ml/gold15.py`,
+        `ml/train_gold15.py`) : même feature set de draft, mais la cible
+        devient le vrai gold@15 de l'ÉQUIPE ENTIÈRE (5 rôles, calculé depuis
+        `match_role_stats` — même requête que `resilience._TEAM_AGG_SQL`),
+        pas la victoire. Teste directement laquelle des 2 hypothèses est
+        vraie : (a) le draft n'explique même pas l'état à 15 min, ou (b) il
+        l'explique mais le reste de la game noie le signal. **Résultat :
+        hypothèse (a) confirmée** — R² 0,012-0,020 sur les 3 modèles
+        (linear/random forest/gradient boosting), le draft n'explique
+        quasiment rien du gold@15 réel non plus. Ferme la piste d'un modèle
+        en 2 étages (draft → gold@15 prédit → victoire).
+
+      - **Corrélations de Pearson feature par feature** (script one-off, pas
+        committé) : confirme le même plafond au niveau de chaque feature
+        individuelle — r max ≈ 0,036 vs victoire (r² 0,13 %), r max ≈ 0,099
+        vs gold@15 réel (r² 0,98 %, plus fort car même nature de mesure).
+        Signes tous cohérents (aucune feature n'a un sens inversé au-delà du
+        bruit), juste des magnitudes négligeables.
+
+      - **Seuil de fiabilité minimum `MIN_GAMES`, essayé puis abandonné** :
+        cf. commentaire détaillé dans `ml/features.py` — grille `MIN_GAMES`
+        ∈ {1, 10, 20, 30, 50} sur le feature set 5 rôles, dégradation
+        MONOTONE de l'AUC quand le seuil augmente (0,553-0,555 à 1, jusqu'à
+        0,535-0,542 à 50), sur les 3 modèles sans exception. Pas de "sweet
+        spot" : le volume gagne systématiquement contre la fiabilité
+        individuelle. Politique `> 0` restaurée.
+
+      - **Analyse par décile de confiance + validation croisée à 5 plis**
+        (script one-off) : même si l'AUC moyen est faible, les prédictions
+        les plus EXTRÊMES portent un vrai signal — top 1 % vs bottom 1 % de
+        confiance : 56,3 % vs 42,7 % de winrate réel (validé sur 165 792
+        prédictions hors-échantillon poolées sur 5 plis, écart-type
+        inter-plis de seulement 0,0034 — pas un artefact d'un split
+        particulier). Exemples concrets vérifiés (noms de champions réels) :
+        les cas extrêmes ne sont presque jamais UN gros counter-pick, mais
+        3 lanes chacune légèrement défavorables/favorables qui s'additionnent
+        (ex. Zed/Syndra/Nautilus vs Talon/Katarina/Braum, 3 matchups à
+        ~46 %). Piste produit envisagée (non implémentée, décision utilisateur) :
+        un badge d'alerte affiché seulement dans ces cas extrêmes plutôt
+        qu'un pourcentage général trompeur. AUC par tranche de durée de game
+        testée aussi : pas de tendance stomp/comeback claire (0,514-0,544
+        selon la tranche, pas monotone).
+
+      - **Extension à 5 rôles (`FIVE_ROLE_FEATURE_NAMES`,
+        `build_five_role_feature_table`)** : ajout de `matchup_delta_top`/
+        `matchup_delta_bot` et du winrate individuel top/adc — `agg_champion`/
+        `agg_matchup` couvrent déjà ces 2 rôles (`match_participants`),
+        aucune nouvelle collecte. **Meilleur résultat de toute la série** :
+        AUC 0,553-0,555 sur les 3 modèles (vs 0,538-0,540 pour le v1/v2) une
+        fois combiné à la politique `> 0` (le premier essai avec
+        `MIN_GAMES=50` masquait le gain réel en détruisant 93 % du dataset).
+        `us_bot_wr`/`them_bot_wr` (winrate individuel de l'ADC) et
+        `matchup_delta_top` figurent parmi les features les plus importantes,
+        au niveau de jgl/mid/sup.
+
+      Bilan honnête : le draft seul reste un mauvais prédicteur de victoire
+      en moyenne (AUC ~0,55 au mieux, loin de `win_factors` à 0,82-0,85), mais
+      étendre aux 5 rôles apporte un vrai gain mesurable, et le signal existe
+      réellement dans les cas extrêmes (déciles 1/10, top/bottom 1 %) même si
+      la moyenne reste faible. GridSearchCV identifié comme piste de réglage
+      fin des hyperparamètres (nécessiterait `GroupKFold` sur `match_id` pour
+      respecter l'anti-fuite déjà en place), mais jugé secondaire tant que le
+      feature engineering évolue encore.
