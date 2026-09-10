@@ -1,6 +1,9 @@
-import numpy as np
+import pytest
 
-from trio_lab.ml.embeddings import (
+np = pytest.importorskip("numpy")
+pytest.importorskip("sklearn")  # extra [ml], pas installé par la CI standard ([dev])
+
+from trio_lab.ml.embeddings import (  # noqa: E402
     N_COMPONENTS,
     _sum_pair_stats_excluding,
     fit_embeddings,

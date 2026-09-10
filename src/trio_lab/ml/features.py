@@ -61,7 +61,7 @@ import logging
 
 import psycopg
 
-from trio_lab.ml import champion_meta, embeddings
+from trio_lab.ml import champion_meta
 from trio_lab.synergy import scores
 
 logger = logging.getLogger(__name__)
@@ -884,23 +884,38 @@ def build_composition_feature_table(
 # Deep") : par-dessus `FIVE_ROLE_FEATURE_NAMES` (référence de la série, pas
 # `COMPOSITION_FEATURE_NAMES` — la composition intrinsèque n'a apporté
 # qu'un gain négligeable et n'apparaissait dans aucun top 10 d'importance,
-# cf. discussion). `embeddings.N_COMPONENTS` dimensions par équipe (moyenne
+# cf. discussion). `_EMBEDDING_N_COMPONENTS` dimensions par équipe (moyenne
 # des 5 vecteurs de champion), pour chaque camp.
+#
+# Valeur dupliquée depuis `embeddings.N_COMPONENTS` plutôt qu'importée : même
+# raisonnement que `embeddings._DUO_PAIR_TYPES` (dupliqué depuis
+# `features._DUO_PAIRS`) — éviter un `import embeddings` au niveau module ici,
+# qui tirerait numpy/scikit-learn dans l'import de `features.py` et casserait
+# les tests "logique pure" couverts par la CI standard (`[dev]`, sans l'extra
+# `[ml]`). `embeddings` n'est importé que localement, dans
+# `build_embedding_feature_table`, qui a de toute façon besoin d'une connexion
+# Postgres et n'est jamais appelée par ces tests-là.
+_EMBEDDING_N_COMPONENTS = 8
+
 EMBEDDING_FEATURE_NAMES = (
     *FIVE_ROLE_FEATURE_NAMES,
-    *(f"us_emb_{i}" for i in range(embeddings.N_COMPONENTS)),
-    *(f"them_emb_{i}" for i in range(embeddings.N_COMPONENTS)),
+    *(f"us_emb_{i}" for i in range(_EMBEDDING_N_COMPONENTS)),
+    *(f"them_emb_{i}" for i in range(_EMBEDDING_N_COMPONENTS)),
 )
 
 
 def _team_embedding(
     vectors: dict[int, object], champs: tuple[int, int, int, int, int]
 ) -> list[float] | None:
+    """Moyenne élément par élément des 5 vecteurs — indexation/`len()` pure,
+    pas d'opération vectorisée numpy : marche aussi bien avec des `np.ndarray`
+    (cas réel, `embeddings.fit_embeddings`) qu'avec de simples listes (tests,
+    pas besoin de numpy dans `tests/ml/test_features.py`)."""
     found = [vectors.get(c) for c in champs]
     if any(v is None for v in found):
         return None
-    stacked = sum(found) / len(found)
-    return list(stacked)
+    dim = len(found[0])
+    return [sum(v[i] for v in found) / len(found) for i in range(dim)]
 
 
 def _row_features_embedding(
@@ -938,6 +953,8 @@ def build_embedding_feature_table(
 ) -> tuple[list[list[float]], list[int], list[str]]:
     """Comme `build_five_role_feature_table`, plus les embeddings appris par
     SVD (`EMBEDDING_FEATURE_NAMES`)."""
+    from trio_lab.ml import embeddings  # import local, cf. `_EMBEDDING_N_COMPONENTS`
+
     match_rows = _fetch_match_rows_5roles(conn, patches)
     agg_champion = _fetch_agg_champion(conn, patches)
     agg_duo = _fetch_agg_duo(conn, patches)

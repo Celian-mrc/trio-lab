@@ -1,5 +1,3 @@
-import numpy as np
-
 from trio_lab.ml.champion_meta import ChampionMeta
 from trio_lab.ml.features import (
     _TRIO_STAT_COLUMNS,
@@ -466,14 +464,14 @@ def test_row_features_composition_complete_matches_feature_names_length():
 
 
 def test_team_embedding_averages_the_5_vectors():
-    vectors = {c: np.array([float(c), float(c) * 2]) for c in range(1, 6)}
+    vectors = {c: [float(c), float(c) * 2] for c in range(1, 6)}
     result = _team_embedding(vectors, (1, 2, 3, 4, 5))
     assert result is not None
     assert result == [3.0, 6.0]  # moyenne de 1..5 = 3, moyenne de 2,4..10 = 6
 
 
 def test_team_embedding_none_when_a_champion_is_missing():
-    vectors = {1: np.array([1.0]), 2: np.array([2.0])}
+    vectors = {1: [1.0], 2: [2.0]}
     assert _team_embedding(vectors, (1, 2, 3, 4, 5)) is None
 
 
@@ -562,7 +560,7 @@ def test_row_features_embedding_complete_matches_feature_names_length():
         )
     }
     embeddings_by_patch = {
-        "16.17": {c: np.zeros(8) for c in range(1, 11)},
+        "16.17": {c: [0.0] * 8 for c in range(1, 11)},
     }
     row = {
         "patch": "16.17",

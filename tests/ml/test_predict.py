@@ -1,7 +1,12 @@
 import pytest
 
-from trio_lab.ml.predict import _ROLE_ORDER, _parse_team, resolve_champion
-from trio_lab.web.champions import Champion
+# extra [ml] (joblib/scikit-learn), pas installé par la CI standard ([dev]) —
+# même logique que tests/ml/test_embeddings.py.
+pytest.importorskip("joblib")
+pytest.importorskip("sklearn")
+
+from trio_lab.ml.predict import _ROLE_ORDER, _parse_team, resolve_champion  # noqa: E402
+from trio_lab.web.champions import Champion  # noqa: E402
 
 INDEX = {
     1: Champion(id=1, name="Volibear", icon_url=""),
