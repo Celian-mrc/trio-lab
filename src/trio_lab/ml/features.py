@@ -61,6 +61,7 @@ import logging
 
 import psycopg
 
+from trio_lab.ml import champion_meta, embeddings
 from trio_lab.synergy import scores
 
 logger = logging.getLogger(__name__)
@@ -764,6 +765,204 @@ def build_five_role_feature_table(
 
     logger.info(
         "features 5 rôles fenêtre %s : %d lignes complètes, %d exclues (baseline manquante)",
+        "+".join(patches),
+        len(X),
+        dropped,
+    )
+    return X, y, match_ids
+
+
+# Composition d'équipe intrinsèque (retour utilisateur 2026-09-10) : PAS un
+# agrégat de performance historique comme tout le reste du module — des
+# propriétés STATIQUES du champion (tags de rôle, profil dégâts/tankiness
+# Data Dragon, cf. `champion_meta.py`), donc aucun risque de sparsité ni de
+# fuite (pas de leave-one-patch-out nécessaire, même raisonnement que
+# `_avg_range`). Testé séparément de `FIVE_ROLE_FEATURE_NAMES` (ajouté par-
+# dessus, pas en remplacement) pour isoler proprement son apport — cf.
+# discussion : gain de ~3% de winrate documenté pour les compositions à
+# dégâts physique/magique équilibrés dans la littérature MOBA.
+COMPOSITION_FEATURE_NAMES = (
+    *FIVE_ROLE_FEATURE_NAMES,
+    "us_team_magic_avg",
+    "them_team_magic_avg",
+    "us_team_attack_avg",
+    "them_team_attack_avg",
+    "us_team_defense_avg",
+    "them_team_defense_avg",
+    "us_damage_mix",
+    "them_damage_mix",
+    "us_n_tanks",
+    "them_n_tanks",
+)
+
+
+def _team_composition_features(
+    meta: dict[int, champion_meta.ChampionMeta], champs: tuple[int, int, int, int, int]
+) -> list[float] | None:
+    """`champs` = (jgl, mid, sup, top, bot). `None` si un champion manque du
+    référentiel Data Dragon (jamais censé arriver une fois synchronisé, mais
+    un champion tout juste sorti pourrait ne pas y être encore)."""
+    metas = [meta.get(c) for c in champs]
+    if any(m is None for m in metas):
+        return None
+    magic_avg = sum(m.magic for m in metas) / 5.0
+    attack_avg = sum(m.attack for m in metas) / 5.0
+    defense_avg = sum(m.defense for m in metas) / 5.0
+    n_magic_leaning = sum(1 for m in metas if m.magic > m.attack)
+    damage_mix = float(min(n_magic_leaning, 5 - n_magic_leaning))
+    n_tanks = float(sum(1 for m in metas if "Tank" in m.tags))
+    return [magic_avg, attack_avg, defense_avg, damage_mix, n_tanks]
+
+
+def _row_features_composition(
+    row: dict,
+    agg_champion: dict,
+    agg_duo: dict,
+    agg_trio: dict,
+    agg_matchup: dict,
+    meta: dict[int, champion_meta.ChampionMeta],
+    patches: list[str],
+) -> list[float] | None:
+    base = _row_features_5roles(row, agg_champion, agg_duo, agg_trio, agg_matchup, patches)
+    if base is None:
+        return None
+    us_champs = (row["us_jgl"], row["us_mid"], row["us_sup"], row["us_top"], row["us_bot"])
+    them_champs = (
+        row["them_jgl"],
+        row["them_mid"],
+        row["them_sup"],
+        row["them_top"],
+        row["them_bot"],
+    )
+    us_comp = _team_composition_features(meta, us_champs)
+    them_comp = _team_composition_features(meta, them_champs)
+    if us_comp is None or them_comp is None:
+        return None
+    # us/them intercalés par métrique (magic, attack, defense, damage_mix,
+    # n_tanks), cohérent avec l'ordre de COMPOSITION_FEATURE_NAMES.
+    extra = [v for pair in zip(us_comp, them_comp, strict=True) for v in pair]
+    return base + extra
+
+
+def build_composition_feature_table(
+    conn: psycopg.Connection, patches: list[str]
+) -> tuple[list[list[float]], list[int], list[str]]:
+    """Comme `build_five_role_feature_table`, plus les 10 features de
+    composition d'équipe intrinsèque (`COMPOSITION_FEATURE_NAMES`)."""
+    match_rows = _fetch_match_rows_5roles(conn, patches)
+    agg_champion = _fetch_agg_champion(conn, patches)
+    agg_duo = _fetch_agg_duo(conn, patches)
+    agg_trio = _fetch_agg_trio(conn, patches)
+    agg_matchup = _fetch_agg_matchup(conn, patches)
+    meta = champion_meta.fetch_meta()
+
+    X: list[list[float]] = []
+    y: list[int] = []
+    match_ids: list[str] = []
+    dropped = 0
+    for row in match_rows:
+        row_features = _row_features_composition(
+            row, agg_champion, agg_duo, agg_trio, agg_matchup, meta, patches
+        )
+        if row_features is None:
+            dropped += 1
+            continue
+        X.append(row_features)
+        y.append(1 if row["win"] else 0)
+        match_ids.append(row["match_id"])
+
+    logger.info(
+        "features composition fenêtre %s : %d lignes complètes, %d exclues (baseline manquante)",
+        "+".join(patches),
+        len(X),
+        dropped,
+    )
+    return X, y, match_ids
+
+
+# Embeddings appris par SVD (retour utilisateur 2026-09-10, approche "Wide &
+# Deep") : par-dessus `FIVE_ROLE_FEATURE_NAMES` (référence de la série, pas
+# `COMPOSITION_FEATURE_NAMES` — la composition intrinsèque n'a apporté
+# qu'un gain négligeable et n'apparaissait dans aucun top 10 d'importance,
+# cf. discussion). `embeddings.N_COMPONENTS` dimensions par équipe (moyenne
+# des 5 vecteurs de champion), pour chaque camp.
+EMBEDDING_FEATURE_NAMES = (
+    *FIVE_ROLE_FEATURE_NAMES,
+    *(f"us_emb_{i}" for i in range(embeddings.N_COMPONENTS)),
+    *(f"them_emb_{i}" for i in range(embeddings.N_COMPONENTS)),
+)
+
+
+def _team_embedding(
+    vectors: dict[int, object], champs: tuple[int, int, int, int, int]
+) -> list[float] | None:
+    found = [vectors.get(c) for c in champs]
+    if any(v is None for v in found):
+        return None
+    stacked = sum(found) / len(found)
+    return list(stacked)
+
+
+def _row_features_embedding(
+    row: dict,
+    agg_champion: dict,
+    agg_duo: dict,
+    agg_trio: dict,
+    agg_matchup: dict,
+    embeddings_by_patch: dict[str, dict],
+    patches: list[str],
+) -> list[float] | None:
+    base = _row_features_5roles(row, agg_champion, agg_duo, agg_trio, agg_matchup, patches)
+    if base is None:
+        return None
+    vectors = embeddings_by_patch.get(row["patch"])
+    if vectors is None:
+        return None
+    us_champs = (row["us_jgl"], row["us_mid"], row["us_sup"], row["us_top"], row["us_bot"])
+    them_champs = (
+        row["them_jgl"],
+        row["them_mid"],
+        row["them_sup"],
+        row["them_top"],
+        row["them_bot"],
+    )
+    us_emb = _team_embedding(vectors, us_champs)
+    them_emb = _team_embedding(vectors, them_champs)
+    if us_emb is None or them_emb is None:
+        return None
+    return base + us_emb + them_emb
+
+
+def build_embedding_feature_table(
+    conn: psycopg.Connection, patches: list[str]
+) -> tuple[list[list[float]], list[int], list[str]]:
+    """Comme `build_five_role_feature_table`, plus les embeddings appris par
+    SVD (`EMBEDDING_FEATURE_NAMES`)."""
+    match_rows = _fetch_match_rows_5roles(conn, patches)
+    agg_champion = _fetch_agg_champion(conn, patches)
+    agg_duo = _fetch_agg_duo(conn, patches)
+    agg_trio = _fetch_agg_trio(conn, patches)
+    agg_matchup = _fetch_agg_matchup(conn, patches)
+    pair_table = embeddings.pair_table_from_agg_duo(agg_duo)
+    embeddings_by_patch = embeddings.fit_embeddings_per_patch(pair_table, patches)
+
+    X: list[list[float]] = []
+    y: list[int] = []
+    match_ids: list[str] = []
+    dropped = 0
+    for row in match_rows:
+        row_features = _row_features_embedding(
+            row, agg_champion, agg_duo, agg_trio, agg_matchup, embeddings_by_patch, patches
+        )
+        if row_features is None:
+            dropped += 1
+            continue
+        X.append(row_features)
+        y.append(1 if row["win"] else 0)
+        match_ids.append(row["match_id"])
+
+    logger.info(
+        "features embedding fenêtre %s : %d lignes complètes, %d exclues (baseline manquante)",
         "+".join(patches),
         len(X),
         dropped,

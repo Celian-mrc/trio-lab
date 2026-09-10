@@ -1,5 +1,10 @@
+import numpy as np
+
+from trio_lab.ml.champion_meta import ChampionMeta
 from trio_lab.ml.features import (
     _TRIO_STAT_COLUMNS,
+    COMPOSITION_FEATURE_NAMES,
+    EMBEDDING_FEATURE_NAMES,
     FEATURE_NAMES,
     FIVE_ROLE_FEATURE_NAMES,
     _avg,
@@ -9,8 +14,12 @@ from trio_lab.ml.features import (
     _matchup_delta,
     _row_features,
     _row_features_5roles,
+    _row_features_composition,
+    _row_features_embedding,
     _scaling_slope_excluding,
     _sum_excluding,
+    _team_composition_features,
+    _team_embedding,
     _trio_stat,
     _trio_wr,
     _wr,
@@ -320,3 +329,256 @@ def test_row_features_5roles_complete_matches_feature_names_length():
     result = _row_features_5roles(row, agg_champion, agg_duo, agg_trio, agg_matchup, PATCHES)
     assert result is not None
     assert len(result) == len(FIVE_ROLE_FEATURE_NAMES)
+
+
+def test_team_composition_features_basic():
+    # 3 champions penchant magie (magic > attack), 2 penchant physique,
+    # 2 tanks -> damage_mix = min(3, 2) = 2.
+    meta = {
+        1: ChampionMeta(id=1, tags=("Tank",), attack=3, defense=8, magic=7),
+        2: ChampionMeta(id=2, tags=("Mage",), attack=2, defense=3, magic=9),
+        3: ChampionMeta(id=3, tags=("Support",), attack=4, defense=5, magic=6),
+        4: ChampionMeta(id=4, tags=("Marksman",), attack=9, defense=2, magic=1),
+        5: ChampionMeta(id=5, tags=("Fighter", "Tank"), attack=7, defense=7, magic=2),
+    }
+    result = _team_composition_features(meta, (1, 2, 3, 4, 5))
+    assert result is not None
+    magic_avg, attack_avg, defense_avg, damage_mix, n_tanks = result
+    assert round(magic_avg, 1) == round((7 + 9 + 6 + 1 + 2) / 5, 1)
+    assert round(attack_avg, 1) == round((3 + 2 + 4 + 9 + 7) / 5, 1)
+    assert round(defense_avg, 1) == round((8 + 3 + 5 + 2 + 7) / 5, 1)
+    assert damage_mix == 2.0  # 3 penchant magie (1,2,3) vs 2 penchant physique (4,5)
+    assert n_tanks == 2.0  # champions 1 et 5
+
+
+def test_team_composition_features_none_when_champion_missing_from_meta():
+    meta = {1: ChampionMeta(id=1, tags=("Tank",), attack=3, defense=8, magic=7)}
+    assert _team_composition_features(meta, (1, 2, 3, 4, 5)) is None
+
+
+def test_row_features_composition_none_when_meta_missing():
+    agg_champion = {
+        (p, role, c): (100, 50)
+        for p in ("16.16", "16.15")
+        for role in ("JUNGLE", "MIDDLE", "UTILITY", "TOP", "BOTTOM")
+        for c in range(1, 11)
+    }
+    agg_duo = {
+        (p, roles, a, b): (100, 50)
+        for p in ("16.16", "16.15")
+        for roles, a, b in (
+            ("jgl_mid", 1, 2),
+            ("jgl_sup", 1, 3),
+            ("mid_sup", 2, 3),
+            ("jgl_mid", 4, 5),
+            ("jgl_sup", 4, 6),
+            ("mid_sup", 5, 6),
+        )
+    }
+    agg_trio = {(p, 1, 2, 3): (100, 50) for p in ("16.16", "16.15")} | {
+        (p, 4, 5, 6): (100, 50) for p in ("16.16", "16.15")
+    }
+    agg_matchup = {
+        (p, role, a, b): (100, 50)
+        for p in ("16.16", "16.15")
+        for role, a, b in (
+            ("JUNGLE", 1, 4),
+            ("MIDDLE", 2, 5),
+            ("UTILITY", 3, 6),
+            ("TOP", 7, 9),
+            ("BOTTOM", 8, 10),
+        )
+    }
+    row = {
+        "patch": "16.17",
+        "us_jgl": 1,
+        "us_mid": 2,
+        "us_sup": 3,
+        "them_jgl": 4,
+        "them_mid": 5,
+        "them_sup": 6,
+        "us_top": 7,
+        "us_bot": 8,
+        "them_top": 9,
+        "them_bot": 10,
+    }
+    # meta vide -> composition manquante malgré un socle 5 rôles complet.
+    result = _row_features_composition(
+        row, agg_champion, agg_duo, agg_trio, agg_matchup, {}, PATCHES
+    )
+    assert result is None
+
+
+def test_row_features_composition_complete_matches_feature_names_length():
+    agg_champion = {
+        (p, role, c): (100, 50)
+        for p in ("16.16", "16.15")
+        for role in ("JUNGLE", "MIDDLE", "UTILITY", "TOP", "BOTTOM")
+        for c in range(1, 11)
+    }
+    agg_duo = {
+        (p, roles, a, b): (100, 50)
+        for p in ("16.16", "16.15")
+        for roles, a, b in (
+            ("jgl_mid", 1, 2),
+            ("jgl_sup", 1, 3),
+            ("mid_sup", 2, 3),
+            ("jgl_mid", 4, 5),
+            ("jgl_sup", 4, 6),
+            ("mid_sup", 5, 6),
+        )
+    }
+    agg_trio = {(p, 1, 2, 3): (100, 50) for p in ("16.16", "16.15")} | {
+        (p, 4, 5, 6): (100, 50) for p in ("16.16", "16.15")
+    }
+    agg_matchup = {
+        (p, role, a, b): (100, 50)
+        for p in ("16.16", "16.15")
+        for role, a, b in (
+            ("JUNGLE", 1, 4),
+            ("MIDDLE", 2, 5),
+            ("UTILITY", 3, 6),
+            ("TOP", 7, 9),
+            ("BOTTOM", 8, 10),
+        )
+    }
+    meta = {
+        c: ChampionMeta(id=c, tags=("Fighter",), attack=5, defense=5, magic=5) for c in range(1, 11)
+    }
+    row = {
+        "patch": "16.17",
+        "us_jgl": 1,
+        "us_mid": 2,
+        "us_sup": 3,
+        "them_jgl": 4,
+        "them_mid": 5,
+        "them_sup": 6,
+        "us_top": 7,
+        "us_bot": 8,
+        "them_top": 9,
+        "them_bot": 10,
+    }
+    result = _row_features_composition(
+        row, agg_champion, agg_duo, agg_trio, agg_matchup, meta, PATCHES
+    )
+    assert result is not None
+    assert len(result) == len(COMPOSITION_FEATURE_NAMES)
+
+
+def test_team_embedding_averages_the_5_vectors():
+    vectors = {c: np.array([float(c), float(c) * 2]) for c in range(1, 6)}
+    result = _team_embedding(vectors, (1, 2, 3, 4, 5))
+    assert result is not None
+    assert result == [3.0, 6.0]  # moyenne de 1..5 = 3, moyenne de 2,4..10 = 6
+
+
+def test_team_embedding_none_when_a_champion_is_missing():
+    vectors = {1: np.array([1.0]), 2: np.array([2.0])}
+    assert _team_embedding(vectors, (1, 2, 3, 4, 5)) is None
+
+
+def test_row_features_embedding_none_when_embeddings_missing_for_patch():
+    agg_champion = {
+        (p, role, c): (100, 50)
+        for p in ("16.16", "16.15")
+        for role in ("JUNGLE", "MIDDLE", "UTILITY", "TOP", "BOTTOM")
+        for c in range(1, 11)
+    }
+    agg_duo = {
+        (p, roles, a, b): (100, 50)
+        for p in ("16.16", "16.15")
+        for roles, a, b in (
+            ("jgl_mid", 1, 2),
+            ("jgl_sup", 1, 3),
+            ("mid_sup", 2, 3),
+            ("jgl_mid", 4, 5),
+            ("jgl_sup", 4, 6),
+            ("mid_sup", 5, 6),
+        )
+    }
+    agg_trio = {(p, 1, 2, 3): (100, 50) for p in ("16.16", "16.15")} | {
+        (p, 4, 5, 6): (100, 50) for p in ("16.16", "16.15")
+    }
+    agg_matchup = {
+        (p, role, a, b): (100, 50)
+        for p in ("16.16", "16.15")
+        for role, a, b in (
+            ("JUNGLE", 1, 4),
+            ("MIDDLE", 2, 5),
+            ("UTILITY", 3, 6),
+            ("TOP", 7, 9),
+            ("BOTTOM", 8, 10),
+        )
+    }
+    row = {
+        "patch": "16.17",
+        "us_jgl": 1,
+        "us_mid": 2,
+        "us_sup": 3,
+        "them_jgl": 4,
+        "them_mid": 5,
+        "them_sup": 6,
+        "us_top": 7,
+        "us_bot": 8,
+        "them_top": 9,
+        "them_bot": 10,
+    }
+    # embeddings_by_patch vide -> pas de vecteurs pour le patch de la ligne.
+    result = _row_features_embedding(row, agg_champion, agg_duo, agg_trio, agg_matchup, {}, PATCHES)
+    assert result is None
+
+
+def test_row_features_embedding_complete_matches_feature_names_length():
+    agg_champion = {
+        (p, role, c): (100, 50)
+        for p in ("16.16", "16.15")
+        for role in ("JUNGLE", "MIDDLE", "UTILITY", "TOP", "BOTTOM")
+        for c in range(1, 11)
+    }
+    agg_duo = {
+        (p, roles, a, b): (100, 50)
+        for p in ("16.16", "16.15")
+        for roles, a, b in (
+            ("jgl_mid", 1, 2),
+            ("jgl_sup", 1, 3),
+            ("mid_sup", 2, 3),
+            ("jgl_mid", 4, 5),
+            ("jgl_sup", 4, 6),
+            ("mid_sup", 5, 6),
+        )
+    }
+    agg_trio = {(p, 1, 2, 3): (100, 50) for p in ("16.16", "16.15")} | {
+        (p, 4, 5, 6): (100, 50) for p in ("16.16", "16.15")
+    }
+    agg_matchup = {
+        (p, role, a, b): (100, 50)
+        for p in ("16.16", "16.15")
+        for role, a, b in (
+            ("JUNGLE", 1, 4),
+            ("MIDDLE", 2, 5),
+            ("UTILITY", 3, 6),
+            ("TOP", 7, 9),
+            ("BOTTOM", 8, 10),
+        )
+    }
+    embeddings_by_patch = {
+        "16.17": {c: np.zeros(8) for c in range(1, 11)},
+    }
+    row = {
+        "patch": "16.17",
+        "us_jgl": 1,
+        "us_mid": 2,
+        "us_sup": 3,
+        "them_jgl": 4,
+        "them_mid": 5,
+        "them_sup": 6,
+        "us_top": 7,
+        "us_bot": 8,
+        "them_top": 9,
+        "them_bot": 10,
+    }
+    result = _row_features_embedding(
+        row, agg_champion, agg_duo, agg_trio, agg_matchup, embeddings_by_patch, PATCHES
+    )
+    assert result is not None
+    assert len(result) == len(EMBEDDING_FEATURE_NAMES)

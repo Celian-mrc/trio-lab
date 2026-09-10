@@ -107,6 +107,8 @@ _FEATURE_SETS = {
     "full": (features.FEATURE_NAMES, features.build_feature_table),
     "reduced": (features.REDUCED_FEATURE_NAMES, features.build_reduced_feature_table),
     "five_role": (features.FIVE_ROLE_FEATURE_NAMES, features.build_five_role_feature_table),
+    "composition": (features.COMPOSITION_FEATURE_NAMES, features.build_composition_feature_table),
+    "embedding": (features.EMBEDDING_FEATURE_NAMES, features.build_embedding_feature_table),
 }
 
 
@@ -120,8 +122,14 @@ def run(
       qui dominaient le classement (winrate champion/duo/trio + deltas de
       matchup jgl/mid/sup).
     - `"five_role"` (retour utilisateur 2026-09-10) : `"reduced"` + les 2
-      lanes ignorées jusque-là (top/adc) — cf. `ml/features.py` pour le
-      détail de chaque variante."""
+      lanes ignorées jusque-là (top/adc) — meilleur résultat de la série.
+    - `"composition"` (retour utilisateur 2026-09-10) : `"five_role"` + 10
+      features de composition d'équipe INTRINSÈQUE (tags/profil dégâts-
+      tankiness Data Dragon, pas un agrégat de performance historique) —
+      gain négligeable mesuré.
+    - `"embedding"` (retour utilisateur 2026-09-10) : `"five_role"` + 16
+      dimensions d'embeddings de champion appris par SVD (`ml/embeddings.py`)
+      — cf. `ml/features.py` pour le détail de chaque variante."""
     feature_names, build = _FEATURE_SETS[feature_set]
     with psycopg.connect(db.require_dsn(dsn)) as conn:
         X_raw, y_raw, match_ids = build(conn, patches)
@@ -192,10 +200,11 @@ def main() -> None:
     )
     parser.add_argument(
         "--feature-set",
-        choices=("full", "reduced", "five_role"),
+        choices=("full", "reduced", "five_role", "composition", "embedding"),
         default="full",
         help="full (39, défaut) / reduced (9, winrate+matchups jgl/mid/sup) / "
-        "five_role (15, reduced + top/adc)",
+        "five_role (15, reduced + top/adc) / composition (25, five_role + tags/dégâts) / "
+        "embedding (31, five_role + embeddings SVD)",
     )
     args = parser.parse_args()
     logging.basicConfig(

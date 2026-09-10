@@ -2272,3 +2272,69 @@ Les deux nécessitent d'ajouter les variables (`SENTRY_DSN`, `LOKI_URL`,
       fin des hyperparamètres (nécessiterait `GroupKFold` sur `match_id` pour
       respecter l'anti-fuite déjà en place), mais jugé secondaire tant que le
       feature engineering évolue encore.
+
+      **Suite (2026-09-10, retour utilisateur)** — 3 pistes de recherche
+      internet (Wide & Deep, embeddings de champion, features de
+      composition) + un outil de prédiction utilisable :
+
+      - **`ml/predict.py`** : outil CLI pour tester une draft complète (10
+        champions + rôles, format `jgl,mid,sup,top,bot`). Entraîne un
+        `HistGradientBoostingClassifier` sur 100 % des données `five_role`
+        (963 078 lignes) et sauvegarde le modèle (`mlruns/
+        draft_predict_model.joblib`, gitignored). Sentinelle `_NO_PATCH`
+        pour qu'une draft hypothétique utilise toute la fenêtre de patchs
+        (pas de leave-one-patch-out sur un match qui n'existe pas). **Mise
+        en garde domaine** : entraîné exclusivement sur du solo queue
+        (Emerald+) — appliqué à une draft PRO, c'est une extrapolation hors
+        du domaine d'entraînement (pas de comms vocales/scrim prep/pathing
+        jungle structuré dans les données).
+
+      - **Features de composition (`COMPOSITION_FEATURE_NAMES`, 25
+        features)** : dégâts (magic/attack/defense moyens Data Dragon),
+        `damage_mix` (mélange physique/magique), nombre de tanks par équipe
+        — `ml/champion_meta.py` récupère ces métadonnées statiques depuis
+        `champion.json` (même client que `web_champions`). **Résultat :
+        aucun gain** au-dessus du five_role seul.
+
+      - **Embeddings de champion appris (SVD, `ml/embeddings.py`)** —
+        approche Wide & Deep (features agrégées + embedding appris dans le
+        même vecteur, pas l'un à la place de l'autre) : `TruncatedSVD` sur
+        une matrice de co-occurrence de victoire champion×champion,
+        centrée à 0,5, recalculée par patch exclu (même anti-fuite leave-
+        one-patch-out que le reste). Deux sources testées :
+        - v1 (`pair_table_from_agg_duo`) : les 3 paires internes du trio
+          (jgl_mid/jgl_sup/mid_sup, déjà dans `agg_duo`) — **aucun gain net**
+          combiné au five_role, cohérent avec le fait que la source
+          n'apporte rien de nouveau par rapport à ce qui est déjà exploité
+          ailleurs dans le modèle.
+        - v2 (`fetch_5role_pair_table`) : co-occurrence sur les 5 rôles
+          (paires jamais vues dans `agg_duo`, ex. top×adc). **Bug trouvé en
+          route** : la requête interrogeait `match_participants`, qui ne
+          retient qu'UN SEUL patch en prod (`maintenance.
+          PARTICIPANTS_KEEP = 1`, contrairement à `RAW_KEEP = 3` pour
+          `matches`/`match_role_stats`) — le leave-one-patch-out du patch
+          dominant (l'immense majorité des lignes) excluait alors le SEUL
+          patch avec des données, donnant une matrice de co-occurrence
+          vide et des embeddings constants (AUC exactement 0,5000 —
+          statistiquement impossible sur 1,1M lignes, signal d'un bug pas
+          d'une absence de signal). Corrigé en interrogeant
+          `match_role_stats` à la place (même schéma, rétention 3 patchs).
+
+        **Résultats (après fix, comparaison à source de fetch unique pour
+        limiter le coût)** : embedding seul —
+        `old_only` (v1) AUC 0,5340 vs `new_only` (v2, 5 rôles) AUC
+        **0,5431**, n=1 133 200 : la source élargie porte un vrai signal
+        standalone, meilleur que v1. Mais combiné aux features `five_role` :
+        `five_role_plus_new` AUC 0,5547 (n=963 078), quasi identique à la
+        référence five_role seule (0,553-0,555) — **pas de gain une fois
+        combiné**. Interprétation : l'embedding 5-rôles apprend par
+        factorisation une information de synergie de paire déjà capturée
+        directement par `matchup_delta_top/bot` + les winrates individuels
+        par rôle — signal réel mais redondant, pas additif.
+
+      Bilan mis à jour : le feature set `five_role` (15 features, AUC
+      0,553-0,555) reste la meilleure config trouvée. Composition et
+      embeddings, testés séparément et en Wide & Deep, n'apportent rien
+      au-dessus — pas un échec d'implémentation, juste une confirmation que
+      l'information qu'ils portent est déjà présente ailleurs dans le
+      modèle.
